@@ -1,0 +1,10 @@
+{
+  "name": "kr.artel.sdk",
+  "version": "0.1.0",
+  "displayName": "Artel SDK",
+  "description": "Unity runtime package for Artel SDK components.",
+  "unity": "2022.3",
+  "author": {
+    "name": "Artel"
+  }
+}

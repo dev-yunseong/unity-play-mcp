@@ -1,0 +1,3 @@
+[submodule "samples/WordVenture"]
+	path = samples/WordVenture
+	url = https://github.com/project-artel/word-venture
