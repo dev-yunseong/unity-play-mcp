@@ -1,4 +1,6 @@
 using Artel.Tracking;
+using Artel.Protocol.Dto;
+using Artel.Serialization;
 using NUnit.Framework;
 
 namespace Artel.Tests.Tracking
@@ -8,38 +10,48 @@ namespace Artel.Tests.Tracking
         [Test]
         public void Observe_FirstSceneEstablishesBaseline()
         {
-            var tracker = new SceneStateHashTracker();
+            var tracker = CreateTracker();
 
-            Assert.That(tracker.Observe("{\"name\":\"Lobby\"}"), Is.False);
+            Assert.That(tracker.Observe(CreateScene("Lobby")), Is.False);
         }
 
         [Test]
         public void Observe_UnchangedSceneDoesNotReportChange()
         {
-            var tracker = new SceneStateHashTracker();
-            tracker.Observe("{\"name\":\"Lobby\"}");
+            var tracker = CreateTracker();
+            tracker.Observe(CreateScene("Lobby"));
 
-            Assert.That(tracker.Observe("{\"name\":\"Lobby\"}"), Is.False);
+            Assert.That(tracker.Observe(CreateScene("Lobby")), Is.False);
         }
 
         [Test]
         public void Observe_ChangedSceneReportsChangeOnce()
         {
-            var tracker = new SceneStateHashTracker();
-            tracker.Observe("{\"name\":\"Lobby\"}");
+            var tracker = CreateTracker();
+            tracker.Observe(CreateScene("Lobby"));
 
-            Assert.That(tracker.Observe("{\"name\":\"Game\"}"), Is.True);
-            Assert.That(tracker.Observe("{\"name\":\"Game\"}"), Is.False);
+            Assert.That(tracker.Observe(CreateScene("Game")), Is.True);
+            Assert.That(tracker.Observe(CreateScene("Game")), Is.False);
         }
 
         [Test]
         public void Reset_ClearsPreviousBaseline()
         {
-            var tracker = new SceneStateHashTracker();
-            tracker.Observe("{\"name\":\"Lobby\"}");
+            var tracker = CreateTracker();
+            tracker.Observe(CreateScene("Lobby"));
             tracker.Reset();
 
-            Assert.That(tracker.Observe("{\"name\":\"Game\"}"), Is.False);
+            Assert.That(tracker.Observe(CreateScene("Game")), Is.False);
+        }
+
+        private static SceneStateHashTracker CreateTracker()
+        {
+            return new SceneStateHashTracker(new NewtonsoftJsonCodec());
+        }
+
+        private static SceneDto CreateScene(string name)
+        {
+            return new SceneDto { Id = 1, Type = "scene", Name = name };
         }
     }
 }

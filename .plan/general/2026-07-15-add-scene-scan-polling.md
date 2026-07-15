@@ -23,13 +23,13 @@
 
 ## Approach (Checklist)
 - [x] **Step 0: Recon** (`ArtelManager`, `SceneScanner`, WebSocket 전송 및 runtime tests 확인)
-- [x] **Step 1: Implementation** (`Update()`에서 unscaled 1초 주기 scan, deterministic hash 비교, 변경 시 `SendToAll`)
-- [x] **Step 2: Tests** (hash 변경 감지와 baseline 갱신 단위 테스트, Unity test runner 검증)
+- [x] **Step 1: Implementation** (`SceneStatePoller`가 unscaled 1초 주기 scan과 변경 판정을 담당하고 Manager는 전송만 수행)
+- [x] **Step 2: Tests** (`SceneStateHashTracker` 내부 직렬화와 `SceneStatePoller` interval/명시적 scan baseline 동작 검증)
 - [x] **Step 3: Rollout / Rollback** (기존 요청식 scan 호환 확인, 변경 파일 revert 가능)
 
 ## Validation
 - **Commands to run:** Unity `2022.3.34f1` batchmode EditMode tests; `git diff --check`
-- **Expected output:** 10/10 NUnit tests 통과, compiler error와 whitespace 오류 없음
+- **Expected output:** 12/12 NUnit tests 통과, compiler error와 whitespace 오류 없음
 
 ## Risks & Rollback
 - **Risks:** scene JSON 순서가 불안정하면 false-positive broadcast 발생; scan 비용이 큰 scene에서 1초 spike 발생; action commit 뒤 후속 snapshot 차이 발생 가능

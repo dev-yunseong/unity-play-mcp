@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Artel.Protocol.Dto;
-using Artel.Protocol.Mapping;
 using Artel.Serialization;
 using Artel.Tracking;
 using UnityEngine;
@@ -20,9 +19,8 @@ namespace Artel
         private SceneScanner scanner;
         private ActionExecutor actionExecutor;
         private IJsonCodec jsonCodec;
-        private readonly SceneStateHashTracker sceneStateHashTracker = new SceneStateHashTracker();
+        private SceneStatePoller sceneStatePoller;
         private long nextMessageId = 1;
-        private float nextSceneScanTime;
 
         public string Url
         {
@@ -34,6 +32,10 @@ namespace Artel
             scanner = new SceneScanner();
             actionExecutor = new ActionExecutor(scanner);
             jsonCodec = new NewtonsoftJsonCodec();
+            sceneStatePoller = new SceneStatePoller(
+                scanner,
+                new SceneStateHashTracker(jsonCodec),
+                SceneScanIntervalSeconds);
         }
 
         private void OnEnable()
@@ -73,8 +75,7 @@ namespace Artel
 
             server = ArtelWebSocketServerFactory.Create(bindAddress, port);
             server.Start();
-            sceneStateHashTracker.Reset();
-            nextSceneScanTime = Time.unscaledTime + SceneScanIntervalSeconds;
+            sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket server started at " + Url);
         }
 
@@ -87,7 +88,7 @@ namespace Artel
 
             server.Dispose();
             server = null;
-            sceneStateHashTracker.Reset();
+            sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket server stopped.");
         }
 
@@ -148,32 +149,21 @@ namespace Artel
 
         private void SendGameState(ArtelConnection connection)
         {
-            var scene = scanner.Scan();
-            var sceneDto = SceneSnapshotMapper.ToDto(scene.Scene);
-            sceneStateHashTracker.Observe(jsonCodec.Serialize(sceneDto));
+            var scene = sceneStatePoller.ScanNow();
 
-            server.Send(connection, SerializeGameState(sceneDto));
-            scene.CommitActions();
+            server.Send(connection, SerializeGameState(scene.Scene));
+            scene.ScanResult.CommitActions();
         }
 
         private void PollSceneState()
         {
-            if (Time.unscaledTime < nextSceneScanTime)
+            if (!sceneStatePoller.TryPoll(Time.unscaledTime, out var scene))
             {
                 return;
             }
 
-            nextSceneScanTime = Time.unscaledTime + SceneScanIntervalSeconds;
-
-            var scene = scanner.Scan();
-            var sceneDto = SceneSnapshotMapper.ToDto(scene.Scene);
-            if (!sceneStateHashTracker.Observe(jsonCodec.Serialize(sceneDto)))
-            {
-                return;
-            }
-
-            server.SendToAll(SerializeGameState(sceneDto));
-            scene.CommitActions();
+            server.SendToAll(SerializeGameState(scene.Scene));
+            scene.ScanResult.CommitActions();
         }
 
         private string SerializeGameState(SceneDto scene)

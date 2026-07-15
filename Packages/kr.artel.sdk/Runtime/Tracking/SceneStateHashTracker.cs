@@ -1,20 +1,29 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using Artel.Protocol.Dto;
+using Artel.Serialization;
 
 namespace Artel.Tracking
 {
     internal sealed class SceneStateHashTracker
     {
+        private readonly IJsonCodec jsonCodec;
         private string lastHash;
 
-        public bool Observe(string serializedScene)
+        public SceneStateHashTracker(IJsonCodec jsonCodec)
         {
-            if (serializedScene == null)
+            this.jsonCodec = jsonCodec ?? throw new ArgumentNullException(nameof(jsonCodec));
+        }
+
+        public bool Observe(SceneDto scene)
+        {
+            if (scene == null)
             {
-                throw new ArgumentNullException(nameof(serializedScene));
+                throw new ArgumentNullException(nameof(scene));
             }
 
+            var serializedScene = jsonCodec.Serialize(scene);
             var currentHash = ComputeHash(serializedScene);
             if (lastHash == null)
             {
