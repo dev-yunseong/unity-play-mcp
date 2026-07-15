@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Artel.Domain;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -120,27 +121,37 @@ namespace Artel
 
             if (button != null)
             {
-                components.Add(CreateComponent("button", gameObjectName, null, null));
+                components.Add(new ButtonComponent(gameObjectName, EmptyStates, EmptyActions));
             }
 
             if (inputField != null)
             {
-                components.Add(CreateComponent("editText", gameObjectName, inputField.text, GetPlaceholder(inputField)));
+                components.Add(new EditTextComponent(
+                    gameObjectName,
+                    inputField.text,
+                    GetPlaceholder(inputField),
+                    EmptyStates,
+                    EmptyActions));
             }
 
             if (tmpInputField != null)
             {
-                components.Add(CreateComponent("editText", gameObjectName, tmpInputField.text, GetPlaceholder(tmpInputField)));
+                components.Add(new EditTextComponent(
+                    gameObjectName,
+                    tmpInputField.text,
+                    GetPlaceholder(tmpInputField),
+                    EmptyStates,
+                    EmptyActions));
             }
 
             if (text != null)
             {
-                components.Add(CreateComponent("text", gameObjectName, text.text, null));
+                components.Add(new TextComponent(gameObjectName, text.text, EmptyStates, EmptyActions));
             }
 
             if (tmpText != null)
             {
-                components.Add(CreateComponent("text", gameObjectName, tmpText.text, null));
+                components.Add(new TextComponent(gameObjectName, tmpText.text, EmptyStates, EmptyActions));
             }
 
             return components;
@@ -176,11 +187,6 @@ namespace Artel
             }
 
             return false;
-        }
-
-        private static SceneComponent CreateComponent(string type, string name, string content, string placeholder)
-        {
-            return new SceneComponent(type, name, content, placeholder, EmptyStates, EmptyActions);
         }
 
         private static string GetPlaceholder(InputField target)

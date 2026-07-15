@@ -1,9 +1,10 @@
 using System.Collections.Generic;
+using Artel.Protocol.Dto;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
-namespace Artel.Tests
+namespace Artel.Tests.Protocol
 {
     public sealed class SceneJsonContractTests
     {
@@ -28,9 +29,8 @@ namespace Artel.Tests
                             Name = "login panel",
                             Components = new List<SceneComponentDto>
                             {
-                                new SceneComponentDto
+                                new EditTextComponentDto
                                 {
-                                    Type = "editText",
                                     Name = "email edit text",
                                     Placeholder = "example@artel.kr",
                                     States = new List<StateDto>
@@ -63,6 +63,17 @@ namespace Artel.Tests
             Assert.That((string)root["scene"]?["children"]?[0]?["components"]?[0]?["type"], Is.EqualTo("editText"));
             Assert.That((string)root["scene"]?["children"]?[0]?["components"]?[0]?["states"]?[0]?["tag"], Is.EqualTo("hp"));
             Assert.That((string)root["scene"]?["children"]?[0]?["components"]?[0]?["actions"]?[0]?["tag"], Is.EqualTo("attack"));
+        }
+
+        [Test]
+        public void Serialize_ButtonDoesNotExposeTextFields()
+        {
+            var json = JsonConvert.SerializeObject(new ButtonComponentDto { Name = "login button" });
+            var component = JObject.Parse(json);
+
+            Assert.That((string)component["type"], Is.EqualTo("button"));
+            Assert.That(component["content"], Is.Null);
+            Assert.That(component["placeholder"], Is.Null);
         }
     }
 }

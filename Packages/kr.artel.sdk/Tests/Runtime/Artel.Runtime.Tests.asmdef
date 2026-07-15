@@ -1,6 +1,6 @@
 {
   "name": "Artel.Runtime.Tests",
-  "rootNamespace": "Artel.Tests",
+  "rootNamespace": "Artel.Tests.Protocol",
   "references": [
     "Artel.Runtime"
   ],

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Artel.Protocol.Dto;
 
 namespace Artel
 {

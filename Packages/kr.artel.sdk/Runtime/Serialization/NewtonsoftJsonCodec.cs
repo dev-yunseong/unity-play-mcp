@@ -1,13 +1,7 @@
 using Newtonsoft.Json;
 
-namespace Artel
+namespace Artel.Serialization
 {
-    internal interface IJsonCodec
-    {
-        string Serialize<T>(T value);
-        T Deserialize<T>(string json);
-    }
-
     internal sealed class NewtonsoftJsonCodec : IJsonCodec
     {
         private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings

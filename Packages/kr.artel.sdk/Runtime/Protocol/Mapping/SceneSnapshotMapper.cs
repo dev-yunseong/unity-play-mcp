@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Globalization;
+using Artel.Domain;
+using Artel.Protocol.Dto;
 
-namespace Artel
+namespace Artel.Protocol.Mapping
 {
     internal static class SceneSnapshotMapper
     {
@@ -72,15 +74,32 @@ namespace Artel
                 });
             }
 
-            return new SceneComponentDto
+            SceneComponentDto dto;
+            if (component is ButtonComponent)
             {
-                Type = component.Type,
-                Name = component.Name,
-                Content = component.Content,
-                Placeholder = component.Placeholder,
-                States = states,
-                Actions = actions
-            };
+                dto = new ButtonComponentDto();
+            }
+            else if (component is TextComponent text)
+            {
+                dto = new TextComponentDto { Content = text.Content };
+            }
+            else if (component is EditTextComponent editText)
+            {
+                dto = new EditTextComponentDto
+                {
+                    Content = editText.Content,
+                    Placeholder = editText.Placeholder
+                };
+            }
+            else
+            {
+                throw new System.ArgumentOutOfRangeException(nameof(component), component.GetType(), "Unsupported scene component.");
+            }
+
+            dto.Name = component.Name;
+            dto.States = states;
+            dto.Actions = actions;
+            return dto;
         }
     }
 }
