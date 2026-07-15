@@ -1,9 +1,9 @@
 {
-  "name": "Artel.Runtime.Tests",
-  "rootNamespace": "Artel.Tests.Protocol",
+  "name": "Unity.Artel.CodeGen",
+  "rootNamespace": "Artel.CodeGen",
   "references": [
     "Artel.Runtime",
-    "Artel.Tracking.Fixtures"
+    "Unity.CompilationPipeline.Common.dll"
   ],
   "includePlatforms": [
     "Editor"
@@ -12,13 +12,11 @@
   "allowUnsafeCode": false,
   "overrideReferences": true,
   "precompiledReferences": [
-    "Newtonsoft.Json.dll"
+    "Mono.Cecil.dll",
+    "Unity.CompilationPipeline.Common.dll"
   ],
   "autoReferenced": false,
   "defineConstraints": [],
   "versionDefines": [],
-  "noEngineReferences": false,
-  "optionalUnityReferences": [
-    "TestAssemblies"
-  ]
+  "noEngineReferences": true
 }

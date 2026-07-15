@@ -67,9 +67,14 @@ namespace Artel.Protocol.Mapping
             {
                 actions.Add(new ActionInvocationDto
                 {
+                    Sequence = action.Sequence,
                     Tag = action.Tag,
                     Name = action.Name,
+                    Success = action.Success,
                     ReturnValue = action.ReturnValue,
+                    Error = action.Success
+                        ? null
+                        : new ActionErrorDto { Type = action.ErrorType, Message = action.ErrorMessage },
                     Timestamp = action.Timestamp.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
                 });
             }
@@ -90,6 +95,10 @@ namespace Artel.Protocol.Mapping
                     Content = editText.Content,
                     Placeholder = editText.Placeholder
                 };
+            }
+            else if (component is TrackedComponent tracked)
+            {
+                dto = new TrackedComponentDto { ComponentType = tracked.ComponentType };
             }
             else
             {

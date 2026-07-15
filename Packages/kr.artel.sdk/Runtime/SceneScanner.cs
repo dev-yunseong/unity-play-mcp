@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Artel.Domain;
+using Artel.Tracking;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -10,9 +11,10 @@ namespace Artel
     internal sealed class SceneScanner
     {
         private readonly Dictionary<int, ScannedTarget> targetsById = new Dictionary<int, ScannedTarget>();
+        private readonly StateReader stateReader = new StateReader();
         private int nextId;
 
-        public SceneSnapshot Scan()
+        public SceneScanResult Scan()
         {
             targetsById.Clear();
             nextId = 1;
@@ -20,6 +22,7 @@ namespace Artel
             var activeScene = SceneManager.GetActiveScene();
             var sceneId = NextId();
             var children = new List<SceneBlock>();
+            var actionCommits = new List<ActionBatchCommit>();
 
             foreach (var root in activeScene.GetRootGameObjects())
             {
@@ -28,17 +31,19 @@ namespace Artel
                     continue;
                 }
 
-                var child = ScanTransform(root.transform);
+                var child = ScanTransform(root.transform, actionCommits);
                 if (child != null)
                 {
                     children.Add(child);
                 }
             }
 
-            return new SceneSnapshot(
-                sceneId,
-                string.IsNullOrEmpty(activeScene.name) ? "Unity Scene" : activeScene.name,
-                children);
+            return new SceneScanResult(
+                new SceneSnapshot(
+                    sceneId,
+                    string.IsNullOrEmpty(activeScene.name) ? "Unity Scene" : activeScene.name,
+                    children),
+                actionCommits);
         }
 
         public bool TryGetTarget(int id, out ScannedTarget target)
@@ -46,7 +51,7 @@ namespace Artel
             return targetsById.TryGetValue(id, out target);
         }
 
-        private SceneBlock ScanTransform(Transform transform)
+        private SceneBlock ScanTransform(Transform transform, List<ActionBatchCommit> actionCommits)
         {
             if (transform == null || !transform.gameObject.activeInHierarchy)
             {
@@ -60,7 +65,7 @@ namespace Artel
             var children = new List<SceneBlock>();
             for (var i = 0; i < transform.childCount; i++)
             {
-                var child = ScanTransform(transform.GetChild(i));
+                var child = ScanTransform(transform.GetChild(i), actionCommits);
                 if (child != null)
                 {
                     children.Add(child);
@@ -70,7 +75,7 @@ namespace Artel
             return new SceneBlock(
                 id,
                 transform.gameObject.name,
-                target.CreateComponents(transform.gameObject.name),
+                target.CreateComponents(transform.gameObject, stateReader, actionCommits),
                 children);
         }
 
@@ -115,9 +120,13 @@ namespace Artel
                 gameObject.GetComponent<TMP_Text>());
         }
 
-        public IReadOnlyList<SceneComponent> CreateComponents(string gameObjectName)
+        public IReadOnlyList<SceneComponent> CreateComponents(
+            GameObject gameObject,
+            StateReader stateReader,
+            List<ActionBatchCommit> actionCommits)
         {
             var components = new List<SceneComponent>();
+            var gameObjectName = gameObject.name;
 
             if (button != null)
             {
@@ -152,6 +161,28 @@ namespace Artel
             if (tmpText != null)
             {
                 components.Add(new TextComponent(gameObjectName, tmpText.text, EmptyStates, EmptyActions));
+            }
+
+            foreach (var component in gameObject.GetComponents<Component>())
+            {
+                var actionSource = component as IArtelActionSource;
+                if (actionSource == null && !stateReader.HasTrackedState(component.GetType()))
+                {
+                    continue;
+                }
+
+                var actionSnapshot = actionSource?.ArtelActionBuffer.Snapshot();
+                var actions = actionSnapshot?.Actions ?? EmptyActions;
+                if (actionSnapshot != null && actionSnapshot.Watermark > 0)
+                {
+                    actionCommits.Add(new ActionBatchCommit(actionSource.ArtelActionBuffer, actionSnapshot.Watermark));
+                }
+
+                components.Add(new TrackedComponent(
+                    component.GetType().FullName,
+                    component.GetType().Name,
+                    stateReader.Read(component),
+                    actions));
             }
 
             return components;

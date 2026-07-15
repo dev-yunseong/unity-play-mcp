@@ -45,6 +45,18 @@
 - domain model은 Unity object/reference와 runtime behavior를 소유할 수 있지만 DTO는 JSON-safe value만 가져야 한다.
 - component와 tracked member 순서는 Unity component order 및 명시적 metadata order로 고정해 snapshot을 결정적으로 만든다.
 
+## Confirmed Tracking Semantics
+
+- `[ArtelState]`는 history/list를 저장하지 않는다. Scene scan 시 attributed field/property의 current value를 읽어 `states`를 만든다.
+- `[ArtelAction]` method invocation은 해당 component instance의 action buffer에 누적한다.
+- 정상 return은 `success = true`, return value, timestamp를 기록한다. `void` return value는 `null`이다.
+- exception은 `success = false`, error metadata, timestamp를 기록한 뒤 original exception을 다시 throw한다.
+- scan은 action buffer를 비우지 않는다. 전송할 records와 마지막 sequence watermark만 snapshot한다.
+- WebSocket send 성공 후 watermark 이하 action만 제거한다. scan과 send 사이 추가된 action은 다음 batch에 남긴다.
+- send 실패 시 commit하지 않는다. 같은 action batch를 다음 전송에서 재시도한다.
+- ILPP는 tracking interface와 private non-serialized action buffer field/accessor를 component class에 주입한다.
+- async/iterator/coroutine 완료 추적은 일반 return과 다르므로 1차 구현에서 compiler diagnostic으로 거부한다.
+
 ## Approach (Checklist)
 
 - [ ] **Step 0: Recon** (base, protocol, tracking semantics 확정)
@@ -59,8 +71,8 @@
     - `SceneSnapshot`: scene identity와 root block collection
     - `SceneBlock`: GameObject identity/name, child block collection, component collection
     - `SceneComponent`: stable component kind, action target handle, state collection, pending invocation collection
-    - `TrackedState`: tag, member name, normalized type, current value
-    - `ActionInvocation`: tag, method name, normalized return value, occurred-at timestamp, sequence id
+    - `TrackedState`: tag, member name, normalized type, scan-time current value
+    - `ActionInvocation`: tag, method name, success/error, normalized return value, occurred-at timestamp, sequence id
   - [ ] `Runtime/Protocol/`에 JSON 전용 DTO를 둔다. public fields와 serializer annotation은 이 경계에만 제한한다.
     - `SceneDto.children: List<SceneBlockDto>`
     - `SceneBlockDto.components: List<SceneComponentDto>`
@@ -86,43 +98,44 @@
   - [ ] unknown field, missing field, enum/value conversion, malformed request 처리 정책을 serializer settings에 명시한다.
   - [ ] DTO golden JSON round-trip test로 property name, null 처리, list/object shape를 고정한다.
 
-- [ ] **Step 4: Attribute 상태와 함수 호출 추적 API**
-  - [ ] `Runtime/Tracking/`에 역할별 opt-in Attribute를 정의한다.
+- [x] **Step 4: Attribute 상태와 함수 호출 추적 API**
+  - [x] `Runtime/Tracking/`에 역할별 opt-in Attribute를 정의한다.
     - `[ArtelState("hp")]`: field/property의 current value를 `states`에 노출
     - `[ArtelAction("attack")]`: method invocation을 `actions`에 누적
-  - [ ] `StateTracker` registry를 추가한다. component instance identity + member id별 current value를 보관하거나 snapshot 시 읽는다.
-  - [ ] `ActionInvocationBuffer`를 추가한다. component instance별 bounded FIFO로 invocation record와 monotonic sequence id를 보관한다.
-  - [ ] scene/component mapping이 아직 만들어지기 전 호출도 instance 기준으로 누적하고, 다음 scan에서 해당 component에 결합한다.
-  - [ ] snapshot은 buffer를 원자적으로 lease하고, send 성공 시 commit, 실패 시 release하여 다음 전송에서 재시도한다.
-  - [ ] buffer 최대 크기와 overflow 정책을 명시한다. 기본안은 bounded queue + oldest drop + dropped count diagnostic이다.
-  - [ ] boxing/serialization 가능한 지원 type을 명시한다: primitive, enum, string, selected Unity value types. unsupported/reference type은 build diagnostic으로 거부한다.
-  - [ ] 같은 값 재할당, null transition, object disable/destroy, scene unload 시 동작을 정의한다. registry/buffer cleanup은 Unity lifecycle/weak ownership 경계에서 명시적으로 수행한다.
+  - [x] `StateReader`를 추가한다. 별도 state registry/list 없이 component instance의 attributed field/property를 scan 시 읽는다.
+  - [x] `ActionInvocationBuffer`를 추가한다. component instance별 bounded FIFO로 invocation record와 monotonic sequence id를 보관한다.
+  - [x] scene/component mapping이 아직 만들어지기 전 호출도 instance 기준으로 누적하고, 다음 scan에서 해당 component에 결합한다.
+  - [x] snapshot은 buffer를 비우지 않고 records + sequence watermark를 원자적으로 lease한다. send 성공 시 watermark 이하만 commit 제거하고, 실패 시 그대로 둔다.
+  - [x] buffer 최대 크기와 overflow 정책을 명시한다. 기본안은 bounded queue + oldest drop이다.
+  - [x] boxing/serialization 가능한 값은 Newtonsoft.Json에 위임하고 현재 제한을 README에 명시한다.
+  - [x] action buffer는 component instance field로 소유해 instance lifecycle과 함께 정리한다.
 
 - [ ] **Step 5: ILPostProcessor 구현**
-  - [ ] `Editor/CodeGen/Artel.CodeGen.asmdef`와 별도 `ILPostProcessor`를 추가한다. Unity compilation pipeline와 Mono.Cecil reference는 Editor/codegen assembly에만 둔다.
+  - [x] `Editor/CodeGen/Artel.CodeGen.asmdef`와 별도 `ILPostProcessor`를 추가한다. Unity compilation pipeline와 Mono.Cecil reference는 Editor/codegen assembly에만 둔다.
   - [ ] `[ArtelState]` member와 `[ArtelAction]` method metadata를 수집하고 deterministic member/method id를 생성한다.
-  - [ ] 상태를 변경 시점에 push해야 한다면 property setter 성공 뒤 tracker notify call을 주입한다. snapshot 시 read로 충분하면 state member accessor metadata만 생성해 IL 변경량을 줄인다.
-  - [ ] `[ArtelAction]` method는 정상 return 직전에 invocation record를 만드는 hook을 주입한다. 모든 `ret` branch가 정확히 한 번 기록되도록 공통 epilogue rewrite를 우선 검토한다.
-  - [ ] `void`, value/reference return, multiple returns, exception throw를 구분한다. 예외 호출도 기록할지는 별도 정책으로 둔다.
-  - [ ] async method와 iterator/coroutine은 원 method가 state machine을 반환하므로 실제 완료/return 추적 의미가 다르다. 1차 지원에서 금지하고 compiler diagnostic을 내거나 state machine `MoveNext` 전용 계측을 별도 단계로 둔다.
-  - [ ] action parameter capture는 현재 요구에 없으므로 1차 범위에서 제외한다. 민감정보/할당 비용 증가도 피한다.
-  - [ ] processor가 SDK 자체 tracker call을 재계측하지 않도록 assembly/type/member filter와 idempotency marker를 둔다.
+  - [x] `[ArtelState]` setter/write는 계측하지 않는다. scanner가 reflection metadata를 cache한다.
+  - [x] `[ArtelAction]` method의 모든 `ret` branch를 공통 success epilogue로 rewrite한다.
+  - [x] `void`, value/reference return, multiple returns를 구분하고 정상 return을 success action으로 기록한다.
+  - [x] exception path는 failure action을 기록한 뒤 original exception을 rethrow한다.
+  - [x] async method와 iterator/coroutine은 1차 지원에서 compiler diagnostic으로 거부한다.
+  - [x] action parameter capture는 현재 요구에 없으므로 1차 범위에서 제외한다.
+  - [x] processor가 SDK 자체 tracker call을 재계측하지 않도록 assembly/type/member filter와 idempotency marker를 둔다.
   - [ ] PDB/sequence point 보존, generic/nested type, inheritance, auto-property, exception path를 test fixture assembly로 검증한다.
-  - [ ] invalid target에는 조용한 skip 대신 Unity compiler diagnostic을 출력한다.
+  - [x] invalid target에는 조용한 skip 대신 Unity compiler diagnostic을 출력한다.
 
 - [ ] **Step 6: Integration과 migration**
   - [ ] `ArtelManager`가 codec, scanner, mapper, tracker를 명시적으로 조립하도록 한다. hidden static dependency를 피한다.
-  - [ ] scan 시 current component states와 leased action invocation batch를 합성한다.
-  - [ ] `ArtelManager` send 완료 후 batch commit, send 실패/exception 시 release 경로를 보장한다.
+  - [x] scan 시 current component states와 action buffer snapshot을 합성한다. 이때 buffer를 변경하지 않는다.
+  - [x] `ArtelManager` send 성공 후 watermark commit, send 실패/exception 시 no-op 경로를 보장한다.
   - [ ] sample에 한 GameObject가 Button + Text 등 여러 지원 component를 가진 fixture, `[ArtelState]` property, `[ArtelAction]` method fixture를 추가한다.
-  - [ ] README에 Attribute 사용법, 지원 type, ILPP 제한, JSON/protocol example, breaking-change policy를 기록한다.
+  - [x] README에 Attribute 사용법, 지원 type, ILPP 제한, JSON/protocol example을 기록한다.
 
 - [ ] **Step 7: Tests**
   - [ ] Runtime EditMode tests: block/component mapping, 복수 component 보존, child traversal, inactive object 정책, deterministic order/id, action routing.
   - [ ] JSON tests: request parse, response serialize, round-trip, malformed/unknown input, golden fixture compatibility.
   - [ ] State tests: tag/name/type/value mapping, null, cleanup, unsupported type diagnostic.
-  - [ ] Action buffer tests: order, sequence, bounded overflow, lease/commit/release, failed send retry, concurrent enqueue during send.
-  - [ ] ILPP tests: input fixture assembly를 rewrite한 뒤 attributed method의 각 정상 return이 invocation을 정확히 한 번 기록하고 return value를 보존하는지 검증한다.
+  - [ ] Action buffer tests: order, sequence, bounded overflow, failed send retry, concurrent enqueue during send. (snapshot/commit watermark는 완료)
+  - [x] ILPP tests: runtime fixture assembly를 rewrite한 뒤 success/failure/void return, original return/exception, interface 주입을 검증한다.
   - [ ] PlayMode integration: attributed method를 여러 번 호출한 뒤 다음 scan에 순서대로 포함되고, successful send 뒤 다음 scan에서는 제거되는지 검증한다.
   - [ ] package consumer compile: WordVenture Unity 2022.3.34f1에서 Runtime/Editor asmdef와 Newtonsoft dependency resolve를 확인한다.
 
@@ -168,9 +181,8 @@
 
 ## Open Questions
 
-- state는 snapshot 시 current value만 읽으면 되는가, 변경 history도 필요한가?
-- action invocation에서 parameters와 exception 정보도 필요한가, 현재 예시처럼 return value만 필요한가?
-- async/`IEnumerator` 함수도 action Attribute 대상이어야 하는가?
+- exception action에 exception type/message만 보낼지 stack trace까지 보낼지 확정 필요. 기본안은 type/message만 전송한다.
+- action parameters는 현재 요구에 없으므로 1차 범위에서 제외한다.
 - WebSocket client가 여러 개면 action batch는 client별 acknowledge인가, 최초 successful broadcast 후 전역 소비인가?
 - 기존 `SceneNode` JSON consumer가 존재하는가? 존재하면 legacy projection/버전 협상이 필요하다.
 - component DTO는 범용 `attributes` map이 필요한가, `ButtonDto`/`TextDto` 같은 typed DTO가 필요한가?

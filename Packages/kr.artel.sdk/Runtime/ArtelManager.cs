@@ -143,10 +143,11 @@ namespace Artel
             {
                 Type = "GAME_STATE",
                 Id = nextMessageId++,
-                Scene = SceneSnapshotMapper.ToDto(scene)
+                Scene = SceneSnapshotMapper.ToDto(scene.Scene)
             };
 
             server.Send(connection, jsonCodec.Serialize(message));
+            scene.CommitActions();
         }
 
         private void SendError(ArtelConnection connection, string error)
