@@ -4,25 +4,11 @@ namespace Artel
 {
     public sealed class ArtelLoggerBehaviour : MonoBehaviour
     {
-        [SerializeField]
-        private string message = "[Artel] tick";
+        [SerializeField] private string message = "Artel SDK loaded.";
 
-        [SerializeField]
-        private float intervalSeconds = 1f;
-
-        private float elapsedSeconds;
-
-        private void Update()
+        private void Start()
         {
-            elapsedSeconds += Time.deltaTime;
-
-            if (elapsedSeconds < intervalSeconds)
-            {
-                return;
-            }
-
-            elapsedSeconds -= intervalSeconds;
-            Debug.Log(message);
+            Debug.Log("[Artel] " + message);
         }
     }
 }
