@@ -2,20 +2,20 @@
 
 ## Why
 
-Predictable branch names expose intent and issue linkage without relying on local context.
+Predictable branch names expose intent without relying on tracker-specific numbers.
 
 ## Naming
 
 ```text
-<type>/<issue-number>
+<type>/<short-description>
 ```
 
 Examples:
 
 ```text
-feat/123
-fix/418
-docs/527
+feat/add-session-timeout
+fix/handle-empty-response
+docs/local-test-setup
 ```
 
 Allowed types:
@@ -29,10 +29,11 @@ Allowed types:
 - `ci`: automation change
 - `chore`: maintenance not covered above
 
-Issue number rules:
-- digits only
-- must reference the primary issue for the branch
-- create or identify the issue before creating the branch
+Description rules:
+- use lowercase kebab-case
+- keep it short but specific enough to expose intent
+- do not require a GitHub Issue number
+- link a Jira work item in the PR when one exists; Jira linkage is optional
 
 ## Lifecycle
 

@@ -25,8 +25,8 @@ is installed.
 
 1. Confirm goal, scope, acceptance criteria, and non-goals.
 2. Read project context, relevant code, tests, and recent changes.
-3. Link or create an issue. Non-trivial development branches require one.
-4. Create a branch using the issue number.
+3. Link the Jira work item when one exists. Do not create a GitHub Issue for development tracking.
+4. Create a descriptive branch. A Jira key is optional and must not block work.
 5. Write a concise implementation plan; use `writing-plan` when installed.
 6. Identify architecture impact, tradeoffs, risks, and rollback.
 7. Implement the smallest coherent change.

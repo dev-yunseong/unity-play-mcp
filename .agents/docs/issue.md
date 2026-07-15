@@ -1,12 +1,14 @@
-# Issue Workflow
+# Jira Work Item Workflow
 
 ## Why
 
-An issue defines the problem and acceptance boundary. It should not prescribe implementation before investigation.
+A Jira work item defines the problem and acceptance boundary. It should not prescribe implementation before investigation.
+
+Use Jira for development tracking. Do not create GitHub Issues for branch or PR bookkeeping. Missing Jira work must not block implementation unless project governance explicitly requires a ticket.
 
 ## Ready Criteria
 
-An issue is ready when it has:
+A work item is ready when it has:
 - clear problem statement
 - user or system impact
 - acceptance criteria
@@ -14,7 +16,7 @@ An issue is ready when it has:
 - explicit non-goals when scope could expand
 - dependencies or blockers
 
-## Issue Template
+## Work Item Template
 
 ```markdown
 ## Problem
@@ -33,15 +35,15 @@ An issue is ready when it has:
 
 ## Lifecycle
 
-1. Create or refine issue.
+1. Create or refine the Jira work item when tracking is required.
 2. Confirm dependencies and priority.
 3. Mark in progress only when active work starts.
-4. Link branch, plan, and PR.
-5. Update scope changes in issue before implementing them.
+4. Link plan and PR from Jira when a work item exists.
+5. Update scope changes in Jira before implementing them.
 6. Close only after acceptance criteria and required validation pass.
 
 ## Sizing
 
-Split issue when it contains multiple independently releasable outcomes or requires unrelated ownership areas.
+Split the Jira work item when it contains multiple independently releasable outcomes or requires unrelated ownership areas.
 
 Do not split tightly coupled steps that cannot provide value or validation independently.
