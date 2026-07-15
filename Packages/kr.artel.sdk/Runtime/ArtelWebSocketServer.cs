@@ -34,6 +34,11 @@ namespace Artel
             this.port = port;
         }
 
+        public bool IsConnected
+        {
+            get { return server != null; }
+        }
+
         public void Start()
         {
             if (server != null)

@@ -2,14 +2,16 @@ using System;
 using System.Collections.Generic;
 using Artel.Domain;
 using Artel.Protocol.Dto;
-using Artel.Protocol.Mapping;
 using Artel.Serialization;
+using Artel.Tracking;
 using UnityEngine;
 
 namespace Artel
 {
     public sealed class ArtelManager : MonoBehaviour
     {
+        private const float SceneScanIntervalSeconds = 1f;
+
         [SerializeField] private bool connectOnEnable;
         [SerializeField] private Server server = new Server();
 
@@ -18,6 +20,7 @@ namespace Artel
         private SceneScanner scanner;
         private ActionExecutor actionExecutor;
         private IJsonCodec jsonCodec;
+        private SceneStatePoller sceneStatePoller;
         private long nextMessageId = 1;
 
         public string SdkId { get; private set; }
@@ -28,6 +31,10 @@ namespace Artel
             scanner = new SceneScanner();
             actionExecutor = new ActionExecutor(scanner);
             jsonCodec = new NewtonsoftJsonCodec();
+            sceneStatePoller = new SceneStatePoller(
+                scanner,
+                new SceneStateHashTracker(jsonCodec),
+                SceneScanIntervalSeconds);
             SdkId = ArtelSdkIdentity.LoadOrCreate();
         }
 
@@ -55,6 +62,8 @@ namespace Artel
             {
                 HandleMessage(message);
             }
+
+            PollSceneState();
         }
 
         public void StartTransport()
@@ -71,6 +80,7 @@ namespace Artel
             }
 
             webSocketTransport.Start();
+            sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket transport started.");
         }
 
@@ -89,6 +99,7 @@ namespace Artel
             webSocketTransport.Stop();
             webSocketTransport.Dispose();
             webSocketTransport = null;
+            sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket transport stopped.");
         }
 
@@ -101,6 +112,7 @@ namespace Artel
 
             webSocketTransport = transport ?? throw new ArgumentNullException(nameof(transport));
             ownsTransport = takeOwnership;
+            sceneStatePoller.Reset(Time.unscaledTime);
         }
 
         public void SetServer(Server configuredServer)
@@ -170,16 +182,36 @@ namespace Artel
 
         private void SendGameState(ArtelWebSocketMessage request)
         {
-            var scene = scanner.Scan();
-            var message = new GameStateMessageDto
+            var poll = sceneStatePoller.ScanNow();
+
+            request.Reply(SerializeGameState(poll.Scene));
+            poll.ScanResult.CommitActions();
+        }
+
+        private void PollSceneState()
+        {
+            if (!webSocketTransport.IsConnected)
+            {
+                return;
+            }
+
+            if (!sceneStatePoller.TryPoll(Time.unscaledTime, out var poll))
+            {
+                return;
+            }
+
+            webSocketTransport.Send(SerializeGameState(poll.Scene));
+            poll.ScanResult.CommitActions();
+        }
+
+        private string SerializeGameState(SceneDto scene)
+        {
+            return jsonCodec.Serialize(new GameStateMessageDto
             {
                 Type = "GAME_STATE",
                 Id = nextMessageId++,
-                Scene = SceneSnapshotMapper.ToDto(scene.Scene)
-            };
-
-            request.Reply(jsonCodec.Serialize(message));
-            scene.CommitActions();
+                Scene = scene
+            });
         }
 
         private void SendError(ArtelWebSocketMessage request, string error)

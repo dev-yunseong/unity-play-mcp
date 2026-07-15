@@ -45,6 +45,11 @@ components are listed separately, so one block can expose multiple capabilities:
 }
 ```
 
+The scene `id` is its Unity scene handle, and each block `id` is the
+`GameObject` instance ID. Treat both as opaque identifiers valid only while
+their Unity objects remain alive in the current process. Do not persist them
+across scene reloads, object recreation, or Unity restarts.
+
 ## State and action tracking
 
 Add attributes to a `MonoBehaviour`. State is read at scan time. Action results

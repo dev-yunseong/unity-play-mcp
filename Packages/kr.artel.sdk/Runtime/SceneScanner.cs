@@ -8,19 +8,17 @@ using UnityEngine.UI;
 
 namespace Artel
 {
-    internal sealed class SceneScanner
+    internal sealed class SceneScanner : ISceneSnapshotScanner
     {
         private readonly Dictionary<int, ScannedTarget> targetsById = new Dictionary<int, ScannedTarget>();
         private readonly StateReader stateReader = new StateReader();
-        private int nextId;
 
         public SceneScanResult Scan()
         {
             targetsById.Clear();
-            nextId = 1;
 
             var activeScene = SceneManager.GetActiveScene();
-            var sceneId = NextId();
+            var sceneId = activeScene.handle;
             var children = new List<SceneBlock>();
             var actionCommits = new List<ActionBatchCommit>();
 
@@ -58,7 +56,7 @@ namespace Artel
                 return null;
             }
 
-            var id = NextId();
+            var id = transform.gameObject.GetInstanceID();
             var target = ScannedTarget.FromGameObject(transform.gameObject);
             targetsById[id] = target;
 
@@ -77,11 +75,6 @@ namespace Artel
                 transform.gameObject.name,
                 target.CreateComponents(transform.gameObject, stateReader, actionCommits),
                 children);
-        }
-
-        private int NextId()
-        {
-            return nextId++;
         }
     }
 

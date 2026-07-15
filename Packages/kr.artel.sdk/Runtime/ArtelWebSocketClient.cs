@@ -31,6 +31,11 @@ namespace Artel
             client.ConnectAsync();
         }
 
+        public bool IsConnected
+        {
+            get { return client != null && client.ReadyState == WebSocketState.Open; }
+        }
+
         public bool TryDequeueMessage(out ArtelWebSocketMessage message)
         {
             return incomingMessages.TryDequeue(out message);
