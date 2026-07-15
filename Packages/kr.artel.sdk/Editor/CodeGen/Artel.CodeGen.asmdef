@@ -1,0 +1,22 @@
+{
+  "name": "Unity.Artel.CodeGen",
+  "rootNamespace": "Artel.CodeGen",
+  "references": [
+    "Artel.Runtime",
+    "Unity.CompilationPipeline.Common.dll"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "Mono.Cecil.dll",
+    "Unity.CompilationPipeline.Common.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

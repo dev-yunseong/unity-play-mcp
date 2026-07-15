@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Artel.Domain;
+using Artel.Tracking;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -9,21 +11,18 @@ namespace Artel
     internal sealed class SceneScanner
     {
         private readonly Dictionary<int, ScannedTarget> targetsById = new Dictionary<int, ScannedTarget>();
+        private readonly StateReader stateReader = new StateReader();
         private int nextId;
 
-        public SceneNode Scan()
+        public SceneScanResult Scan()
         {
             targetsById.Clear();
             nextId = 1;
 
             var activeScene = SceneManager.GetActiveScene();
-            var scene = new SceneNode
-            {
-                id = NextId(),
-                type = "scene",
-                name = string.IsNullOrEmpty(activeScene.name) ? "Unity Scene" : activeScene.name,
-                children = new List<SceneNode>()
-            };
+            var sceneId = NextId();
+            var children = new List<SceneBlock>();
+            var actionCommits = new List<ActionBatchCommit>();
 
             foreach (var root in activeScene.GetRootGameObjects())
             {
@@ -32,14 +31,19 @@ namespace Artel
                     continue;
                 }
 
-                var child = ScanTransform(root.transform);
+                var child = ScanTransform(root.transform, actionCommits);
                 if (child != null)
                 {
-                    scene.children.Add(child);
+                    children.Add(child);
                 }
             }
 
-            return scene;
+            return new SceneScanResult(
+                new SceneSnapshot(
+                    sceneId,
+                    string.IsNullOrEmpty(activeScene.name) ? "Unity Scene" : activeScene.name,
+                    children),
+                actionCommits);
         }
 
         public bool TryGetTarget(int id, out ScannedTarget target)
@@ -47,50 +51,32 @@ namespace Artel
             return targetsById.TryGetValue(id, out target);
         }
 
-        private SceneNode ScanTransform(Transform transform)
+        private SceneBlock ScanTransform(Transform transform, List<ActionBatchCommit> actionCommits)
         {
             if (transform == null || !transform.gameObject.activeInHierarchy)
             {
                 return null;
             }
 
+            var id = NextId();
             var target = ScannedTarget.FromGameObject(transform.gameObject);
-            var node = CreateNode(transform.gameObject, target);
-            targetsById[node.id] = target;
+            targetsById[id] = target;
 
+            var children = new List<SceneBlock>();
             for (var i = 0; i < transform.childCount; i++)
             {
-                var child = ScanTransform(transform.GetChild(i));
+                var child = ScanTransform(transform.GetChild(i), actionCommits);
                 if (child != null)
                 {
-                    node.children.Add(child);
+                    children.Add(child);
                 }
             }
 
-            return node;
-        }
-
-        private SceneNode CreateNode(GameObject gameObject, ScannedTarget target)
-        {
-            var node = new SceneNode
-            {
-                id = NextId(),
-                type = target.Kind,
-                name = gameObject.name,
-                children = new List<SceneNode>()
-            };
-
-            if (target.Kind == "Text")
-            {
-                node.content = target.GetText();
-            }
-            else if (target.Kind == "EditText")
-            {
-                node.content = target.GetText();
-                node.placeholder = target.GetPlaceholder();
-            }
-
-            return node;
+            return new SceneBlock(
+                id,
+                transform.gameObject.name,
+                target.CreateComponents(transform.gameObject, stateReader, actionCommits),
+                children);
         }
 
         private int NextId()
@@ -101,53 +87,105 @@ namespace Artel
 
     internal sealed class ScannedTarget
     {
+        private static readonly IReadOnlyList<TrackedState> EmptyStates = new List<TrackedState>();
+        private static readonly IReadOnlyList<ActionInvocation> EmptyActions = new List<ActionInvocation>();
+
         private readonly Button button;
         private readonly InputField inputField;
         private readonly TMP_InputField tmpInputField;
         private readonly Text text;
         private readonly TMP_Text tmpText;
 
-        public string Kind { get; private set; }
-
         private ScannedTarget(
             Button button,
             InputField inputField,
             TMP_InputField tmpInputField,
             Text text,
-            TMP_Text tmpText,
-            string kind)
+            TMP_Text tmpText)
         {
             this.button = button;
             this.inputField = inputField;
             this.tmpInputField = tmpInputField;
             this.text = text;
             this.tmpText = tmpText;
-            Kind = kind;
         }
 
         public static ScannedTarget FromGameObject(GameObject gameObject)
         {
-            var button = gameObject.GetComponent<Button>();
-            var inputField = gameObject.GetComponent<InputField>();
-            var tmpInput = gameObject.GetComponent<TMP_InputField>();
-            var text = gameObject.GetComponent<Text>();
-            var tmpText = gameObject.GetComponent<TMP_Text>();
+            return new ScannedTarget(
+                gameObject.GetComponent<Button>(),
+                gameObject.GetComponent<InputField>(),
+                gameObject.GetComponent<TMP_InputField>(),
+                gameObject.GetComponent<Text>(),
+                gameObject.GetComponent<TMP_Text>());
+        }
 
-            var kind = "block";
+        public IReadOnlyList<SceneComponent> CreateComponents(
+            GameObject gameObject,
+            StateReader stateReader,
+            List<ActionBatchCommit> actionCommits)
+        {
+            var components = new List<SceneComponent>();
+            var gameObjectName = gameObject.name;
+
             if (button != null)
             {
-                kind = "Button";
-            }
-            else if (inputField != null || tmpInput != null)
-            {
-                kind = "EditText";
-            }
-            else if (text != null || tmpText != null)
-            {
-                kind = "Text";
+                components.Add(new ButtonComponent(gameObjectName, EmptyStates, EmptyActions));
             }
 
-            return new ScannedTarget(button, inputField, tmpInput, text, tmpText, kind);
+            if (inputField != null)
+            {
+                components.Add(new EditTextComponent(
+                    gameObjectName,
+                    inputField.text,
+                    GetPlaceholder(inputField),
+                    EmptyStates,
+                    EmptyActions));
+            }
+
+            if (tmpInputField != null)
+            {
+                components.Add(new EditTextComponent(
+                    gameObjectName,
+                    tmpInputField.text,
+                    GetPlaceholder(tmpInputField),
+                    EmptyStates,
+                    EmptyActions));
+            }
+
+            if (text != null)
+            {
+                components.Add(new TextComponent(gameObjectName, text.text, EmptyStates, EmptyActions));
+            }
+
+            if (tmpText != null)
+            {
+                components.Add(new TextComponent(gameObjectName, tmpText.text, EmptyStates, EmptyActions));
+            }
+
+            foreach (var component in gameObject.GetComponents<Component>())
+            {
+                var actionSource = component as IArtelActionSource;
+                if (actionSource == null && !stateReader.HasTrackedState(component.GetType()))
+                {
+                    continue;
+                }
+
+                var actionSnapshot = actionSource?.ArtelActionBuffer.Snapshot();
+                var actions = actionSnapshot?.Actions ?? EmptyActions;
+                if (actionSnapshot != null && actionSnapshot.Watermark > 0)
+                {
+                    actionCommits.Add(new ActionBatchCommit(actionSource.ArtelActionBuffer, actionSnapshot.Watermark));
+                }
+
+                components.Add(new TrackedComponent(
+                    component.GetType().FullName,
+                    component.GetType().Name,
+                    stateReader.Read(component),
+                    actions));
+            }
+
+            return components;
         }
 
         public bool Click()
@@ -182,52 +220,19 @@ namespace Artel
             return false;
         }
 
-        public string GetText()
+        private static string GetPlaceholder(InputField target)
         {
-            if (inputField != null)
-            {
-                return inputField.text;
-            }
-
-            if (text != null)
-            {
-                return text.text;
-            }
-
-            if (tmpInputField != null)
-            {
-                return tmpInputField.text;
-            }
-
-            if (tmpText != null)
-            {
-                return tmpText.text;
-            }
-
-            return string.Empty;
+            return target.placeholder is Text placeholderText ? placeholderText.text : null;
         }
 
-        public string GetPlaceholder()
+        private static string GetPlaceholder(TMP_InputField target)
         {
-            if (inputField != null && inputField.placeholder is Text placeholderText)
+            if (target.placeholder is TMP_Text tmpPlaceholder)
             {
-                return placeholderText.text;
+                return tmpPlaceholder.text;
             }
 
-            if (tmpInputField != null)
-            {
-                if (tmpInputField.placeholder is TMP_Text tmpPlaceholder)
-                {
-                    return tmpPlaceholder.text;
-                }
-
-                if (tmpInputField.placeholder is Text uiPlaceholder)
-                {
-                    return uiPlaceholder.text;
-                }
-            }
-
-            return string.Empty;
+            return target.placeholder is Text uiPlaceholder ? uiPlaceholder.text : null;
         }
     }
 }

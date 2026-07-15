@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Artel.Protocol.Dto;
+using Artel.Protocol.Mapping;
+using Artel.Serialization;
 using UnityEngine;
 
 namespace Artel
@@ -13,6 +16,7 @@ namespace Artel
         private IArtelWebSocketServer server;
         private SceneScanner scanner;
         private ActionExecutor actionExecutor;
+        private IJsonCodec jsonCodec;
         private long nextMessageId = 1;
 
         public string Url
@@ -24,6 +28,7 @@ namespace Artel
         {
             scanner = new SceneScanner();
             actionExecutor = new ActionExecutor(scanner);
+            jsonCodec = new NewtonsoftJsonCodec();
         }
 
         private void OnEnable()
@@ -80,17 +85,19 @@ namespace Artel
         {
             try
             {
-                var root = MiniJson.ParseObject(message.Text);
-                var type = MiniJson.GetString(root, "type");
-                var method = MiniJson.GetString(root, "method");
-
-                if (type == "ACTION")
+                var request = jsonCodec.Deserialize<ArtelRequestDto>(message.Text);
+                if (request == null)
                 {
-                    HandleAction(root);
+                    throw new InvalidOperationException("Message body is empty.");
+                }
+
+                if (request.Type == "ACTION")
+                {
+                    HandleAction(request);
                     return;
                 }
 
-                if (method == "scan_scene" || type == "SCAN_SCENE" || type == "GET_GAME_STATE")
+                if (request.Method == "scan_scene" || request.Type == "SCAN_SCENE" || request.Type == "GET_GAME_STATE")
                 {
                     SendGameState(message.Connection);
                     return;
@@ -104,58 +111,55 @@ namespace Artel
             }
         }
 
-        private void HandleAction(Dictionary<string, object> root)
+        private void HandleAction(ArtelRequestDto request)
         {
-            var actions = MiniJson.GetArray(root, "actions");
             var results = new List<ActionResultDto>();
 
-            foreach (var item in actions)
+            foreach (var action in request.Actions ?? new List<ActionRequestDto>())
             {
-                if (!(item is Dictionary<string, object> action))
+                if (action == null)
                 {
                     results.Add(ActionResultDto.Failure(0, "Action item must be an object."));
                     continue;
                 }
 
-                var actionId = MiniJson.GetInt(action, "id", 0);
-                var method = MiniJson.GetString(action, "method");
-                var parameters = MiniJson.GetArray(action, "params");
-                results.Add(actionExecutor.Execute(actionId, method, parameters));
+                results.Add(actionExecutor.Execute(action.Id, action.Method, action.Parameters));
             }
 
             var response = new ActionResultMessage
             {
-                type = "ACTION_RESULT",
-                id = nextMessageId++,
-                results = results
+                Type = "ACTION_RESULT",
+                Id = nextMessageId++,
+                Results = results
             };
 
-            server.SendToAll(JsonUtility.ToJson(response));
+            server.SendToAll(jsonCodec.Serialize(response));
         }
 
         private void SendGameState(ArtelConnection connection)
         {
             var scene = scanner.Scan();
-            var message = new GameStateMessage
+            var message = new GameStateMessageDto
             {
-                type = "GAME_STATE",
-                id = nextMessageId++,
-                scene = scene
+                Type = "GAME_STATE",
+                Id = nextMessageId++,
+                Scene = SceneSnapshotMapper.ToDto(scene.Scene)
             };
 
-            server.Send(connection, JsonUtility.ToJson(message));
+            server.Send(connection, jsonCodec.Serialize(message));
+            scene.CommitActions();
         }
 
         private void SendError(ArtelConnection connection, string error)
         {
             var message = new ErrorMessage
             {
-                type = "ERROR",
-                id = nextMessageId++,
-                error = error
+                Type = "ERROR",
+                Id = nextMessageId++,
+                Error = error
             };
 
-            server.Send(connection, JsonUtility.ToJson(message));
+            server.Send(connection, jsonCodec.Serialize(message));
         }
     }
 }
