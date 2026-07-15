@@ -2,7 +2,7 @@
   "name": "kr.artel.sdk",
   "version": "0.1.0",
   "displayName": "Artel SDK",
-  "description": "Unity runtime SDK for exposing scene state and accepting local actions over WebSocket.",
+  "description": "Unity runtime SDK for onboarding and remote scene interaction over WebSocket.",
   "unity": "2022.3",
   "author": {
     "name": "Artel"
@@ -11,6 +11,7 @@
     "com.unity.nuget.mono-cecil": "1.11.4",
     "com.unity.nuget.newtonsoft-json": "3.2.1",
     "com.unity.textmeshpro": "3.0.6",
-    "com.unity.ugui": "1.0.0"
+    "com.unity.ugui": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0"
   }
 }

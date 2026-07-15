@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Artel.Domain;
 using Artel.Protocol.Dto;
 using Artel.Serialization;
 using Artel.Tracking;
@@ -11,21 +12,19 @@ namespace Artel
     {
         private const float SceneScanIntervalSeconds = 1f;
 
-        [SerializeField] private bool startServerOnEnable = true;
-        [SerializeField] private string bindAddress = "127.0.0.1";
-        [SerializeField] private int port = 17311;
+        [SerializeField] private bool connectOnEnable;
+        [SerializeField] private Server server = new Server();
 
-        private IArtelWebSocketServer server;
+        private IArtelWebSocketTransport webSocketTransport;
+        private bool ownsTransport = true;
         private SceneScanner scanner;
         private ActionExecutor actionExecutor;
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
         private long nextMessageId = 1;
 
-        public string Url
-        {
-            get { return "ws://" + bindAddress + ":" + port + "/ws"; }
-        }
+        public string SdkId { get; private set; }
+        public Server Server { get { return server; } }
 
         private void Awake()
         {
@@ -36,29 +35,30 @@ namespace Artel
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
+            SdkId = ArtelSdkIdentity.LoadOrCreate();
         }
 
         private void OnEnable()
         {
-            if (startServerOnEnable)
+            if (connectOnEnable)
             {
-                StartServer();
+                StartTransport();
             }
         }
 
         private void OnDisable()
         {
-            StopServer();
+            StopTransport();
         }
 
         private void Update()
         {
-            if (server == null)
+            if (webSocketTransport == null)
             {
                 return;
             }
 
-            while (server.TryDequeueMessage(out var message))
+            while (webSocketTransport.TryDequeueMessage(out var message))
             {
                 HandleMessage(message);
             }
@@ -66,33 +66,66 @@ namespace Artel
             PollSceneState();
         }
 
-        public void StartServer()
+        public void StartTransport()
         {
-            if (server != null)
+            if (webSocketTransport == null)
+            {
+                webSocketTransport = new ArtelWebSocketClient(server, SdkId);
+                ownsTransport = true;
+            }
+
+            if (!ownsTransport)
             {
                 return;
             }
 
-            server = ArtelWebSocketServerFactory.Create(bindAddress, port);
-            server.Start();
+            webSocketTransport.Start();
             sceneStatePoller.Reset(Time.unscaledTime);
-            Debug.Log("[Artel] WebSocket server started at " + Url);
+            Debug.Log("[Artel] WebSocket transport started.");
         }
 
-        public void StopServer()
+        public void StopTransport()
         {
-            if (server == null)
+            if (webSocketTransport == null)
             {
                 return;
             }
 
-            server.Dispose();
-            server = null;
+            if (!ownsTransport)
+            {
+                return;
+            }
+
+            webSocketTransport.Stop();
+            webSocketTransport.Dispose();
+            webSocketTransport = null;
             sceneStatePoller.Reset(Time.unscaledTime);
-            Debug.Log("[Artel] WebSocket server stopped.");
+            Debug.Log("[Artel] WebSocket transport stopped.");
         }
 
-        private void HandleMessage(ArtelClientMessage message)
+        internal void SetWebSocketTransport(IArtelWebSocketTransport transport, bool takeOwnership)
+        {
+            if (webSocketTransport != null)
+            {
+                throw new InvalidOperationException("WebSocket transport is already configured.");
+            }
+
+            webSocketTransport = transport ?? throw new ArgumentNullException(nameof(transport));
+            ownsTransport = takeOwnership;
+            sceneStatePoller.Reset(Time.unscaledTime);
+        }
+
+        public void SetServer(Server configuredServer)
+        {
+            if (webSocketTransport != null)
+            {
+                throw new InvalidOperationException("Server cannot change after WebSocket transport is configured.");
+            }
+
+            server = configuredServer ?? throw new ArgumentNullException(nameof(configuredServer));
+        }
+
+        private void HandleMessage(ArtelWebSocketMessage message)
         {
             try
             {
@@ -110,15 +143,15 @@ namespace Artel
 
                 if (request.Method == "scan_scene" || request.Type == "SCAN_SCENE" || request.Type == "GET_GAME_STATE")
                 {
-                    SendGameState(message.Connection);
+                    SendGameState(message);
                     return;
                 }
 
-                SendError(message.Connection, "Unsupported message. Use JSON-RPC method scan_scene or ACTION.");
+                SendError(message, "Unsupported message. Use JSON-RPC method scan_scene or ACTION.");
             }
             catch (Exception exception)
             {
-                SendError(message.Connection, "Invalid message: " + exception.Message);
+                SendError(message, "Invalid message: " + exception.Message);
             }
         }
 
@@ -144,26 +177,31 @@ namespace Artel
                 Results = results
             };
 
-            server.SendToAll(jsonCodec.Serialize(response));
+            webSocketTransport.Send(jsonCodec.Serialize(response));
         }
 
-        private void SendGameState(ArtelConnection connection)
+        private void SendGameState(ArtelWebSocketMessage request)
         {
-            var scene = sceneStatePoller.ScanNow();
+            var poll = sceneStatePoller.ScanNow();
 
-            server.Send(connection, SerializeGameState(scene.Scene));
-            scene.ScanResult.CommitActions();
+            request.Reply(SerializeGameState(poll.Scene));
+            poll.ScanResult.CommitActions();
         }
 
         private void PollSceneState()
         {
-            if (!sceneStatePoller.TryPoll(Time.unscaledTime, out var scene))
+            if (!webSocketTransport.IsConnected)
             {
                 return;
             }
 
-            server.SendToAll(SerializeGameState(scene.Scene));
-            scene.ScanResult.CommitActions();
+            if (!sceneStatePoller.TryPoll(Time.unscaledTime, out var poll))
+            {
+                return;
+            }
+
+            webSocketTransport.Send(SerializeGameState(poll.Scene));
+            poll.ScanResult.CommitActions();
         }
 
         private string SerializeGameState(SceneDto scene)
@@ -176,7 +214,7 @@ namespace Artel
             });
         }
 
-        private void SendError(ArtelConnection connection, string error)
+        private void SendError(ArtelWebSocketMessage request, string error)
         {
             var message = new ErrorMessage
             {
@@ -185,7 +223,7 @@ namespace Artel
                 Error = error
             };
 
-            server.Send(connection, jsonCodec.Serialize(message));
+            request.Reply(jsonCodec.Serialize(message));
         }
     }
 }
