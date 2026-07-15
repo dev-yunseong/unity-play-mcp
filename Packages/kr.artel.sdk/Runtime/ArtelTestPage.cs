@@ -77,29 +77,43 @@ namespace Artel
       label.textContent = `${node.type} #${node.id} ${node.name || ''}`;
       wrap.appendChild(label);
 
-      if (node.type === 'Button') {
-        const button = document.createElement('button');
-        button.textContent = node.name || `Button ${node.id}`;
-        button.onclick = () => sendAction('button_click', [node.id]);
-        wrap.appendChild(button);
-      } else if (node.type === 'EditText') {
-        const input = document.createElement('input');
-        input.value = node.content || '';
-        input.placeholder = node.placeholder || '';
-        input.onchange = () => sendAction('enter_text', [node.id, input.value]);
-        wrap.appendChild(input);
-      } else if (node.type === 'Text') {
-        const text = document.createElement('div');
-        text.textContent = node.content || node.name || '';
-        wrap.appendChild(text);
-      } else {
-        const block = document.createElement('div');
-        block.className = 'block';
-        block.textContent = node.name || node.type;
-        wrap.appendChild(block);
+      for (const component of node.components || []) {
+        wrap.appendChild(renderComponent(node.id, component));
       }
 
       for (const child of node.children || []) wrap.appendChild(renderNode(child));
+      return wrap;
+    }
+
+    function renderComponent(blockId, component) {
+      const wrap = document.createElement('div');
+      wrap.className = 'block';
+
+      if (component.type === 'button') {
+        const button = document.createElement('button');
+        button.textContent = component.name || `Button ${blockId}`;
+        button.onclick = () => sendAction('button_click', [blockId]);
+        wrap.appendChild(button);
+      } else if (component.type === 'editText') {
+        const input = document.createElement('input');
+        input.value = component.content || '';
+        input.placeholder = component.placeholder || '';
+        input.onchange = () => sendAction('enter_text', [blockId, input.value]);
+        wrap.appendChild(input);
+      } else if (component.type === 'text') {
+        const text = document.createElement('div');
+        text.textContent = component.content || component.name || '';
+        wrap.appendChild(text);
+      } else {
+        wrap.textContent = component.name || component.type;
+      }
+
+      if ((component.states || []).length > 0 || (component.actions || []).length > 0) {
+        const metadata = document.createElement('pre');
+        metadata.textContent = JSON.stringify({ states: component.states, actions: component.actions }, null, 2);
+        wrap.appendChild(metadata);
+      }
+
       return wrap;
     }
   </script>
