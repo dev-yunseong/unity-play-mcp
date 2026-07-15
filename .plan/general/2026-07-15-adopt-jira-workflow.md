@@ -6,7 +6,7 @@
 
 ## Goal
 
-GitHub Issue 생성과 숫자 기반 브랜치명을 강제하는 저장소 지침을 제거하고 Jira 중심의 선택적 작업 추적 규칙으로 전환한다.
+GitHub Issue와 branch 생성을 담당하는 저장소 지침을 제거하고, 외부에서 제공된 Jira 및 branch context를 사용하는 워크플로로 전환한다.
 
 ## Non-goals
 
@@ -18,6 +18,7 @@ GitHub Issue 생성과 숫자 기반 브랜치명을 강제하는 저장소 지�
 - Jira 티켓은 있을 때 연결하지만, 티켓 부재가 개발과 PR 생성을 막지 않아야 한다.
 - 브랜치는 번호 대신 의도를 드러내는 짧은 설명을 사용해야 한다.
 - 기존 GitHub Issue 기반 로컬 skill과 agent 지침도 같은 정책을 따라야 한다.
+- issue와 branch 생성 workflow 파일은 저장소에서 제거한다.
 - 커밋 메시지는 제한된 type과 한글 변경 사항 형식을 사용해야 한다.
 
 ## Approach (Checklist)

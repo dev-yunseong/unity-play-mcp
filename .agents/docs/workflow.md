@@ -25,16 +25,15 @@ is installed.
 
 1. Confirm goal, scope, acceptance criteria, and non-goals.
 2. Read project context, relevant code, tests, and recent changes.
-3. Link the Jira work item when one exists. Do not create a GitHub Issue for development tracking.
-4. Create a descriptive branch. A Jira key is optional and must not block work.
-5. Write a concise implementation plan; use `writing-plan` when installed.
-6. Identify architecture impact, tradeoffs, risks, and rollback.
-7. Implement the smallest coherent change.
-8. Follow `testing.md`; use an installed testing skill when available.
-9. Review the complete diff for scope, correctness, and accidental churn.
-10. Commit coherent units using the commit convention.
-11. Open a PR with evidence and explicit remaining risk.
-12. Address review without hiding unresolved concerns.
+3. Use Jira and branch context provided by the user or environment. Do not create issues or branches unless explicitly requested.
+4. Write a concise implementation plan; use `writing-plan` when installed.
+5. Identify architecture impact, tradeoffs, risks, and rollback.
+6. Implement the smallest coherent change.
+7. Follow `testing.md`; use an installed testing skill when available.
+8. Review the complete diff for scope, correctness, and accidental churn.
+9. Commit coherent units using the commit convention.
+10. Open a PR with evidence and explicit remaining risk.
+11. Address review without hiding unresolved concerns.
 
 ## Change Rules
 
