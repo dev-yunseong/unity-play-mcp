@@ -1,8 +1,19 @@
 # Artel SDK
 
+## Runtime connection
+
+Add `ArtelManager` to a scene. By default it creates a WebSocket client and
+connects to the configured URL. The client appends the persistent SDK UUID as
+the `sdkId` query parameter.
+
+The UUID is generated once and stored in Unity `PlayerPrefs` under
+`Artel.SdkId`.
+
 ## Local PoC
 
-Add `ArtelManager` to a scene to start the SDK WebSocket server:
+Add both `ArtelManager` and `ArtelTestPageManager` to the same scene object.
+The test page manager replaces the default client transport with its local
+WebSocket server and manages both test servers:
 
 - WebSocket URL: `ws://127.0.0.1:17311/ws`
 - Scan request: `{ "jsonrpc": "2.0", "id": 1, "method": "scan_scene", "params": [] }`
@@ -67,10 +78,8 @@ Current limits:
 - Return and state values must be serializable by Newtonsoft.Json.
 - Each component keeps at most 256 pending actions; overflow drops the oldest.
 
-Add `ArtelTestPageServer` to a scene when you want the browser test page:
-
 - HTTP URL: `http://127.0.0.1:17310/`
-- The test page connects to the `ArtelManager` WebSocket server.
+- WebSocket URL: `ws://127.0.0.1:17311/ws`
 
 ## Included dependencies
 

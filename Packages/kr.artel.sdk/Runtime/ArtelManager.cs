@@ -9,79 +9,99 @@ namespace Artel
 {
     public sealed class ArtelManager : MonoBehaviour
     {
-        [SerializeField] private bool startServerOnEnable = true;
-        [SerializeField] private string bindAddress = "127.0.0.1";
-        [SerializeField] private int port = 17311;
+        [SerializeField] private bool connectOnEnable = true;
+        [SerializeField] private string websocketUrl = "ws://127.0.0.1:17311/ws";
 
-        private IArtelWebSocketServer server;
+        private IArtelWebSocketTransport webSocketTransport;
+        private bool ownsTransport = true;
         private SceneScanner scanner;
         private ActionExecutor actionExecutor;
         private IJsonCodec jsonCodec;
         private long nextMessageId = 1;
 
-        public string Url
-        {
-            get { return "ws://" + bindAddress + ":" + port + "/ws"; }
-        }
+        public string SdkId { get; private set; }
 
         private void Awake()
         {
             scanner = new SceneScanner();
             actionExecutor = new ActionExecutor(scanner);
             jsonCodec = new NewtonsoftJsonCodec();
+            SdkId = ArtelSdkIdentity.LoadOrCreate();
         }
 
         private void OnEnable()
         {
-            if (startServerOnEnable)
+            if (connectOnEnable)
             {
-                StartServer();
+                StartTransport();
             }
         }
 
         private void OnDisable()
         {
-            StopServer();
+            StopTransport();
         }
 
         private void Update()
         {
-            if (server == null)
+            if (webSocketTransport == null)
             {
                 return;
             }
 
-            while (server.TryDequeueMessage(out var message))
+            while (webSocketTransport.TryDequeueMessage(out var message))
             {
                 HandleMessage(message);
             }
         }
 
-        public void StartServer()
+        public void StartTransport()
         {
-            if (server != null)
+            if (webSocketTransport == null)
+            {
+                webSocketTransport = new ArtelWebSocketClient(websocketUrl, SdkId);
+                ownsTransport = true;
+            }
+
+            if (!ownsTransport)
             {
                 return;
             }
 
-            server = ArtelWebSocketServerFactory.Create(bindAddress, port);
-            server.Start();
-            Debug.Log("[Artel] WebSocket server started at " + Url);
+            webSocketTransport.Start();
+            Debug.Log("[Artel] WebSocket transport started.");
         }
 
-        public void StopServer()
+        public void StopTransport()
         {
-            if (server == null)
+            if (webSocketTransport == null)
             {
                 return;
             }
 
-            server.Dispose();
-            server = null;
-            Debug.Log("[Artel] WebSocket server stopped.");
+            if (!ownsTransport)
+            {
+                return;
+            }
+
+            webSocketTransport.Stop();
+            webSocketTransport.Dispose();
+            webSocketTransport = null;
+            Debug.Log("[Artel] WebSocket transport stopped.");
         }
 
-        private void HandleMessage(ArtelClientMessage message)
+        internal void SetWebSocketTransport(IArtelWebSocketTransport transport, bool takeOwnership)
+        {
+            if (webSocketTransport != null)
+            {
+                throw new InvalidOperationException("WebSocket transport is already configured.");
+            }
+
+            webSocketTransport = transport ?? throw new ArgumentNullException(nameof(transport));
+            ownsTransport = takeOwnership;
+        }
+
+        private void HandleMessage(ArtelWebSocketMessage message)
         {
             try
             {
@@ -99,15 +119,15 @@ namespace Artel
 
                 if (request.Method == "scan_scene" || request.Type == "SCAN_SCENE" || request.Type == "GET_GAME_STATE")
                 {
-                    SendGameState(message.Connection);
+                    SendGameState(message);
                     return;
                 }
 
-                SendError(message.Connection, "Unsupported message. Use JSON-RPC method scan_scene or ACTION.");
+                SendError(message, "Unsupported message. Use JSON-RPC method scan_scene or ACTION.");
             }
             catch (Exception exception)
             {
-                SendError(message.Connection, "Invalid message: " + exception.Message);
+                SendError(message, "Invalid message: " + exception.Message);
             }
         }
 
@@ -133,10 +153,10 @@ namespace Artel
                 Results = results
             };
 
-            server.SendToAll(jsonCodec.Serialize(response));
+            webSocketTransport.Send(jsonCodec.Serialize(response));
         }
 
-        private void SendGameState(ArtelConnection connection)
+        private void SendGameState(ArtelWebSocketMessage request)
         {
             var scene = scanner.Scan();
             var message = new GameStateMessageDto
@@ -146,11 +166,11 @@ namespace Artel
                 Scene = SceneSnapshotMapper.ToDto(scene.Scene)
             };
 
-            server.Send(connection, jsonCodec.Serialize(message));
+            request.Reply(jsonCodec.Serialize(message));
             scene.CommitActions();
         }
 
-        private void SendError(ArtelConnection connection, string error)
+        private void SendError(ArtelWebSocketMessage request, string error)
         {
             var message = new ErrorMessage
             {
@@ -159,7 +179,7 @@ namespace Artel
                 Error = error
             };
 
-            server.Send(connection, jsonCodec.Serialize(message));
+            request.Reply(jsonCodec.Serialize(message));
         }
     }
 }
