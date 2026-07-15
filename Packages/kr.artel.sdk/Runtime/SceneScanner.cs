@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 namespace Artel
 {
-    internal sealed class SceneScanner
+    internal sealed class SceneScanner : ISceneSnapshotScanner
     {
         private readonly Dictionary<int, ScannedTarget> targetsById = new Dictionary<int, ScannedTarget>();
         private readonly StateReader stateReader = new StateReader();

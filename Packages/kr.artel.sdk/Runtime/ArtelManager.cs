@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
 using Artel.Protocol.Dto;
-using Artel.Protocol.Mapping;
 using Artel.Serialization;
+using Artel.Tracking;
 using UnityEngine;
 
 namespace Artel
 {
     public sealed class ArtelManager : MonoBehaviour
     {
+        private const float SceneScanIntervalSeconds = 1f;
+
         [SerializeField] private bool startServerOnEnable = true;
         [SerializeField] private string bindAddress = "127.0.0.1";
         [SerializeField] private int port = 17311;
@@ -17,6 +19,7 @@ namespace Artel
         private SceneScanner scanner;
         private ActionExecutor actionExecutor;
         private IJsonCodec jsonCodec;
+        private SceneStatePoller sceneStatePoller;
         private long nextMessageId = 1;
 
         public string Url
@@ -29,6 +32,10 @@ namespace Artel
             scanner = new SceneScanner();
             actionExecutor = new ActionExecutor(scanner);
             jsonCodec = new NewtonsoftJsonCodec();
+            sceneStatePoller = new SceneStatePoller(
+                scanner,
+                new SceneStateHashTracker(jsonCodec),
+                SceneScanIntervalSeconds);
         }
 
         private void OnEnable()
@@ -55,6 +62,8 @@ namespace Artel
             {
                 HandleMessage(message);
             }
+
+            PollSceneState();
         }
 
         public void StartServer()
@@ -66,6 +75,7 @@ namespace Artel
 
             server = ArtelWebSocketServerFactory.Create(bindAddress, port);
             server.Start();
+            sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket server started at " + Url);
         }
 
@@ -78,6 +88,7 @@ namespace Artel
 
             server.Dispose();
             server = null;
+            sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket server stopped.");
         }
 
@@ -138,16 +149,31 @@ namespace Artel
 
         private void SendGameState(ArtelConnection connection)
         {
-            var scene = scanner.Scan();
-            var message = new GameStateMessageDto
+            var scene = sceneStatePoller.ScanNow();
+
+            server.Send(connection, SerializeGameState(scene.Scene));
+            scene.ScanResult.CommitActions();
+        }
+
+        private void PollSceneState()
+        {
+            if (!sceneStatePoller.TryPoll(Time.unscaledTime, out var scene))
+            {
+                return;
+            }
+
+            server.SendToAll(SerializeGameState(scene.Scene));
+            scene.ScanResult.CommitActions();
+        }
+
+        private string SerializeGameState(SceneDto scene)
+        {
+            return jsonCodec.Serialize(new GameStateMessageDto
             {
                 Type = "GAME_STATE",
                 Id = nextMessageId++,
-                Scene = SceneSnapshotMapper.ToDto(scene.Scene)
-            };
-
-            server.Send(connection, jsonCodec.Serialize(message));
-            scene.CommitActions();
+                Scene = scene
+            });
         }
 
         private void SendError(ArtelConnection connection, string error)
