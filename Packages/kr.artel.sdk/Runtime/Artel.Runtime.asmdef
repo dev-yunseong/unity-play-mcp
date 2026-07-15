@@ -1,12 +1,17 @@
 {
   "name": "Artel.Runtime",
   "rootNamespace": "Artel",
-  "references": [],
+  "references": [
+    "Unity.TextMeshPro",
+    "UnityEngine.UI"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "websocket-sharp.dll"
+  ],
   "autoReferenced": true,
   "defineConstraints": [],
   "versionDefines": [],
