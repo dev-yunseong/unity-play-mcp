@@ -1,0 +1,23 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+UserSettings/
+
+# Visual Studio
+.vs/
+*.sln
+*.csproj.user
+
+# Rider
+.idea/
+
+# git
+.worktree
+
+# .NET
+bin/
+obj/
