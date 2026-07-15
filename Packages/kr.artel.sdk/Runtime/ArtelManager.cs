@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Artel.Domain;
 using Artel.Protocol.Dto;
 using Artel.Protocol.Mapping;
 using Artel.Serialization;
@@ -9,8 +10,8 @@ namespace Artel
 {
     public sealed class ArtelManager : MonoBehaviour
     {
-        [SerializeField] private bool connectOnEnable = true;
-        [SerializeField] private string websocketUrl = "ws://127.0.0.1:17311/ws";
+        [SerializeField] private bool connectOnEnable;
+        [SerializeField] private Server server = new Server();
 
         private IArtelWebSocketTransport webSocketTransport;
         private bool ownsTransport = true;
@@ -20,6 +21,7 @@ namespace Artel
         private long nextMessageId = 1;
 
         public string SdkId { get; private set; }
+        public Server Server { get { return server; } }
 
         private void Awake()
         {
@@ -59,7 +61,7 @@ namespace Artel
         {
             if (webSocketTransport == null)
             {
-                webSocketTransport = new ArtelWebSocketClient(websocketUrl, SdkId);
+                webSocketTransport = new ArtelWebSocketClient(server.GetSdkWebSocketUri(SdkId));
                 ownsTransport = true;
             }
 
@@ -99,6 +101,16 @@ namespace Artel
 
             webSocketTransport = transport ?? throw new ArgumentNullException(nameof(transport));
             ownsTransport = takeOwnership;
+        }
+
+        public void SetServer(Server configuredServer)
+        {
+            if (webSocketTransport != null)
+            {
+                throw new InvalidOperationException("Server cannot change after WebSocket transport is configured.");
+            }
+
+            server = configuredServer ?? throw new ArgumentNullException(nameof(configuredServer));
         }
 
         private void HandleMessage(ArtelWebSocketMessage message)

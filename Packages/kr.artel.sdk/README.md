@@ -2,9 +2,13 @@
 
 ## Runtime connection
 
-Add `ArtelManager` to a scene. By default it creates a WebSocket client and
-connects to the configured URL. The client appends the persistent SDK UUID as
-the `sdkId` query parameter.
+Add `ArtelManager` and `ArtelOnboardingController` to a scene object. Configure
+the HTTP and WebSocket base URLs on the manager's `Server` field. Both insecure
+and secure schemes are supported (`http`/`https`, `ws`/`wss`).
+
+At runtime the onboarding panel registers the persistent SDK UUID with
+`POST /api/sdkId`. After registration succeeds, the user can explicitly connect
+to `/ws/sdk?sdkId={SDK_ID}`.
 
 The UUID is generated once and stored in Unity `PlayerPrefs` under
 `Artel.SdkId`.

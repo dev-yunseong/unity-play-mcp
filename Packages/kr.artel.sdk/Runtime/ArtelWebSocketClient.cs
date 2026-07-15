@@ -11,9 +11,9 @@ namespace Artel
             new ConcurrentQueue<ArtelWebSocketMessage>();
         private WebSocket client;
 
-        public ArtelWebSocketClient(string url, string sdkId)
+        public ArtelWebSocketClient(Uri endpoint)
         {
-            this.url = ArtelWebSocketUrl.WithSdkId(url, sdkId);
+            url = endpoint?.AbsoluteUri ?? throw new ArgumentNullException(nameof(endpoint));
         }
 
         public void Start()
@@ -66,15 +66,6 @@ namespace Artel
             {
                 incomingMessages.Enqueue(new ArtelWebSocketMessage(eventArgs.Data, Send));
             }
-        }
-    }
-
-    internal static class ArtelWebSocketUrl
-    {
-        public static string WithSdkId(string url, string sdkId)
-        {
-            var separator = url.Contains("?") ? "&" : "?";
-            return url + separator + "sdkId=" + Uri.EscapeDataString(sdkId);
         }
     }
 }
