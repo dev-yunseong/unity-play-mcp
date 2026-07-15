@@ -61,7 +61,7 @@ namespace Artel
         {
             if (webSocketTransport == null)
             {
-                webSocketTransport = new ArtelWebSocketClient(server.GetSdkWebSocketUri(SdkId));
+                webSocketTransport = new ArtelWebSocketClient(server, SdkId);
                 ownsTransport = true;
             }
 

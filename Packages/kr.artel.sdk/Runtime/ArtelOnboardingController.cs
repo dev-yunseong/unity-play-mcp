@@ -1,10 +1,6 @@
-using System.Collections;
-using System.Text;
-using Artel.Protocol.Dto;
 using Artel.Serialization;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.Networking;
 using UnityEngine.UI;
 
 namespace Artel
@@ -17,15 +13,13 @@ namespace Artel
 
         [SerializeField] private ArtelManager artelManager;
 
-        private readonly IJsonCodec jsonCodec = new NewtonsoftJsonCodec();
         private GameObject canvasObject;
         private GameObject createdEventSystem;
         private GameObject panelObject;
         private Button registerButton;
         private Button connectButton;
         private Text statusText;
-        private bool registered;
-        private bool requestInProgress;
+        private ArtelOnboardingViewModel viewModel;
 
         private void Awake()
         {
@@ -33,13 +27,16 @@ namespace Artel
             {
                 artelManager = GetComponent<ArtelManager>();
             }
+
+            viewModel = new ArtelOnboardingViewModel(
+                new ArtelSdkRegistrationClient(new NewtonsoftJsonCodec()));
+            viewModel.Changed += RefreshView;
         }
 
         private void Start()
         {
             CreateGui();
-            SetStatus("SDK ID를 서버에 등록해 주세요.");
-            RefreshButtons();
+            RefreshView();
         }
 
         private void OnDestroy()
@@ -53,76 +50,21 @@ namespace Artel
             {
                 Destroy(createdEventSystem);
             }
+
+            if (viewModel != null)
+            {
+                viewModel.Changed -= RefreshView;
+            }
         }
 
         private void RegisterSdkId()
         {
-            if (!requestInProgress)
-            {
-                StartCoroutine(RegisterSdkIdRequest());
-            }
-        }
-
-        private IEnumerator RegisterSdkIdRequest()
-        {
-            requestInProgress = true;
-            registered = false;
-            SetStatus("SDK ID 등록 중...");
-            RefreshButtons();
-
-            UnityWebRequest request;
-            try
-            {
-                var body = jsonCodec.Serialize(new SdkRegistrationRequestDto { SdkId = artelManager.SdkId });
-                request = new UnityWebRequest(
-                    artelManager.Server.SdkRegistrationUri.AbsoluteUri,
-                    UnityWebRequest.kHttpVerbPOST)
-                {
-                    uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
-                    downloadHandler = new DownloadHandlerBuffer()
-                };
-                request.SetRequestHeader("Content-Type", "application/json");
-            }
-            catch (System.Exception exception)
-            {
-                requestInProgress = false;
-                SetStatus("설정 오류: " + exception.Message);
-                RefreshButtons();
-                yield break;
-            }
-
-            using (request)
-            {
-                yield return request.SendWebRequest();
-
-                registered = request.result == UnityWebRequest.Result.Success;
-                var response = string.IsNullOrWhiteSpace(request.downloadHandler.text)
-                    ? "HTTP " + request.responseCode
-                    : request.downloadHandler.text;
-                SetStatus((registered ? "등록 성공: " : "등록 실패: ") + response);
-            }
-
-            requestInProgress = false;
-            RefreshButtons();
+            StartCoroutine(viewModel.Register(artelManager.Server, artelManager.SdkId));
         }
 
         private void ConnectWebSocket()
         {
-            if (!registered || requestInProgress)
-            {
-                return;
-            }
-
-            try
-            {
-                artelManager.StartTransport();
-                SetStatus("실시간 서버 연결을 시작했습니다.");
-                connectButton.interactable = false;
-            }
-            catch (System.Exception exception)
-            {
-                SetStatus("연결 실패: " + exception.Message);
-            }
+            viewModel.Connect(artelManager.StartTransport);
         }
 
         private void CreateGui()
@@ -171,15 +113,11 @@ namespace Artel
             SetRect(statusText.rectTransform, new Vector2(20f, -182f), new Vector2(400f, 70f));
         }
 
-        private void RefreshButtons()
+        private void RefreshView()
         {
-            registerButton.interactable = !requestInProgress;
-            connectButton.interactable = registered && !requestInProgress;
-        }
-
-        private void SetStatus(string status)
-        {
-            statusText.text = status;
+            statusText.text = viewModel.Status;
+            registerButton.interactable = viewModel.CanRegister;
+            connectButton.interactable = viewModel.CanConnect;
         }
 
         private static Button CreateButton(Transform parent, string label, Vector2 size)

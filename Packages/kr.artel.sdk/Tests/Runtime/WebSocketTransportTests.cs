@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Text;
 using Artel.Domain;
 using Artel.Protocol.Dto;
 using Newtonsoft.Json;
@@ -60,14 +61,44 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void Server_BuildsSdkRegistrationAndSecureWebSocketEndpoints()
+        public void Server_BuildsSecureProtocolBaseUris()
         {
-            var server = new Server("https://test.artel.example/", "wss://socket.artel.example/");
+            var server = new Server(true, "test.artel.example", 8443);
 
-            Assert.That(server.SdkRegistrationUri.AbsoluteUri, Is.EqualTo("https://test.artel.example/api/sdkId"));
+            Assert.That(server.HttpBaseUri.AbsoluteUri, Is.EqualTo("https://test.artel.example:8443/"));
             Assert.That(
-                server.GetSdkWebSocketUri("sdk id").AbsoluteUri,
-                Is.EqualTo("wss://socket.artel.example/ws/sdk?sdkId=sdk%20id"));
+                server.WebSocketBaseUri.AbsoluteUri,
+                Is.EqualTo("wss://test.artel.example:8443/"));
+        }
+
+        [Test]
+        public void RegistrationClient_OwnsSdkRegistrationPathAndBody()
+        {
+            var server = new Server(false, "127.0.0.1", 8080);
+            var client = new ArtelSdkRegistrationClient(new Artel.Serialization.NewtonsoftJsonCodec());
+            var request = client.CreateRequest(server, "sdk-id");
+
+            try
+            {
+                Assert.That(request.url, Is.EqualTo("http://127.0.0.1:8080/api/sdkId"));
+                Assert.That(
+                    Encoding.UTF8.GetString(request.uploadHandler.data),
+                    Is.EqualTo("{\"sdkId\":\"sdk-id\"}"));
+            }
+            finally
+            {
+                request.Dispose();
+            }
+        }
+
+        [Test]
+        public void WebSocketClient_OwnsSdkWebSocketPathAndQuery()
+        {
+            var server = new Server(true, "socket.artel.example", 443);
+
+            var endpoint = ArtelWebSocketClient.BuildEndpoint(server, "sdk id");
+
+            Assert.That(endpoint.AbsoluteUri, Is.EqualTo("wss://socket.artel.example/ws/sdk?sdkId=sdk%20id"));
         }
 
         [Test]
@@ -76,6 +107,17 @@ namespace Artel.Tests.Transport
             var json = JsonConvert.SerializeObject(new SdkRegistrationRequestDto { SdkId = "sdk-id" });
 
             Assert.That(json, Is.EqualTo("{\"sdkId\":\"sdk-id\"}"));
+        }
+
+        [Test]
+        public void OnboardingViewModel_StartsWithRegistrationEnabledOnly()
+        {
+            var viewModel = new ArtelOnboardingViewModel(
+                new ArtelSdkRegistrationClient(new Artel.Serialization.NewtonsoftJsonCodec()));
+
+            Assert.That(viewModel.CanRegister, Is.True);
+            Assert.That(viewModel.CanConnect, Is.False);
+            Assert.That(viewModel.Status, Does.Contain("등록"));
         }
 
         [Test]

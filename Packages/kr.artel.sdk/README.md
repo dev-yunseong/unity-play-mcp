@@ -3,10 +3,11 @@
 ## Runtime connection
 
 Add `ArtelManager` and `ArtelOnboardingController` to a scene object. Configure
-the HTTP and WebSocket base URLs on the manager's `Server` field. Both insecure
-and secure schemes are supported (`http`/`https`, `ws`/`wss`).
+`secure`, `host`, and `port` on the manager's `Server` field. The server builds
+the matching HTTP and WebSocket base URLs (`http`/`ws` or `https`/`wss`). API
+clients own their endpoint paths.
 
-At runtime the onboarding panel registers the persistent SDK UUID with
+At runtime the view-model-backed onboarding panel registers the persistent SDK UUID with
 `POST /api/sdkId`. After registration succeeds, the user can explicitly connect
 to `/ws/sdk?sdkId={SDK_ID}`.
 

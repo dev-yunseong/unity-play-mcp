@@ -6,55 +6,44 @@ namespace Artel.Domain
     [Serializable]
     public sealed class Server
     {
-        private const string SdkRegistrationPath = "/api/sdkId";
-        private const string SdkWebSocketPath = "/ws/sdk";
-
-        [SerializeField] private string httpBaseUrl = string.Empty;
-        [SerializeField] private string websocketBaseUrl = string.Empty;
+        [SerializeField] private bool secure = true;
+        [SerializeField] private string host = string.Empty;
+        [SerializeField] private int port = 443;
 
         public Server()
         {
         }
 
-        public Server(string httpBaseUrl, string websocketBaseUrl)
+        public Server(bool secure, string host, int port)
         {
-            this.httpBaseUrl = httpBaseUrl;
-            this.websocketBaseUrl = websocketBaseUrl;
+            this.secure = secure;
+            this.host = host;
+            this.port = port;
         }
 
-        public Uri SdkRegistrationUri
+        public Uri HttpBaseUri
         {
-            get { return BuildUri(httpBaseUrl, SdkRegistrationPath, "http", "https"); }
+            get { return BuildBaseUri(secure ? "https" : "http"); }
         }
 
-        public Uri GetSdkWebSocketUri(string sdkId)
+        public Uri WebSocketBaseUri
         {
-            if (string.IsNullOrWhiteSpace(sdkId))
-            {
-                throw new ArgumentException("SDK ID is required.", nameof(sdkId));
-            }
-
-            var endpoint = BuildUri(websocketBaseUrl, SdkWebSocketPath, "ws", "wss");
-            return new UriBuilder(endpoint)
-            {
-                Query = "sdkId=" + Uri.EscapeDataString(sdkId)
-            }.Uri;
+            get { return BuildBaseUri(secure ? "wss" : "ws"); }
         }
 
-        private static Uri BuildUri(string baseUrl, string path, string scheme, string secureScheme)
+        private Uri BuildBaseUri(string scheme)
         {
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+            if (string.IsNullOrWhiteSpace(host))
             {
-                throw new InvalidOperationException("Server base URL must be an absolute URL: " + baseUrl);
+                throw new InvalidOperationException("Server host is required.");
             }
 
-            if (baseUri.Scheme != scheme && baseUri.Scheme != secureScheme)
+            if (port < 1 || port > 65535)
             {
-                throw new InvalidOperationException(
-                    "Server URL scheme must be " + scheme + " or " + secureScheme + ": " + baseUrl);
+                throw new InvalidOperationException("Server port must be between 1 and 65535: " + port);
             }
 
-            return new Uri(baseUri.ToString().TrimEnd('/') + path, UriKind.Absolute);
+            return new UriBuilder(scheme, host.Trim(), port).Uri;
         }
     }
 }

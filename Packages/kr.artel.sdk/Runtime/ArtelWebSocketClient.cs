@@ -1,19 +1,22 @@
 using System;
 using System.Collections.Concurrent;
+using Artel.Domain;
 using WebSocketSharp;
 
 namespace Artel
 {
     internal sealed class ArtelWebSocketClient : IArtelWebSocketTransport
     {
+        private const string SdkWebSocketPath = "/ws/sdk";
+
         private readonly string url;
         private readonly ConcurrentQueue<ArtelWebSocketMessage> incomingMessages =
             new ConcurrentQueue<ArtelWebSocketMessage>();
         private WebSocket client;
 
-        public ArtelWebSocketClient(Uri endpoint)
+        public ArtelWebSocketClient(Server server, string sdkId)
         {
-            url = endpoint?.AbsoluteUri ?? throw new ArgumentNullException(nameof(endpoint));
+            url = BuildEndpoint(server, sdkId).AbsoluteUri;
         }
 
         public void Start()
@@ -58,6 +61,25 @@ namespace Artel
         public void Dispose()
         {
             Stop();
+        }
+
+        internal static Uri BuildEndpoint(Server server, string sdkId)
+        {
+            if (server == null)
+            {
+                throw new ArgumentNullException(nameof(server));
+            }
+
+            if (string.IsNullOrWhiteSpace(sdkId))
+            {
+                throw new ArgumentException("SDK ID is required.", nameof(sdkId));
+            }
+
+            var endpoint = new Uri(server.WebSocketBaseUri, SdkWebSocketPath);
+            return new UriBuilder(endpoint)
+            {
+                Query = "sdkId=" + Uri.EscapeDataString(sdkId)
+            }.Uri;
         }
 
         private void OnMessage(object sender, MessageEventArgs eventArgs)
