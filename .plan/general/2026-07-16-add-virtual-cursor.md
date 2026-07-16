@@ -21,6 +21,7 @@ SDK가 `button_click` 또는 `enter_text`를 실행할 때 대상 UI 오브젝�
 - 여러 액션 요청은 커서 이동이 겹치지 않도록 직렬 실행한다.
 - 씬 또는 sample submodule 수정 없이 SDK 런타임에서 동작해야 한다.
 - `ArtelManager`만 부착해도 Onboarding GUI가 자동 생성되어야 한다.
+- 커서는 36x48px 크기와 고대비 외곽선·그림자로 게임 화면에서 잘 보여야 한다.
 - 현재 사용자 변경인 `.gitignore`, `samples/WordVenture`, `src/`는 건드리지 않는다.
 
 ## Approach (Checklist)

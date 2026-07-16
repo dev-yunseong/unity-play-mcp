@@ -6,8 +6,8 @@ namespace Artel
 {
     public sealed class CursorController : MonoBehaviour
     {
-        private const int CursorWidth = 18;
-        private const int CursorHeight = 24;
+        private const int CursorWidth = 36;
+        private const int CursorHeight = 48;
         private const int OverlaySortingOrder = short.MaxValue;
 
         [SerializeField] private bool smoothMovement;
@@ -123,22 +123,62 @@ namespace Artel
             };
             var pixels = new Color32[CursorWidth * CursorHeight];
 
-            for (var y = 0; y < CursorHeight; y++)
+            for (var distanceFromTop = 0; distanceFromTop < CursorHeight; distanceFromTop++)
             {
-                var distanceFromTop = CursorHeight - y - 1;
-                var width = distanceFromTop < 15 ? (distanceFromTop / 2) + 1 : 0;
-                for (var x = 0; x < width; x++)
+                var y = CursorHeight - distanceFromTop - 1;
+                for (var x = 0; x < CursorWidth; x++)
                 {
-                    var isBorder = x == 0 || x == width - 1 || distanceFromTop == 0 || distanceFromTop == 14;
-                    pixels[(y * CursorWidth) + x] = isBorder
-                        ? new Color32(24, 24, 24, 255)
-                        : new Color32(255, 255, 255, 255);
+                    if (IsCursorShape(x, distanceFromTop))
+                    {
+                        pixels[(y * CursorWidth) + x] = IsCursorBorder(x, distanceFromTop)
+                            ? new Color32(12, 22, 38, 255)
+                            : new Color32(72, 200, 255, 255);
+                        continue;
+                    }
+
+                    if (IsCursorShape(x - 3, distanceFromTop - 3))
+                    {
+                        pixels[(y * CursorWidth) + x] = new Color32(0, 0, 0, 90);
+                    }
                 }
             }
 
             texture.SetPixels32(pixels);
             texture.Apply(false, true);
             return texture;
+        }
+
+        private static bool IsCursorShape(int x, int distanceFromTop)
+        {
+            if (x < 0 || distanceFromTop < 0)
+            {
+                return false;
+            }
+
+            var arrowHead = distanceFromTop <= 29 && x <= Mathf.FloorToInt(distanceFromTop * 0.64f);
+            var stemStart = 9 + Mathf.Max(0, distanceFromTop - 20) / 3;
+            var arrowStem = distanceFromTop >= 20
+                && distanceFromTop <= 43
+                && x >= stemStart
+                && x <= stemStart + 8;
+            return arrowHead || arrowStem;
+        }
+
+        private static bool IsCursorBorder(int x, int distanceFromTop)
+        {
+            const int borderThickness = 2;
+            for (var yOffset = -borderThickness; yOffset <= borderThickness; yOffset++)
+            {
+                for (var xOffset = -borderThickness; xOffset <= borderThickness; xOffset++)
+                {
+                    if (!IsCursorShape(x + xOffset, distanceFromTop + yOffset))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 }
