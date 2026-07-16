@@ -25,5 +25,20 @@ namespace Artel.Tests.Tracking
         {
             throw new InvalidOperationException("boom");
         }
+
+        public bool ReadSpaceKeyDown()
+        {
+            return Input.GetKeyDown(KeyCode.Space);
+        }
+
+        public bool ReadSpaceKey()
+        {
+            return Input.GetKey(KeyCode.Space);
+        }
+
+        public bool ReadAnyKeyDown()
+        {
+            return Input.anyKeyDown;
+        }
     }
 }

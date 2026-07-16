@@ -12,6 +12,10 @@ namespace Artel
     body { font-family: system-ui, sans-serif; margin: 24px; color: #1f2328; }
     header { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
     button, input { font: inherit; padding: 8px 10px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 16px; padding: 12px; background: #f6f8fa; }
+    .controls label { display: grid; gap: 4px; font-size: 12px; color: #57606a; }
+    .controls input { color: #1f2328; }
+    #key-duration { width: 96px; }
     .node { border-left: 2px solid #d0d7de; margin: 8px 0 8px 16px; padding-left: 12px; }
     .label { font-size: 12px; color: #57606a; margin-bottom: 4px; }
     .block { padding: 8px; background: #f6f8fa; }
@@ -25,6 +29,31 @@ namespace Artel
     <button id=""scan"">Scan</button>
     <span id=""status"">idle</span>
   </header>
+  <section class=""controls"" aria-label=""Keyboard input"">
+    <strong>Keyboard</strong>
+    <label>
+      KeyCode
+      <input id=""key-code"" list=""key-codes"" value=""Space"" autocomplete=""off"">
+    </label>
+    <datalist id=""key-codes"">
+      <option value=""Space""></option>
+      <option value=""Return""></option>
+      <option value=""Escape""></option>
+      <option value=""UpArrow""></option>
+      <option value=""DownArrow""></option>
+      <option value=""LeftArrow""></option>
+      <option value=""RightArrow""></option>
+      <option value=""A""></option>
+      <option value=""W""></option>
+      <option value=""S""></option>
+      <option value=""D""></option>
+    </datalist>
+    <label>
+      Duration (seconds)
+      <input id=""key-duration"" type=""number"" value=""0.5"" min=""0.01"" step=""0.05"">
+    </label>
+    <button id=""key-click"">Click key</button>
+  </section>
   <main id=""scene""></main>
   <pre id=""log""></pre>
   <script>
@@ -34,9 +63,12 @@ namespace Artel
     const status = document.getElementById('status');
     const sceneRoot = document.getElementById('scene');
     const log = document.getElementById('log');
+    const keyCode = document.getElementById('key-code');
+    const keyDuration = document.getElementById('key-duration');
 
     document.getElementById('connect').onclick = connect;
     document.getElementById('scan').onclick = scan;
+    document.getElementById('key-click').onclick = clickKey;
 
     function connect() {
       ws = new WebSocket(wsUrl);
@@ -52,11 +84,27 @@ namespace Artel
     }
 
     function sendAction(method, params) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        status.textContent = 'connect first';
+        return;
+      }
+
       ws.send(JSON.stringify({
         type: 'ACTION',
         id: actionId++,
         actions: [{ id: actionId++, jsonrpc: '2.0', method, params }]
       }));
+    }
+
+    function clickKey() {
+      const key = keyCode.value.trim();
+      const duration = Number(keyDuration.value);
+      if (!key || !Number.isFinite(duration) || duration <= 0) {
+        status.textContent = 'invalid key input';
+        return;
+      }
+
+      sendAction('key_click', [key, duration]);
     }
 
     function handleMessage(message) {

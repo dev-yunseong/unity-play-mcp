@@ -110,6 +110,15 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
+        public void TestPage_ProvidesKeyboardActionControls()
+        {
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"key-code\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"key-duration\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"key-click\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("sendAction('key_click', [key, duration])"));
+        }
+
+        [Test]
         public void OnboardingViewModel_StartsWithRegistrationEnabledOnly()
         {
             var viewModel = new ArtelOnboardingViewModel(
