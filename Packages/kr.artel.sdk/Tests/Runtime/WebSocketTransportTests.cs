@@ -130,26 +130,31 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OnboardingController_CreatesToggleAndRegistrationPanel()
+        public void ArtelManager_CreatesOnboardingGuiAutomatically()
         {
             var host = new GameObject("Artel onboarding test");
             var manager = host.AddComponent<ArtelManager>();
-            var controller = host.AddComponent<ArtelOnboardingController>();
 
             try
             {
                 InvokeLifecycle(manager, "Awake");
+                var controller = host.GetComponent<ArtelOnboardingController>();
+                Assert.That(controller, Is.Not.Null);
+                Assert.That(host.GetComponent<KeyboardStatusController>(), Is.Not.Null);
                 InvokeLifecycle(controller, "Awake");
                 InvokeLifecycle(controller, "Start");
                 var canvas = GameObject.Find("Artel Onboarding Canvas");
                 Assert.That(canvas, Is.Not.Null);
                 var buttons = canvas.GetComponentsInChildren<Button>(true);
+                var smoothCursorToggle = canvas.GetComponentInChildren<Toggle>(true);
                 var connectButton = Array.Find(buttons, button => button.name == "실시간 연결 Button");
 
                 Assert.That(manager.SdkId, Is.Not.Empty);
                 Assert.That(buttons, Has.Length.EqualTo(3));
                 Assert.That(connectButton, Is.Not.Null);
                 Assert.That(connectButton.interactable, Is.False);
+                Assert.That(smoothCursorToggle, Is.Not.Null);
+                Assert.That(smoothCursorToggle.isOn, Is.False);
             }
             finally
             {
