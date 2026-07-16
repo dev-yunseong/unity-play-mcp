@@ -89,18 +89,24 @@ namespace Artel
         private readonly Text text;
         private readonly TMP_Text tmpText;
 
+        public RectTransform RectTransform { get; }
+        public bool CanClick { get { return button != null; } }
+        public bool CanEnterText { get { return inputField != null || tmpInputField != null; } }
+
         private ScannedTarget(
             Button button,
             InputField inputField,
             TMP_InputField tmpInputField,
             Text text,
-            TMP_Text tmpText)
+            TMP_Text tmpText,
+            RectTransform rectTransform)
         {
             this.button = button;
             this.inputField = inputField;
             this.tmpInputField = tmpInputField;
             this.text = text;
             this.tmpText = tmpText;
+            RectTransform = rectTransform;
         }
 
         public static ScannedTarget FromGameObject(GameObject gameObject)
@@ -110,7 +116,8 @@ namespace Artel
                 gameObject.GetComponent<InputField>(),
                 gameObject.GetComponent<TMP_InputField>(),
                 gameObject.GetComponent<Text>(),
-                gameObject.GetComponent<TMP_Text>());
+                gameObject.GetComponent<TMP_Text>(),
+                gameObject.GetComponent<RectTransform>());
         }
 
         public IReadOnlyList<SceneComponent> CreateComponents(

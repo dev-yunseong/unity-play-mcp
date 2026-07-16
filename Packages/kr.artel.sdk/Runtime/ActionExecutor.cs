@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using Artel.Protocol.Dto;
@@ -9,65 +10,98 @@ namespace Artel
     internal sealed class ActionExecutor
     {
         private readonly SceneScanner scanner;
+        private readonly CursorController cursorController;
 
-        public ActionExecutor(SceneScanner scanner)
+        public ActionExecutor(SceneScanner scanner, CursorController cursorController)
         {
             this.scanner = scanner;
+            this.cursorController = cursorController;
         }
 
-        public ActionResultDto Execute(int actionId, string method, List<object> parameters)
+        public IEnumerator Execute(
+            int actionId,
+            string method,
+            List<object> parameters,
+            Action<ActionResultDto> completed)
         {
             if (method == "button_click")
             {
-                return ExecuteButtonClick(actionId, parameters);
+                yield return ExecuteButtonClick(actionId, parameters, completed);
+                yield break;
             }
 
             if (method == "enter_text")
             {
-                return ExecuteEnterText(actionId, parameters);
+                yield return ExecuteEnterText(actionId, parameters, completed);
+                yield break;
             }
 
             if (method == "key_click")
             {
-                return ExecuteKeyClick(actionId, parameters);
+                completed(ExecuteKeyClick(actionId, parameters));
+                yield break;
             }
 
-            return ActionResultDto.Failure(actionId, "Unsupported method: " + method);
+            completed(ActionResultDto.Failure(actionId, "Unsupported method: " + method));
         }
 
-        private ActionResultDto ExecuteButtonClick(int actionId, List<object> parameters)
+        private IEnumerator ExecuteButtonClick(
+            int actionId,
+            List<object> parameters,
+            Action<ActionResultDto> completed)
         {
             if (!TryReadId(parameters, out var targetId))
             {
-                return ActionResultDto.Failure(actionId, "button_click requires params [targetId].");
+                completed(ActionResultDto.Failure(actionId, "button_click requires params [targetId]."));
+                yield break;
             }
 
             if (!scanner.TryGetTarget(targetId, out var target))
             {
-                return ActionResultDto.Failure(actionId, "Unknown target id: " + targetId);
+                completed(ActionResultDto.Failure(actionId, "Unknown target id: " + targetId));
+                yield break;
             }
 
-            return target.Click()
+            if (!target.CanClick)
+            {
+                completed(ActionResultDto.Failure(actionId, "Target is not a Button: " + targetId));
+                yield break;
+            }
+
+            yield return cursorController.MoveTo(target.RectTransform);
+            completed(target.Click()
                 ? ActionResultDto.Success(actionId)
-                : ActionResultDto.Failure(actionId, "Target is not a Button: " + targetId);
+                : ActionResultDto.Failure(actionId, "Target is not a Button: " + targetId));
         }
 
-        private ActionResultDto ExecuteEnterText(int actionId, List<object> parameters)
+        private IEnumerator ExecuteEnterText(
+            int actionId,
+            List<object> parameters,
+            Action<ActionResultDto> completed)
         {
             if (!TryReadId(parameters, out var targetId) || parameters.Count < 2)
             {
-                return ActionResultDto.Failure(actionId, "enter_text requires params [targetId, value].");
+                completed(ActionResultDto.Failure(actionId, "enter_text requires params [targetId, value]."));
+                yield break;
             }
 
             if (!scanner.TryGetTarget(targetId, out var target))
             {
-                return ActionResultDto.Failure(actionId, "Unknown target id: " + targetId);
+                completed(ActionResultDto.Failure(actionId, "Unknown target id: " + targetId));
+                yield break;
             }
 
+            if (!target.CanEnterText)
+            {
+                completed(ActionResultDto.Failure(actionId, "Target is not an EditText: " + targetId));
+                yield break;
+            }
+
+            yield return cursorController.MoveTo(target.RectTransform);
             var value = parameters[1] == null ? string.Empty : parameters[1].ToString();
-            return target.EnterText(value)
+            completed(target.EnterText(value)
                 ? ActionResultDto.Success(actionId)
-                : ActionResultDto.Failure(actionId, "Target is not an EditText: " + targetId);
+                : ActionResultDto.Failure(actionId, "Target is not an EditText: " + targetId));
         }
 
         private static ActionResultDto ExecuteKeyClick(int actionId, List<object> parameters)

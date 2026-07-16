@@ -72,7 +72,7 @@ namespace Artel
             canvasObject = new GameObject("Artel Onboarding Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = short.MaxValue;
+            canvas.sortingOrder = short.MaxValue - 1;
 
             var scaler = canvasObject.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -93,7 +93,7 @@ namespace Artel
             panelRect.anchorMax = new Vector2(1f, 1f);
             panelRect.pivot = new Vector2(1f, 1f);
             panelRect.anchoredPosition = new Vector2(-24f, -84f);
-            panelRect.sizeDelta = new Vector2(440f, 270f);
+            panelRect.sizeDelta = new Vector2(440f, 320f);
 
             var title = CreateText(panelObject.transform, "Artel SDK Onboarding", 24, TextAnchor.MiddleLeft);
             SetRect(title.rectTransform, new Vector2(20f, -18f), new Vector2(400f, 40f));
@@ -109,8 +109,13 @@ namespace Artel
             SetRect(connectButton.GetComponent<RectTransform>(), new Vector2(230f, -126f), new Vector2(190f, 44f));
             connectButton.onClick.AddListener(ConnectWebSocket);
 
+            var smoothCursorToggle = CreateToggle(panelObject.transform, "부드러운 커서");
+            SetRect(smoothCursorToggle.GetComponent<RectTransform>(), new Vector2(20f, -182f), new Vector2(220f, 32f));
+            smoothCursorToggle.isOn = artelManager.SmoothCursorMovement;
+            smoothCursorToggle.onValueChanged.AddListener(value => artelManager.SmoothCursorMovement = value);
+
             statusText = CreateText(panelObject.transform, string.Empty, 15, TextAnchor.UpperLeft);
-            SetRect(statusText.rectTransform, new Vector2(20f, -182f), new Vector2(400f, 70f));
+            SetRect(statusText.rectTransform, new Vector2(20f, -226f), new Vector2(400f, 70f));
         }
 
         private void RefreshView()
@@ -148,6 +153,37 @@ namespace Artel
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Truncate;
             return text;
+        }
+
+        private static Toggle CreateToggle(Transform parent, string label)
+        {
+            var toggleObject = new GameObject(label + " Toggle", typeof(RectTransform), typeof(Toggle));
+            toggleObject.transform.SetParent(parent, false);
+
+            var backgroundObject = new GameObject("Background", typeof(RectTransform), typeof(Image));
+            backgroundObject.transform.SetParent(toggleObject.transform, false);
+            var backgroundRect = backgroundObject.GetComponent<RectTransform>();
+            SetRect(backgroundRect, Vector2.zero, new Vector2(28f, 28f));
+            var background = backgroundObject.GetComponent<Image>();
+            background.color = new Color(0.22f, 0.24f, 0.3f, 1f);
+
+            var checkmarkObject = new GameObject("Checkmark", typeof(RectTransform), typeof(Image));
+            checkmarkObject.transform.SetParent(backgroundObject.transform, false);
+            var checkmarkRect = checkmarkObject.GetComponent<RectTransform>();
+            checkmarkRect.anchorMin = new Vector2(0.2f, 0.2f);
+            checkmarkRect.anchorMax = new Vector2(0.8f, 0.8f);
+            checkmarkRect.offsetMin = Vector2.zero;
+            checkmarkRect.offsetMax = Vector2.zero;
+            var checkmark = checkmarkObject.GetComponent<Image>();
+            checkmark.color = ButtonColor;
+
+            var text = CreateText(toggleObject.transform, label, 16, TextAnchor.MiddleLeft);
+            SetRect(text.rectTransform, new Vector2(40f, 0f), new Vector2(180f, 28f));
+
+            var toggle = toggleObject.GetComponent<Toggle>();
+            toggle.targetGraphic = background;
+            toggle.graphic = checkmark;
+            return toggle;
         }
 
         private static void AnchorTopRight(RectTransform rectTransform, Vector2 position)

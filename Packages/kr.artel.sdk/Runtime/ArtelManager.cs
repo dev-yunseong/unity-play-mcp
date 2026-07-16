@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Artel.Domain;
 using Artel.Protocol.Dto;
@@ -19,17 +20,37 @@ namespace Artel
         private bool ownsTransport = true;
         private SceneScanner scanner;
         private ActionExecutor actionExecutor;
+        private CursorController cursorController;
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
         private long nextMessageId = 1;
+        private readonly Queue<ArtelRequestDto> actionRequests = new Queue<ArtelRequestDto>();
+        private bool processingActions;
 
         public string SdkId { get; private set; }
         public Server Server { get { return server; } }
+        public bool SmoothCursorMovement
+        {
+            get { return cursorController != null && cursorController.SmoothMovement; }
+            set
+            {
+                if (cursorController != null)
+                {
+                    cursorController.SmoothMovement = value;
+                }
+            }
+        }
 
         private void Awake()
         {
             scanner = new SceneScanner();
-            actionExecutor = new ActionExecutor(scanner);
+            cursorController = GetComponent<CursorController>();
+            if (cursorController == null)
+            {
+                cursorController = gameObject.AddComponent<CursorController>();
+            }
+
+            actionExecutor = new ActionExecutor(scanner, cursorController);
             jsonCodec = new NewtonsoftJsonCodec();
             sceneStatePoller = new SceneStatePoller(
                 scanner,
@@ -139,7 +160,7 @@ namespace Artel
 
                 if (request.Type == "ACTION")
                 {
-                    HandleAction(request);
+                    EnqueueAction(request);
                     return;
                 }
 
@@ -157,7 +178,27 @@ namespace Artel
             }
         }
 
-        private void HandleAction(ArtelRequestDto request)
+        private void EnqueueAction(ArtelRequestDto request)
+        {
+            actionRequests.Enqueue(request);
+            if (!processingActions)
+            {
+                StartCoroutine(ProcessActions());
+            }
+        }
+
+        private IEnumerator ProcessActions()
+        {
+            processingActions = true;
+            while (actionRequests.Count > 0)
+            {
+                yield return ExecuteActionRequest(actionRequests.Dequeue());
+            }
+
+            processingActions = false;
+        }
+
+        private IEnumerator ExecuteActionRequest(ArtelRequestDto request)
         {
             var results = new List<ActionResultDto>();
 
@@ -169,7 +210,11 @@ namespace Artel
                     continue;
                 }
 
-                results.Add(actionExecutor.Execute(action.Id, action.Method, action.Parameters));
+                yield return actionExecutor.Execute(
+                    action.Id,
+                    action.Method,
+                    action.Parameters,
+                    result => results.Add(result));
             }
 
             var response = new ActionResultMessage
@@ -179,7 +224,10 @@ namespace Artel
                 Results = results
             };
 
-            webSocketTransport.Send(jsonCodec.Serialize(response));
+            if (webSocketTransport != null)
+            {
+                webSocketTransport.Send(jsonCodec.Serialize(response));
+            }
         }
 
         private void SendGameState(ArtelWebSocketMessage request)
