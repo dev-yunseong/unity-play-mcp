@@ -140,6 +140,7 @@ namespace Artel.Tests.Transport
                 InvokeLifecycle(manager, "Awake");
                 var controller = host.GetComponent<ArtelOnboardingController>();
                 Assert.That(controller, Is.Not.Null);
+                Assert.That(host.GetComponent<KeyboardStatusController>(), Is.Not.Null);
                 InvokeLifecycle(controller, "Awake");
                 InvokeLifecycle(controller, "Start");
                 var canvas = GameObject.Find("Artel Onboarding Canvas");

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Artel.Protocol.Dto;
 using Artel.Tests.Tracking;
 using NUnit.Framework;
 using UnityEngine;
@@ -9,10 +10,21 @@ namespace Artel.Tests.Input
 {
     public sealed class VirtualKeyboardStateTests
     {
+        private GameObject cursorObject;
+        private CursorController cursorController;
+
+        [SetUp]
+        public void SetUp()
+        {
+            cursorObject = new GameObject("keyboard action cursor");
+            cursorController = cursorObject.AddComponent<CursorController>();
+        }
+
         [TearDown]
         public void TearDown()
         {
             ArtelInput.ResetVirtualKeyboard();
+            Object.DestroyImmediate(cursorObject);
         }
 
         [Test]
@@ -48,9 +60,7 @@ namespace Artel.Tests.Input
         [Test]
         public void ActionExecutor_AcceptsKeyCodeNameAndDuration()
         {
-            var executor = new ActionExecutor(new SceneScanner());
-
-            var result = executor.Execute(
+            var result = ExecuteAction(
                 2,
                 "key_click",
                 new List<object> { "Space", 0.5d });
@@ -64,11 +74,9 @@ namespace Artel.Tests.Input
         {
             var host = new GameObject("input fixture");
             var fixture = host.AddComponent<TrackedFixtureBehaviour>();
-            var executor = new ActionExecutor(new SceneScanner());
-
             try
             {
-                var result = executor.Execute(
+                var result = ExecuteAction(
                     2,
                     "key_click",
                     new List<object> { "Space", 0.5d });
@@ -93,9 +101,7 @@ namespace Artel.Tests.Input
         [TestCase("Space", -1d)]
         public void ActionExecutor_RejectsInvalidKeyClickParameters(object key, object duration)
         {
-            var executor = new ActionExecutor(new SceneScanner());
-
-            var result = executor.Execute(
+            var result = ExecuteAction(
                 7,
                 "key_click",
                 new List<object> { key, duration });
@@ -103,6 +109,25 @@ namespace Artel.Tests.Input
             Assert.That(result.Id, Is.EqualTo(7));
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.Error, Does.Contain("key_click requires"));
+        }
+
+        private ActionResultDto ExecuteAction(int actionId, string method, List<object> parameters)
+        {
+            var executor = new ActionExecutor(new SceneScanner(), cursorController);
+            ActionResultDto result = null;
+            Drain(executor.Execute(actionId, method, parameters, value => result = value));
+            return result;
+        }
+
+        private static void Drain(IEnumerator routine)
+        {
+            while (routine.MoveNext())
+            {
+                if (routine.Current is IEnumerator nested)
+                {
+                    Drain(nested);
+                }
+            }
         }
     }
 }
