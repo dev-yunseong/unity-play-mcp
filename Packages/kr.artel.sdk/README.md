@@ -22,7 +22,56 @@ WebSocket server and manages both test servers:
 
 - WebSocket URL: `ws://127.0.0.1:17311/ws`
 - Scan request: `{ "jsonrpc": "2.0", "id": 1, "method": "scan_scene", "params": [] }`
-- Action message: `ACTION` with `button_click` and `enter_text`
+- Action message: `ACTION` with `button_click`, `enter_text`, and `key_click`
+
+## Agent keyboard input
+
+Keep using `UnityEngine.Input` for keyboard polling. Artel's IL post-processor
+rewrites supported calls to the `ArtelInput` proxy during compilation:
+
+```csharp
+using UnityEngine;
+
+public sealed class PlayerInput : MonoBehaviour
+{
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            Jump();
+        }
+    }
+
+    private void Jump()
+    {
+    }
+}
+```
+
+The proxy combines physical Unity input with virtual Agent input for
+`GetKeyDown`, `GetKey`, `GetKeyUp`, `anyKey`, and `anyKeyDown`. A `key_click`
+action accepts a `KeyCode` enum name or numeric value plus a positive duration
+in seconds:
+
+```json
+{
+  "type": "ACTION",
+  "id": 2,
+  "actions": [
+    {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "method": "key_click",
+      "params": ["Space", 0.5]
+    }
+  ]
+}
+```
+
+Virtual input begins on the frame after the action is accepted. `GetKeyDown`
+is true for that frame, `GetKey` remains true for the requested duration, and
+`GetKeyUp` is true for one frame when the duration ends. These values are frame
+snapshots and can be read by multiple callers without being consumed.
 
 `GAME_STATE.scene` uses one block per active `GameObject`. Supported Unity UI
 components are listed separately, so one block can expose multiple capabilities:

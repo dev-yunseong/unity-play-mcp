@@ -53,6 +53,8 @@ namespace Artel
 
         private void Update()
         {
+            ArtelInput.AdvanceFrame();
+
             if (webSocketTransport == null)
             {
                 return;

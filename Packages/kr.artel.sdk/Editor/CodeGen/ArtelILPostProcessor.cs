@@ -45,8 +45,10 @@ namespace Artel.CodeGen
 
                 using (var assembly = AssemblyDefinition.ReadAssembly(peStream, reader))
                 {
-                    var weaver = new ActionMethodWeaver(assembly.MainModule, diagnostics);
-                    var changed = weaver.Process();
+                    var actionWeaver = new ActionMethodWeaver(assembly.MainModule, diagnostics);
+                    var inputWeaver = new InputMethodWeaver(assembly.MainModule);
+                    var changed = actionWeaver.Process();
+                    changed |= inputWeaver.Process();
                     if (!changed)
                     {
                         return new ILPostProcessResult(null, diagnostics);

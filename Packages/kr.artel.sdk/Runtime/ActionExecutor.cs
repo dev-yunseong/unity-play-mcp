@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Artel.Protocol.Dto;
+using UnityEngine;
 
 namespace Artel
 {
@@ -22,6 +25,11 @@ namespace Artel
             if (method == "enter_text")
             {
                 return ExecuteEnterText(actionId, parameters);
+            }
+
+            if (method == "key_click")
+            {
+                return ExecuteKeyClick(actionId, parameters);
             }
 
             return ActionResultDto.Failure(actionId, "Unsupported method: " + method);
@@ -60,6 +68,73 @@ namespace Artel
             return target.EnterText(value)
                 ? ActionResultDto.Success(actionId)
                 : ActionResultDto.Failure(actionId, "Target is not an EditText: " + targetId);
+        }
+
+        private static ActionResultDto ExecuteKeyClick(int actionId, List<object> parameters)
+        {
+            if (parameters == null || parameters.Count < 2 ||
+                !TryReadKeyCode(parameters[0], out var key) ||
+                !TryReadDuration(parameters[1], out var durationSeconds))
+            {
+                return ActionResultDto.Failure(
+                    actionId,
+                    "key_click requires params [keyCode, positiveDurationSeconds].");
+            }
+
+            ArtelInput.ClickKey(key, durationSeconds);
+            return ActionResultDto.Success(actionId);
+        }
+
+        private static bool TryReadKeyCode(object value, out KeyCode key)
+        {
+            key = KeyCode.None;
+            if (value == null)
+            {
+                return false;
+            }
+
+            if (value is long longValue)
+            {
+                if (longValue < int.MinValue || longValue > int.MaxValue)
+                {
+                    return false;
+                }
+
+                return TryReadKeyCode((int)longValue, out key);
+            }
+
+            if (value is int intValue)
+            {
+                if (!Enum.IsDefined(typeof(KeyCode), intValue))
+                {
+                    return false;
+                }
+
+                key = (KeyCode)intValue;
+                return key != KeyCode.None;
+            }
+
+            return Enum.TryParse(value.ToString(), true, out key) &&
+                   key != KeyCode.None &&
+                   Enum.IsDefined(typeof(KeyCode), key);
+        }
+
+        private static bool TryReadDuration(object value, out float durationSeconds)
+        {
+            durationSeconds = 0f;
+            if (value == null ||
+                !float.TryParse(
+                    Convert.ToString(value, CultureInfo.InvariantCulture),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out durationSeconds))
+            {
+                return false;
+            }
+
+            return durationSeconds > 0f &&
+                   !float.IsInfinity(durationSeconds) &&
+                   !float.IsNaN(durationSeconds);
         }
 
         private static bool TryReadId(List<object> parameters, out int id)
