@@ -27,11 +27,12 @@ Agent가 `key_click` action으로 키와 지속 시간을 전달하고, ILPP가 
 - [x] **Step 1: Implementation** virtual key state와 `ArtelInput` proxy 추가, Input call-site IL 치환과 `key_click` dispatch 연결
 - [x] **Step 2: Tests** frame transition, 다중 조회, validation, JSON action 실행 테스트 추가 및 Unity EditMode 실행
 - [x] **Step 3: Rollout / Rollback** README 사용법과 제한 기록, diff 검토; 단일 feature commit으로 되돌릴 수 있게 유지
+- [x] **Step 4: Test page** KeyCode와 duration을 입력해 `key_click`을 전송하는 test page control 추가
 
 ## Validation
 - **Commands to run:** `git diff --check`; Unity EditMode test runner의 `Artel.Runtime.Tests`
 - **Expected output:** whitespace error 없음; key input/action tests 포함 전체 EditMode test 통과
-- **Result:** `git diff --check` 통과; Unity 2022.3.34f1 EditMode `30/30` 통과
+- **Result:** `git diff --check` 통과; Unity 2022.3.34f1 EditMode `31/31` 통과
 
 ## Risks & Rollback
 
