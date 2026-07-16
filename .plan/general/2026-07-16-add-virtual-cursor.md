@@ -20,6 +20,7 @@ SDK가 `button_click` 또는 `enter_text`를 실행할 때 대상 UI 오브젝�
 - 기존 액션 결과와 UI 이벤트 실행 순서를 유지한다.
 - 여러 액션 요청은 커서 이동이 겹치지 않도록 직렬 실행한다.
 - 씬 또는 sample submodule 수정 없이 SDK 런타임에서 동작해야 한다.
+- `ArtelManager`만 부착해도 Onboarding GUI가 자동 생성되어야 한다.
 - 현재 사용자 변경인 `.gitignore`, `samples/WordVenture`, `src/`는 건드리지 않는다.
 
 ## Approach (Checklist)

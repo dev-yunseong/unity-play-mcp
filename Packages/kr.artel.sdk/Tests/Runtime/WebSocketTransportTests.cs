@@ -130,15 +130,16 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OnboardingController_CreatesToggleAndRegistrationPanel()
+        public void ArtelManager_CreatesOnboardingGuiAutomatically()
         {
             var host = new GameObject("Artel onboarding test");
             var manager = host.AddComponent<ArtelManager>();
-            var controller = host.AddComponent<ArtelOnboardingController>();
 
             try
             {
                 InvokeLifecycle(manager, "Awake");
+                var controller = host.GetComponent<ArtelOnboardingController>();
+                Assert.That(controller, Is.Not.Null);
                 InvokeLifecycle(controller, "Awake");
                 InvokeLifecycle(controller, "Start");
                 var canvas = GameObject.Find("Artel Onboarding Canvas");

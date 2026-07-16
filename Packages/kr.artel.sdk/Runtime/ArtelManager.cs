@@ -50,6 +50,11 @@ namespace Artel
                 cursorController = gameObject.AddComponent<CursorController>();
             }
 
+            if (GetComponent<ArtelOnboardingController>() == null)
+            {
+                gameObject.AddComponent<ArtelOnboardingController>();
+            }
+
             actionExecutor = new ActionExecutor(scanner, cursorController);
             jsonCodec = new NewtonsoftJsonCodec();
             sceneStatePoller = new SceneStatePoller(
