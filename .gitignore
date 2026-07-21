@@ -21,3 +21,6 @@ UserSettings/
 # .NET
 bin/
 obj/
+
+# Agent tooling
+.agents/settings.local.json
