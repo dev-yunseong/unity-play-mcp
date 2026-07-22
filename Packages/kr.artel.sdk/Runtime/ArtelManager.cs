@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using Artel.Domain;
 using Artel.Protocol.Dto;
 using Artel.Serialization;
+using Artel.Streaming;
 using Artel.Tracking;
+using Unity.WebRTC;
 using UnityEngine;
 
 namespace Artel
@@ -23,6 +25,8 @@ namespace Artel
         private CursorController cursorController;
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
+        private ArtelStreamHost streamHost;
+        private Coroutine webRtcPump;
         private long nextMessageId = 1;
         private readonly Queue<ArtelRequestDto> actionRequests = new Queue<ArtelRequestDto>();
         private bool processingActions;
@@ -67,6 +71,13 @@ namespace Artel
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
+
+            var streamSignals = new WebSocketStreamSignalSender(jsonCodec, () => webSocketTransport);
+            streamHost = new ArtelStreamHost(
+                jsonCodec,
+                streamSignals,
+                new WebRtcStreamSessionFactory(this, streamSignals));
+
             SdkId = ArtelSdkIdentity.LoadOrCreate();
             GameVersion = Application.version;
         }
@@ -87,6 +98,10 @@ namespace Artel
         private void Update()
         {
             ArtelInput.AdvanceFrame();
+
+            // Ahead of the transport check on purpose: the lease is a dead-man timer, so it has to
+            // keep running when the socket is the thing that died.
+            PumpStreaming();
 
             if (webSocketTransport == null)
             {
@@ -134,6 +149,10 @@ namespace Artel
 
         public void StopTransport()
         {
+            // Before the socket goes, so the closing STREAM_STATE still has somewhere to go and
+            // capture never outlives the connection that asked for it.
+            streamHost.Stop();
+
             if (webSocketTransport == null)
             {
                 return;
@@ -203,6 +222,11 @@ namespace Artel
                 if (request.Type == "ACTION")
                 {
                     EnqueueAction(request);
+                    return;
+                }
+
+                if (streamHost.TryHandleMessage(request.Type, message.Text, Time.unscaledTime))
+                {
                     return;
                 }
 
@@ -303,6 +327,27 @@ namespace Artel
 
             webSocketTransport.Send(SerializeGameState(poll.Scene));
             poll.ScanResult.CommitActions();
+        }
+
+        private void PumpStreaming()
+        {
+            streamHost.Tick(Time.unscaledTime);
+
+            if (streamHost.HasLiveSession == (webRtcPump != null))
+            {
+                return;
+            }
+
+            if (webRtcPump == null)
+            {
+                // WebRTC.Update drives the plugin's per-frame encode step. It runs only while a
+                // session is live, so a game that merely installs the SDK never pays for it.
+                webRtcPump = StartCoroutine(WebRTC.Update());
+                return;
+            }
+
+            StopCoroutine(webRtcPump);
+            webRtcPump = null;
         }
 
         private void PollSceneState()
