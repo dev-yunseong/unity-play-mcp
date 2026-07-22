@@ -14,9 +14,9 @@ namespace Artel
             new ConcurrentQueue<ArtelWebSocketMessage>();
         private WebSocket client;
 
-        public ArtelWebSocketClient(Server server, string sdkId)
+        public ArtelWebSocketClient(Server server, string instanceKey)
         {
-            url = BuildEndpoint(server, sdkId).AbsoluteUri;
+            url = BuildEndpoint(server, instanceKey).AbsoluteUri;
         }
 
         public void Start()
@@ -68,22 +68,22 @@ namespace Artel
             Stop();
         }
 
-        internal static Uri BuildEndpoint(Server server, string sdkId)
+        internal static Uri BuildEndpoint(Server server, string instanceKey)
         {
             if (server == null)
             {
                 throw new ArgumentNullException(nameof(server));
             }
 
-            if (string.IsNullOrWhiteSpace(sdkId))
+            if (string.IsNullOrWhiteSpace(instanceKey))
             {
-                throw new ArgumentException("SDK ID is required.", nameof(sdkId));
+                throw new ArgumentException("Instance key is required.", nameof(instanceKey));
             }
 
             var endpoint = new Uri(server.WebSocketBaseUri, SdkWebSocketPath);
             return new UriBuilder(endpoint)
             {
-                Query = "sdkId=" + Uri.EscapeDataString(sdkId)
+                Query = "instanceKey=" + Uri.EscapeDataString(instanceKey)
             }.Uri;
         }
 

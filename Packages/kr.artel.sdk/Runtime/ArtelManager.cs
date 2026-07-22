@@ -28,6 +28,7 @@ namespace Artel
         private bool processingActions;
 
         public string SdkId { get; private set; }
+        public string GameVersion { get; private set; }
         public Server Server { get { return server; } }
         public bool SmoothCursorMovement
         {
@@ -67,6 +68,7 @@ namespace Artel
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
             SdkId = ArtelSdkIdentity.LoadOrCreate();
+            GameVersion = Application.version;
         }
 
         private void OnEnable()
@@ -103,7 +105,13 @@ namespace Artel
         {
             if (webSocketTransport == null)
             {
-                webSocketTransport = new ArtelWebSocketClient(server, SdkId);
+                if (!ArtelInstanceKey.TryLoad(out var instanceKey))
+                {
+                    Debug.LogWarning("[Artel] WebSocket transport needs a registered instance key.");
+                    return;
+                }
+
+                webSocketTransport = new ArtelWebSocketClient(server, instanceKey);
                 ownsTransport = true;
             }
 
