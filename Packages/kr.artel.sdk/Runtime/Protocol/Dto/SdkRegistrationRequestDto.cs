@@ -4,7 +4,13 @@ namespace Artel.Protocol.Dto
 {
     internal sealed class SdkRegistrationRequestDto
     {
-        [JsonProperty("sdkId")]
-        public string SdkId { get; set; }
+        [JsonProperty("instanceKey")]
+        public string InstanceKey { get; set; }
+
+        [JsonProperty("sdkUuid")]
+        public string SdkUuid { get; set; }
+
+        [JsonProperty("gameVersion")]
+        public string GameVersion { get; set; }
     }
 }

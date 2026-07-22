@@ -8,17 +8,24 @@ namespace Artel
     [RequireComponent(typeof(ArtelManager))]
     public sealed class ArtelOnboardingController : MonoBehaviour
     {
+        private const int InstanceKeyCharacterLimit = 24;
+
         private static readonly Color PanelColor = new Color(0.08f, 0.09f, 0.12f, 0.94f);
         private static readonly Color ButtonColor = new Color(0.18f, 0.45f, 0.85f, 1f);
+        private static readonly Color FieldColor = new Color(0.16f, 0.18f, 0.24f, 1f);
+        private static readonly Color PlaceholderColor = new Color(0.62f, 0.65f, 0.72f, 1f);
 
         [SerializeField] private ArtelManager artelManager;
 
         private GameObject canvasObject;
         private GameObject createdEventSystem;
         private GameObject panelObject;
+        private GameObject advancedObject;
+        private InputField instanceKeyField;
         private Button registerButton;
         private Button connectButton;
         private Text statusText;
+        private bool appliedShowPanel;
         private ArtelOnboardingViewModel viewModel;
 
         private void Awake()
@@ -35,8 +42,14 @@ namespace Artel
 
         private void Start()
         {
+            viewModel.Initialize();
             CreateGui();
             RefreshView();
+
+            if (viewModel.HasStoredKey)
+            {
+                RegisterInstanceKey();
+            }
         }
 
         private void OnDestroy()
@@ -57,9 +70,14 @@ namespace Artel
             }
         }
 
-        private void RegisterSdkId()
+        private void RegisterInstanceKey()
         {
-            StartCoroutine(viewModel.Register(artelManager.Server, artelManager.SdkId));
+            StartCoroutine(viewModel.Register(
+                artelManager.Server,
+                viewModel.KeyInput,
+                artelManager.SdkId,
+                artelManager.GameVersion,
+                artelManager.StartTransport));
         }
 
         private void ConnectWebSocket()
@@ -93,36 +111,117 @@ namespace Artel
             panelRect.anchorMax = new Vector2(1f, 1f);
             panelRect.pivot = new Vector2(1f, 1f);
             panelRect.anchoredPosition = new Vector2(-24f, -84f);
-            panelRect.sizeDelta = new Vector2(440f, 320f);
+            panelRect.sizeDelta = new Vector2(440f, 400f);
 
-            var title = CreateText(panelObject.transform, "Artel SDK Onboarding", 24, TextAnchor.MiddleLeft);
-            SetRect(title.rectTransform, new Vector2(20f, -18f), new Vector2(400f, 40f));
+            var title = CreateText(panelObject.transform, "Artel SDK", 24, TextAnchor.MiddleLeft);
+            SetRect(title.rectTransform, new Vector2(20f, -16f), new Vector2(400f, 36f));
 
-            var sdkIdText = CreateText(panelObject.transform, "SDK ID\n" + artelManager.SdkId, 16, TextAnchor.UpperLeft);
-            SetRect(sdkIdText.rectTransform, new Vector2(20f, -66f), new Vector2(400f, 50f));
+            instanceKeyField = CreateInputField(
+                panelObject.transform,
+                "대시보드에서 발급받은 키를 입력하세요",
+                InstanceKeyCharacterLimit);
+            SetRect(instanceKeyField.GetComponent<RectTransform>(), new Vector2(20f, -58f), new Vector2(400f, 44f));
+            instanceKeyField.onValueChanged.AddListener(value => viewModel.KeyInput = value);
 
-            registerButton = CreateButton(panelObject.transform, "SDK ID 등록", new Vector2(190f, 44f));
-            SetRect(registerButton.GetComponent<RectTransform>(), new Vector2(20f, -126f), new Vector2(190f, 44f));
-            registerButton.onClick.AddListener(RegisterSdkId);
+            registerButton = CreateButton(panelObject.transform, "등록", new Vector2(400f, 44f));
+            SetRect(registerButton.GetComponent<RectTransform>(), new Vector2(20f, -110f), new Vector2(400f, 44f));
+            registerButton.onClick.AddListener(RegisterInstanceKey);
 
-            connectButton = CreateButton(panelObject.transform, "실시간 연결", new Vector2(190f, 44f));
-            SetRect(connectButton.GetComponent<RectTransform>(), new Vector2(230f, -126f), new Vector2(190f, 44f));
-            connectButton.onClick.AddListener(ConnectWebSocket);
+            statusText = CreateText(panelObject.transform, string.Empty, 15, TextAnchor.UpperLeft);
+            SetRect(statusText.rectTransform, new Vector2(20f, -162f), new Vector2(400f, 66f));
 
-            var smoothCursorToggle = CreateToggle(panelObject.transform, "부드러운 커서");
-            SetRect(smoothCursorToggle.GetComponent<RectTransform>(), new Vector2(20f, -182f), new Vector2(220f, 32f));
+            var advancedButton = CreateButton(panelObject.transform, "고급", new Vector2(400f, 34f));
+            SetRect(advancedButton.GetComponent<RectTransform>(), new Vector2(20f, -234f), new Vector2(400f, 34f));
+            advancedButton.onClick.AddListener(() => advancedObject.SetActive(!advancedObject.activeSelf));
+
+            CreateAdvancedSection();
+
+            appliedShowPanel = viewModel.ShowPanel;
+            panelObject.SetActive(appliedShowPanel);
+        }
+
+        private void CreateAdvancedSection()
+        {
+            advancedObject = new GameObject("Advanced Section", typeof(RectTransform));
+            advancedObject.transform.SetParent(panelObject.transform, false);
+            SetRect(advancedObject.GetComponent<RectTransform>(), new Vector2(0f, -272f), new Vector2(440f, 128f));
+
+            var details = CreateText(
+                advancedObject.transform,
+                "SDK UUID " + artelManager.SdkId + "\n게임 버전 " + artelManager.GameVersion,
+                14,
+                TextAnchor.UpperLeft);
+            SetRect(details.rectTransform, new Vector2(20f, -8f), new Vector2(400f, 44f));
+
+            var smoothCursorToggle = CreateToggle(advancedObject.transform, "부드러운 커서");
+            SetRect(smoothCursorToggle.GetComponent<RectTransform>(), new Vector2(20f, -58f), new Vector2(200f, 32f));
             smoothCursorToggle.isOn = artelManager.SmoothCursorMovement;
             smoothCursorToggle.onValueChanged.AddListener(value => artelManager.SmoothCursorMovement = value);
 
-            statusText = CreateText(panelObject.transform, string.Empty, 15, TextAnchor.UpperLeft);
-            SetRect(statusText.rectTransform, new Vector2(20f, -226f), new Vector2(400f, 70f));
+            connectButton = CreateButton(advancedObject.transform, "연결", new Vector2(180f, 36f));
+            SetRect(connectButton.GetComponent<RectTransform>(), new Vector2(240f, -56f), new Vector2(180f, 36f));
+            connectButton.onClick.AddListener(ConnectWebSocket);
+
+            var clearKeyButton = CreateButton(advancedObject.transform, "키 지우기", new Vector2(180f, 32f));
+            SetRect(clearKeyButton.GetComponent<RectTransform>(), new Vector2(20f, -96f), new Vector2(180f, 32f));
+            clearKeyButton.onClick.AddListener(viewModel.ClearStoredKey);
+
+            advancedObject.SetActive(false);
         }
 
         private void RefreshView()
         {
+            if (statusText == null)
+            {
+                return;
+            }
+
+            if (instanceKeyField.text != viewModel.KeyInput)
+            {
+                instanceKeyField.text = viewModel.KeyInput;
+            }
+
             statusText.text = viewModel.Status;
             registerButton.interactable = viewModel.CanRegister;
             connectButton.interactable = viewModel.CanConnect;
+
+            if (appliedShowPanel != viewModel.ShowPanel)
+            {
+                appliedShowPanel = viewModel.ShowPanel;
+                panelObject.SetActive(appliedShowPanel);
+            }
+        }
+
+        private static InputField CreateInputField(Transform parent, string placeholderLabel, int characterLimit)
+        {
+            var fieldObject = new GameObject(
+                "인스턴스 키 InputField",
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(InputField));
+            fieldObject.transform.SetParent(parent, false);
+            var background = fieldObject.GetComponent<Image>();
+            background.color = FieldColor;
+
+            var text = CreateText(fieldObject.transform, string.Empty, 18, TextAnchor.MiddleLeft);
+            text.name = "Text";
+            text.supportRichText = false;
+            StretchInside(text.rectTransform);
+
+            var placeholder = CreateText(fieldObject.transform, placeholderLabel, 16, TextAnchor.MiddleLeft);
+            placeholder.name = "Placeholder";
+            placeholder.color = PlaceholderColor;
+            placeholder.fontStyle = FontStyle.Italic;
+            StretchInside(placeholder.rectTransform);
+
+            var inputField = fieldObject.GetComponent<InputField>();
+            inputField.targetGraphic = background;
+            inputField.textComponent = text;
+            inputField.placeholder = placeholder;
+            inputField.lineType = InputField.LineType.SingleLine;
+            inputField.characterLimit = characterLimit;
+            inputField.text = string.Empty;
+            return inputField;
         }
 
         private static Button CreateButton(Transform parent, string label, Vector2 size)
@@ -201,6 +300,14 @@ namespace Artel
             rectTransform.pivot = new Vector2(0f, 1f);
             rectTransform.anchoredPosition = position;
             rectTransform.sizeDelta = size;
+        }
+
+        private static void StretchInside(RectTransform rectTransform)
+        {
+            rectTransform.anchorMin = Vector2.zero;
+            rectTransform.anchorMax = Vector2.one;
+            rectTransform.offsetMin = new Vector2(12f, 6f);
+            rectTransform.offsetMax = new Vector2(-12f, -6f);
         }
 
         private static GameObject EnsureEventSystem()

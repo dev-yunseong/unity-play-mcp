@@ -28,6 +28,7 @@ namespace Artel
         private bool processingActions;
 
         public string SdkId { get; private set; }
+        public string GameVersion { get; private set; }
         public Server Server { get { return server; } }
         public bool SmoothCursorMovement
         {
@@ -67,6 +68,7 @@ namespace Artel
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
             SdkId = ArtelSdkIdentity.LoadOrCreate();
+            GameVersion = Application.version;
         }
 
         private void OnEnable()
@@ -103,12 +105,25 @@ namespace Artel
         {
             if (webSocketTransport == null)
             {
-                webSocketTransport = new ArtelWebSocketClient(server, SdkId);
+                if (!ArtelInstanceKey.TryLoad(out var instanceKey))
+                {
+                    Debug.LogWarning("[Artel] WebSocket transport needs a registered instance key.");
+                    return;
+                }
+
+                webSocketTransport = new ArtelWebSocketClient(server, instanceKey);
                 ownsTransport = true;
             }
 
             if (!ownsTransport)
             {
+                // A transport was injected by something else in the scene — ArtelTestPageManager
+                // does this to serve its own local page. Saying so beats returning in silence,
+                // which reads exactly like a successful connection from every layer above.
+                Debug.LogWarning(
+                    "[Artel] WebSocket transport is owned by another component, " +
+                    "so this game will not connect to the orchestration server. " +
+                    "Remove ArtelTestPageManager from the scene to connect.");
                 return;
             }
 
@@ -134,6 +149,23 @@ namespace Artel
             webSocketTransport = null;
             sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket transport stopped.");
+        }
+
+        internal bool HasWebSocketTransport { get { return webSocketTransport != null; } }
+
+        /// <summary>
+        /// Releases a transport this manager does not own, so the component that installed one
+        /// can hand the connection back when it is switched off.
+        /// </summary>
+        internal void ClearWebSocketTransport(IArtelWebSocketTransport transport)
+        {
+            if (ownsTransport || webSocketTransport != transport)
+            {
+                return;
+            }
+
+            webSocketTransport = null;
+            ownsTransport = true;
         }
 
         internal void SetWebSocketTransport(IArtelWebSocketTransport transport, bool takeOwnership)
