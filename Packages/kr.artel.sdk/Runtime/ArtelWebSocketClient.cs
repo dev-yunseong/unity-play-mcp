@@ -28,7 +28,31 @@ namespace Artel
 
             client = new WebSocket(url);
             client.OnMessage += OnMessage;
+            client.OnOpen += OnOpen;
+            client.OnError += OnError;
+            client.OnClose += OnClose;
+            UnityEngine.Debug.Log("[Artel] Connecting WebSocket to " + url);
             client.ConnectAsync();
+        }
+
+        // ConnectAsync reports nothing to the caller, so without these the socket can fail to
+        // open and every layer above still reads as connected. The close code matters most:
+        // the server sends 4001 for an unknown instance key and 4002 when that instance
+        // already holds a connection.
+        private void OnOpen(object sender, EventArgs e)
+        {
+            UnityEngine.Debug.Log("[Artel] WebSocket connected.");
+        }
+
+        private void OnError(object sender, ErrorEventArgs e)
+        {
+            UnityEngine.Debug.LogError("[Artel] WebSocket error: " + e.Message);
+        }
+
+        private void OnClose(object sender, CloseEventArgs e)
+        {
+            UnityEngine.Debug.LogWarning(
+                "[Artel] WebSocket closed: code=" + e.Code + " reason=" + e.Reason);
         }
 
         public bool IsConnected

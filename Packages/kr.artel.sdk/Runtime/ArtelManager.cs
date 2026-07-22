@@ -117,6 +117,13 @@ namespace Artel
 
             if (!ownsTransport)
             {
+                // A transport was injected by something else in the scene — ArtelTestPageManager
+                // does this to serve its own local page. Saying so beats returning in silence,
+                // which reads exactly like a successful connection from every layer above.
+                Debug.LogWarning(
+                    "[Artel] WebSocket transport is owned by another component, " +
+                    "so this game will not connect to the orchestration server. " +
+                    "Remove ArtelTestPageManager from the scene to connect.");
                 return;
             }
 
