@@ -7,11 +7,29 @@ Add `ArtelManager` and `ArtelOnboardingController` to a scene object. Configure
 the matching HTTP and WebSocket base URLs (`http`/`ws` or `https`/`wss`). API
 clients own their endpoint paths.
 
-At runtime the view-model-backed onboarding panel registers the persistent SDK UUID with
-`POST /api/sdkId`. After registration succeeds, the user can explicitly connect
-to `/ws/sdk?sdkId={SDK_ID}`.
+Registration is authenticated with an **instance key** issued by the Artel
+dashboard. Create a game instance there, copy its key, and paste it into the
+onboarding panel's key field. The view-model-backed panel then calls:
 
-The UUID is generated once and stored in Unity `PlayerPrefs` under
+```
+POST /api/sdk/registrations
+{ "instanceKey": "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdkUuid": "<uuid>", "gameVersion": "1.2.3" }
+```
+
+`gameVersion` is `Application.version` from Player Settings, and `sdkUuid` is
+the SDK's per-installation UUID — it identifies which runtime registered, and is
+not a credential. On success the key is written to Unity `PlayerPrefs` under
+`Artel.InstanceKey` and the SDK connects to `/ws/sdk?instanceKey={INSTANCE_KEY}`
+automatically. Every later launch registers and connects with no interaction.
+
+A key is stored only after the server accepts it. If the server answers `404`
+the key is unknown or its instance was deleted, so the stored key is discarded
+and the panel asks for a new one. Any other failure keeps the key so the `등록`
+button can retry. The panel's `고급` section shows the SDK UUID and game
+version, and offers a manual `연결` button plus `키 지우기` to forget the stored
+key.
+
+The per-installation UUID is generated once and stored in `PlayerPrefs` under
 `Artel.SdkId`.
 
 ## Local PoC

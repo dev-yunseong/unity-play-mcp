@@ -25,5 +25,5 @@ obj/
 # Agent tooling
 .agents/settings.local.json
 
-# Local Jira credentials
+# Local-only Jira credentials for the MCP server
 .jira.env
