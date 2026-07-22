@@ -151,6 +151,23 @@ namespace Artel
             Debug.Log("[Artel] WebSocket transport stopped.");
         }
 
+        internal bool HasWebSocketTransport { get { return webSocketTransport != null; } }
+
+        /// <summary>
+        /// Releases a transport this manager does not own, so the component that installed one
+        /// can hand the connection back when it is switched off.
+        /// </summary>
+        internal void ClearWebSocketTransport(IArtelWebSocketTransport transport)
+        {
+            if (ownsTransport || webSocketTransport != transport)
+            {
+                return;
+            }
+
+            webSocketTransport = null;
+            ownsTransport = true;
+        }
+
         internal void SetWebSocketTransport(IArtelWebSocketTransport transport, bool takeOwnership)
         {
             if (webSocketTransport != null)

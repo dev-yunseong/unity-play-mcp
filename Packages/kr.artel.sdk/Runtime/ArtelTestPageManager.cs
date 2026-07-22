@@ -22,9 +22,6 @@ namespace Artel
 
         private void Awake()
         {
-            pageServer = new ArtelTestPageServer(bindAddress, httpPort, websocketPort);
-            webSocketServer = new ArtelWebSocketServer(bindAddress, websocketPort);
-
             if (artelManager == null)
             {
                 artelManager = GetComponent<ArtelManager>();
@@ -34,14 +31,39 @@ namespace Artel
             {
                 Debug.LogError("[Artel] ArtelTestPageManager requires an ArtelManager reference.");
                 enabled = false;
+            }
+        }
+
+        /// <summary>
+        /// Taking the transport used to happen in <c>Awake</c>, which Unity calls even on a
+        /// disabled component. Unchecking this component therefore did nothing: it still replaced
+        /// the game's connection to the orchestration server with a local test-page socket, and
+        /// the only symptom was a game that never appeared online. <c>OnEnable</c> runs only when
+        /// the component is actually on, so the checkbox now means what it looks like it means.
+        /// </summary>
+        private void OnEnable()
+        {
+            if (artelManager == null)
+            {
                 return;
             }
 
-            artelManager.SetWebSocketTransport(webSocketServer, false);
-        }
+            if (artelManager.HasWebSocketTransport)
+            {
+                Debug.LogWarning(
+                    "[Artel] The game already has a WebSocket transport, " +
+                    "so the test page will not serve it.");
+                return;
+            }
 
-        private void OnEnable()
-        {
+            if (pageServer == null)
+            {
+                pageServer = new ArtelTestPageServer(bindAddress, httpPort, websocketPort);
+                webSocketServer = new ArtelWebSocketServer(bindAddress, websocketPort);
+            }
+
+            artelManager.SetWebSocketTransport(webSocketServer, false);
+
             if (startOnEnable)
             {
                 StartServers();
@@ -50,11 +72,29 @@ namespace Artel
 
         private void OnDisable()
         {
+            if (webSocketServer == null)
+            {
+                return;
+            }
+
             StopServers();
+
+            // Hand the connection back, so switching this off at runtime lets the game reach the
+            // orchestration server instead of leaving it wired to a stopped local socket.
+            if (artelManager != null)
+            {
+                artelManager.ClearWebSocketTransport(webSocketServer);
+            }
         }
 
         public void StartServers()
         {
+            if (webSocketServer == null)
+            {
+                Debug.LogWarning("[Artel] Test page servers are not available while this component is off.");
+                return;
+            }
+
             webSocketServer.Start();
             pageServer.Start();
             Debug.Log("[Artel] Test page servers started at " + Url);
