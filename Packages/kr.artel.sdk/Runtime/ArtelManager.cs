@@ -176,7 +176,7 @@ namespace Artel
 
                 if (request.Method == "scan_scene" || request.Type == "SCAN_SCENE" || request.Type == "GET_GAME_STATE")
                 {
-                    SendGameState(message);
+                    ReplyWithGameState(message);
                     return;
                 }
 
@@ -220,6 +220,18 @@ namespace Artel
                     continue;
                 }
 
+                if (action.Method == "scan_scene")
+                {
+                    // Scanning from inside the batch is what orders a read against the writes
+                    // before it. The top-level scan path answers straight out of HandleMessage,
+                    // so it can report the scene while a preceding button_click is still moving
+                    // the cursor — and it consumes the pending action snapshot that click has
+                    // not produced yet.
+                    SendGameState();
+                    results.Add(ActionResultDto.Success(action.Id));
+                    continue;
+                }
+
                 yield return actionExecutor.Execute(
                     action.Id,
                     action.Method,
@@ -240,11 +252,24 @@ namespace Artel
             }
         }
 
-        private void SendGameState(ArtelWebSocketMessage request)
+        private void ReplyWithGameState(ArtelWebSocketMessage request)
         {
             var poll = sceneStatePoller.ScanNow();
 
             request.Reply(SerializeGameState(poll.Scene));
+            poll.ScanResult.CommitActions();
+        }
+
+        private void SendGameState()
+        {
+            if (webSocketTransport == null)
+            {
+                return;
+            }
+
+            var poll = sceneStatePoller.ScanNow();
+
+            webSocketTransport.Send(SerializeGameState(poll.Scene));
             poll.ScanResult.CommitActions();
         }
 

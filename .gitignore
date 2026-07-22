@@ -24,3 +24,6 @@ obj/
 
 # Agent tooling
 .agents/settings.local.json
+
+# Local Jira credentials
+.jira.env

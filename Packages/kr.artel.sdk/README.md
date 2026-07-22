@@ -22,7 +22,30 @@ WebSocket server and manages both test servers:
 
 - WebSocket URL: `ws://127.0.0.1:17311/ws`
 - Scan request: `{ "jsonrpc": "2.0", "id": 1, "method": "scan_scene", "params": [] }`
-- Action message: `ACTION` with `button_click`, `enter_text`, and `key_click`
+- Action message: `ACTION` with `button_click`, `enter_text`, `key_click`, and `scan_scene`
+
+## Ordering a scan against actions
+
+A top-level `scan_scene` answers as soon as the message arrives, so it can report
+the scene while a preceding `button_click` is still moving the cursor. Put
+`scan_scene` inside the `ACTION` batch instead and it runs on the same queue,
+after every action ahead of it has finished:
+
+```json
+{
+  "type": "ACTION",
+  "id": 9,
+  "actions": [
+    { "id": 1, "method": "button_click", "params": [12345] },
+    { "id": 2, "method": "scan_scene", "params": [] }
+  ]
+}
+```
+
+The batched scan sends its own `GAME_STATE` message — the same shape the poller
+pushes — and leaves `{ "id": 2, "success": true }` in the `ACTION_RESULT` that
+follows. The top-level request keeps working so existing clients can migrate at
+their own pace.
 
 ## Agent keyboard input
 
