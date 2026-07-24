@@ -133,6 +133,28 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
+        public void RegistrationClient_IncludesSceneScanWhenProvided()
+        {
+            var server = new Server(false, "127.0.0.1", 8080);
+            var client = new ArtelSdkRegistrationClient(new Artel.Serialization.NewtonsoftJsonCodec());
+            var sceneScan = new Artel.Protocol.Dto.SceneScanReportDto();
+            sceneScan.ScenesInBuild.Add("Assets/Scenes/Main.unity");
+
+            var request = client.CreateRequest(server, "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdk-uuid", "1.2.3", sceneScan);
+
+            try
+            {
+                Assert.That(
+                    Encoding.UTF8.GetString(request.uploadHandler.data),
+                    Does.Contain("\"sceneScan\":{\"scenesInBuild\":[\"Assets/Scenes/Main.unity\"]"));
+            }
+            finally
+            {
+                request.Dispose();
+            }
+        }
+
+        [Test]
         public void WebSocketClient_OwnsSdkWebSocketPathAndQuery()
         {
             var server = new Server(true, "socket.artel.example", 443);

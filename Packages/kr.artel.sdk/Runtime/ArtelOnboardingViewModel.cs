@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using Artel.Domain;
+using Artel.Protocol.Dto;
 using UnityEngine.Networking;
 
 namespace Artel
@@ -83,7 +84,8 @@ namespace Artel
             string instanceKey,
             string sdkUuid,
             string gameVersion,
-            Action connect)
+            Action connect,
+            SceneScanReportDto sceneScan = null)
         {
             if (State == ArtelOnboardingState.Registering)
             {
@@ -112,7 +114,7 @@ namespace Artel
             UnityWebRequest request;
             try
             {
-                request = registrationClient.CreateRequest(server, trimmedKey, sdkUuid, gameVersion);
+                request = registrationClient.CreateRequest(server, trimmedKey, sdkUuid, gameVersion, sceneScan);
             }
             catch (Exception exception)
             {

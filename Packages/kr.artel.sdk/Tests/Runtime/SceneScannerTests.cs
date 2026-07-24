@@ -35,6 +35,29 @@ namespace Artel.Tests
         }
 
         [Test]
+        public void ScanLoadedScenes_IncludesTheActiveSceneHierarchy()
+        {
+            var scanner = new SceneScanner();
+
+            var scenes = scanner.ScanLoadedScenes();
+            var activeScene = scenes.Single(scene => scene.Id == SceneManager.GetActiveScene().handle);
+
+            Assert.That(activeScene.Children.Any(child => child.Name == gameObject.name), Is.True);
+        }
+
+        [Test]
+        public void CreateReport_ListsBuildScenesAndScansLoadedOnes()
+        {
+            var report = SceneScanReporter.CreateReport();
+
+            Assert.That(report.ScannedScenes, Is.Not.Empty);
+            Assert.That(
+                report.ScannedScenes.Any(scene =>
+                    scene.Children.Any(child => child.Name == gameObject.name)),
+                Is.True);
+        }
+
+        [Test]
         public void Scan_KeepsBlockIdWhenHierarchyOrderChanges()
         {
             var scanner = new SceneScanner();
