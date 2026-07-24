@@ -26,7 +26,7 @@ namespace Artel
             var scanner = new SceneScanner();
             foreach (var scene in scanner.ScanLoadedScenes())
             {
-                report.ScannedScenes.Add(SceneSnapshotMapper.ToDto(scene));
+                report.ScannedScenes.Add(SceneScanReportMapper.ToReport(SceneSnapshotMapper.ToDto(scene)));
             }
 
             return report;

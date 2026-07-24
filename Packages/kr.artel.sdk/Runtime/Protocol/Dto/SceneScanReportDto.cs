@@ -13,6 +13,6 @@ namespace Artel.Protocol.Dto
         public List<string> ScenesInBuild { get; set; } = new List<string>();
 
         [JsonProperty("scannedScenes")]
-        public List<SceneDto> ScannedScenes { get; set; } = new List<SceneDto>();
+        public List<SceneScanSceneDto> ScannedScenes { get; set; } = new List<SceneScanSceneDto>();
     }
 }
