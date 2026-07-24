@@ -18,7 +18,12 @@ namespace Artel
             this.jsonCodec = jsonCodec ?? throw new ArgumentNullException(nameof(jsonCodec));
         }
 
-        public UnityWebRequest CreateRequest(Server server, string instanceKey, string sdkUuid, string gameVersion)
+        public UnityWebRequest CreateRequest(
+            Server server,
+            string instanceKey,
+            string sdkUuid,
+            string gameVersion,
+            SceneScanReportDto sceneScan = null)
         {
             if (server == null)
             {
@@ -40,7 +45,8 @@ namespace Artel
             {
                 InstanceKey = instanceKey,
                 SdkUuid = sdkUuid,
-                GameVersion = gameVersion
+                GameVersion = gameVersion,
+                SceneScan = sceneScan
             });
             var request = new UnityWebRequest(endpoint.AbsoluteUri, UnityWebRequest.kHttpVerbPOST)
             {

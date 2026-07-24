@@ -77,7 +77,22 @@ namespace Artel
                 viewModel.KeyInput,
                 artelManager.SdkId,
                 artelManager.GameVersion,
-                artelManager.StartTransport));
+                artelManager.StartTransport,
+                CreateSceneScanOrNull()));
+        }
+
+        // 스캔은 부가 정보다. 어떤 씬 구성에서 실패하더라도 등록 자체를 막으면 안 된다.
+        private static Artel.Protocol.Dto.SceneScanReportDto CreateSceneScanOrNull()
+        {
+            try
+            {
+                return SceneScanReporter.CreateReport();
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning("Artel: 씬 스캔에 실패해 스캔 없이 등록합니다. " + exception.Message);
+                return null;
+            }
         }
 
         private void ConnectWebSocket()

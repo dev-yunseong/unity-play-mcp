@@ -17,12 +17,41 @@ namespace Artel
         {
             targetsById.Clear();
 
-            var activeScene = SceneManager.GetActiveScene();
-            var sceneId = activeScene.handle;
-            var children = new List<SceneBlock>();
             var actionCommits = new List<ActionBatchCommit>();
+            return new SceneScanResult(
+                ScanScene(SceneManager.GetActiveScene(), actionCommits),
+                actionCommits);
+        }
 
-            foreach (var root in activeScene.GetRootGameObjects())
+        /// <summary>
+        /// 로드된 씬 전부를 스캔한다. 등록 시 씬 구성 보고용이다.
+        /// 액션 커밋을 버리므로 액션 버퍼를 소비하지 않는다. 스트리밍 스캔과 달리
+        /// 이 결과로 CommitActions를 부르면 안 되기 때문에 커밋 목록을 노출하지 않는다.
+        /// </summary>
+        public IReadOnlyList<SceneSnapshot> ScanLoadedScenes()
+        {
+            targetsById.Clear();
+
+            var discardedCommits = new List<ActionBatchCommit>();
+            var scenes = new List<SceneSnapshot>();
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (!scene.isLoaded)
+                {
+                    continue;
+                }
+
+                scenes.Add(ScanScene(scene, discardedCommits));
+            }
+
+            return scenes;
+        }
+
+        private SceneSnapshot ScanScene(Scene scene, List<ActionBatchCommit> actionCommits)
+        {
+            var children = new List<SceneBlock>();
+            foreach (var root in scene.GetRootGameObjects())
             {
                 if (root == null || !root.activeInHierarchy)
                 {
@@ -36,12 +65,10 @@ namespace Artel
                 }
             }
 
-            return new SceneScanResult(
-                new SceneSnapshot(
-                    sceneId,
-                    string.IsNullOrEmpty(activeScene.name) ? "Unity Scene" : activeScene.name,
-                    children),
-                actionCommits);
+            return new SceneSnapshot(
+                scene.handle,
+                string.IsNullOrEmpty(scene.name) ? "Unity Scene" : scene.name,
+                children);
         }
 
         public bool TryGetTarget(int id, out ScannedTarget target)
