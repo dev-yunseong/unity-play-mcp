@@ -1,7 +1,10 @@
+using System.Collections;
 using System.Linq;
+using Artel.Protocol.Dto;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 
 namespace Artel.Tests
 {
@@ -34,22 +37,14 @@ namespace Artel.Tests
             Assert.That(scanner.TryGetTarget(block.Id, out _), Is.True);
         }
 
-        [Test]
-        public void ScanLoadedScenes_IncludesTheActiveSceneHierarchy()
+        [UnityTest]
+        public IEnumerator CreateReport_ListsBuildScenesAndScansThem()
         {
-            var scanner = new SceneScanner();
+            SceneScanReportDto report = null;
 
-            var scenes = scanner.ScanLoadedScenes();
-            var activeScene = scenes.Single(scene => scene.Id == SceneManager.GetActiveScene().handle);
+            yield return SceneScanReporter.CreateReport(result => report = result);
 
-            Assert.That(activeScene.Children.Any(child => child.Name == gameObject.name), Is.True);
-        }
-
-        [Test]
-        public void CreateReport_ListsBuildScenesAndScansLoadedOnes()
-        {
-            var report = SceneScanReporter.CreateReport();
-
+            Assert.That(report, Is.Not.Null);
             Assert.That(report.ScannedScenes, Is.Not.Empty);
             Assert.That(
                 report.ScannedScenes.Any(scene =>

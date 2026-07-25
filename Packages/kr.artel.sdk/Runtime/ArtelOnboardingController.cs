@@ -1,3 +1,5 @@
+using System.Collections;
+using Artel.Protocol.Dto;
 using Artel.Serialization;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -72,27 +74,22 @@ namespace Artel
 
         private void RegisterInstanceKey()
         {
-            StartCoroutine(viewModel.Register(
+            StartCoroutine(ScanScenesThenRegister());
+        }
+
+        // 스캔이 빌드 내 씬을 하나씩 로드했다 내리므로 등록은 그만큼 늦게 시작한다.
+        private IEnumerator ScanScenesThenRegister()
+        {
+            SceneScanReportDto sceneScan = null;
+            yield return SceneScanReporter.CreateReport(report => sceneScan = report);
+
+            yield return viewModel.Register(
                 artelManager.Server,
                 viewModel.KeyInput,
                 artelManager.SdkId,
                 artelManager.GameVersion,
                 artelManager.StartTransport,
-                CreateSceneScanOrNull()));
-        }
-
-        // 스캔은 부가 정보다. 어떤 씬 구성에서 실패하더라도 등록 자체를 막으면 안 된다.
-        private static Artel.Protocol.Dto.SceneScanReportDto CreateSceneScanOrNull()
-        {
-            try
-            {
-                return SceneScanReporter.CreateReport();
-            }
-            catch (System.Exception exception)
-            {
-                Debug.LogWarning("Artel: 씬 스캔에 실패해 스캔 없이 등록합니다. " + exception.Message);
-                return null;
-            }
+                sceneScan);
         }
 
         private void ConnectWebSocket()

@@ -27,6 +27,7 @@ namespace Artel
     <strong>Artel SDK PoC</strong>
     <button id=""connect"">Connect</button>
     <button id=""scan"">Scan</button>
+    <button id=""scan-all"">Scan all scenes</button>
     <span id=""status"">idle</span>
   </header>
   <section class=""controls"" aria-label=""Keyboard input"">
@@ -60,6 +61,7 @@ namespace Artel
     const wsUrl = '__WS_URL__';
     let ws;
     let actionId = 1;
+    let liveSceneId = null;
     const status = document.getElementById('status');
     const sceneRoot = document.getElementById('scene');
     const log = document.getElementById('log');
@@ -68,6 +70,7 @@ namespace Artel
 
     document.getElementById('connect').onclick = connect;
     document.getElementById('scan').onclick = scan;
+    document.getElementById('scan-all').onclick = scanAllScenes;
     document.getElementById('key-click').onclick = clickKey;
 
     function connect() {
@@ -81,6 +84,11 @@ namespace Artel
     function scan() {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({ jsonrpc: '2.0', id: actionId++, method: 'scan_scene', params: [] }));
+    }
+
+    function scanAllScenes() {
+      status.textContent = 'scanning every scene…';
+      sendAction('scan_all_scenes', []);
     }
 
     function sendAction(method, params) {
@@ -110,14 +118,33 @@ namespace Artel
     function handleMessage(message) {
       log.textContent = JSON.stringify(message, null, 2);
       if (message.type === 'GAME_STATE') renderScene(message.scene);
+      if (message.type === 'ALL_SCENES') renderAllScenes(message.scenes);
     }
 
     function renderScene(scene) {
+      liveSceneId = scene.id;
       sceneRoot.innerHTML = '';
-      sceneRoot.appendChild(renderNode(scene));
+      sceneRoot.appendChild(renderNode(scene, true));
     }
 
-    function renderNode(node) {
+    function renderAllScenes(scenes) {
+      status.textContent = `${(scenes || []).length} scenes scanned`;
+      sceneRoot.innerHTML = '';
+
+      for (const entry of scenes || []) {
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = `build #${entry.buildIndex} — ${entry.path}`;
+        sceneRoot.appendChild(label);
+
+        // The walk unloads every scene it opened, so those block ids address objects
+        // that no longer exist and their controls are rendered dead. The scene the
+        // game already had open survived it and stays clickable.
+        sceneRoot.appendChild(renderNode(entry.scene, entry.scene.id === liveSceneId));
+      }
+    }
+
+    function renderNode(node, interactive) {
       const wrap = document.createElement('div');
       wrap.className = 'node';
       const label = document.createElement('div');
@@ -126,27 +153,29 @@ namespace Artel
       wrap.appendChild(label);
 
       for (const component of node.components || []) {
-        wrap.appendChild(renderComponent(node.id, component));
+        wrap.appendChild(renderComponent(node.id, component, interactive));
       }
 
-      for (const child of node.children || []) wrap.appendChild(renderNode(child));
+      for (const child of node.children || []) wrap.appendChild(renderNode(child, interactive));
       return wrap;
     }
 
-    function renderComponent(blockId, component) {
+    function renderComponent(blockId, component, interactive) {
       const wrap = document.createElement('div');
       wrap.className = 'block';
 
       if (component.type === 'button') {
         const button = document.createElement('button');
         button.textContent = component.name || `Button ${blockId}`;
-        button.onclick = () => sendAction('button_click', [blockId]);
+        button.disabled = !interactive;
+        if (interactive) button.onclick = () => sendAction('button_click', [blockId]);
         wrap.appendChild(button);
       } else if (component.type === 'editText') {
         const input = document.createElement('input');
         input.value = component.content || '';
         input.placeholder = component.placeholder || '';
-        input.onchange = () => sendAction('enter_text', [blockId, input.value]);
+        input.disabled = !interactive;
+        if (interactive) input.onchange = () => sendAction('enter_text', [blockId, input.value]);
         wrap.appendChild(input);
       } else if (component.type === 'text') {
         const text = document.createElement('div');

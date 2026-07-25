@@ -40,7 +40,7 @@ WebSocket server and manages both test servers:
 
 - WebSocket URL: `ws://127.0.0.1:17311/ws`
 - Scan request: `{ "jsonrpc": "2.0", "id": 1, "method": "scan_scene", "params": [] }`
-- Action message: `ACTION` with `button_click`, `enter_text`, `key_click`, and `scan_scene`
+- Action message: `ACTION` with `button_click`, `enter_text`, `key_click`, `scan_scene`, and `scan_all_scenes`
 
 ## Ordering a scan against actions
 
@@ -64,6 +64,70 @@ The batched scan sends its own `GAME_STATE` message — the same shape the polle
 pushes — and leaves `{ "id": 2, "success": true }` in the `ACTION_RESULT` that
 follows. The top-level request keeps working so existing clients can migrate at
 their own pace.
+
+## Scanning every scene in the build
+
+`scan_all_scenes` walks Build Settings from index 0 upward, scanning each scene,
+and answers with a single `ALL_SCENES` message. It is a batch method only —
+the walk spans many frames, so there is no top-level form.
+
+```json
+{ "type": "ACTION", "id": 10, "actions": [{ "id": 1, "method": "scan_all_scenes", "params": [] }] }
+```
+
+```json
+{
+  "type": "ALL_SCENES",
+  "id": 11,
+  "scenes": [
+    { "buildIndex": 0, "path": "Assets/Scenes/Lobby.unity", "scene": { "id": -1234, "type": "scene", "name": "Lobby", "children": [] } }
+  ]
+}
+```
+
+Each `scene` is the same shape `GAME_STATE` sends. Scenes are loaded
+`Additive`, scanned, then unloaded; a scene the game already has open is scanned
+in place and left alone. The original active scene is restored and rescanned
+afterwards, so `button_click` and `enter_text` target ids keep working.
+
+The local test page drives this from its **Scan all scenes** button. It lists
+every returned scene under its build index and path, drawn by the same renderer
+`GAME_STATE` uses. Controls belonging to a scene the walk unloaded are disabled,
+since clicking them would address nothing; the scene the game already had open
+stays clickable.
+
+This runs the game's other scenes, briefly. Their `Awake`, `OnEnable`, and
+`Start` execute — anything they do on load (audio, network calls, writing to
+`PlayerPrefs`) happens for real. Treat `scan_all_scenes` as a discovery step, not
+something to call during a run you care about. Block ids collected this way
+belong to objects that are destroyed when the scan finishes; only the returned
+structure is durable.
+
+A visited scene escapes its own unload two ways. `DontDestroyOnLoad` moves
+objects to a scene of their own, and anything its `Awake` or `Start`
+instantiates lands in whatever scene is active then — the game's, since a scene
+cannot be made active until it has finished loading. Both surface as new root
+objects.
+
+So before each load the walk records every root alive, and after scanning it
+hands the new ones to the scene it is about to unload with
+`MoveGameObjectToScene`. They are destroyed by that unload, `OnDestroy` and all.
+The comparison and the unload happen without yielding in between, so nothing
+spawned after the comparison slips past it.
+
+What that cannot undo:
+
+- `static` fields and event subscriptions a destroyed manager left behind.
+- Singletons that destroy the *duplicate* on `Awake` — the game's own instance
+  may be the one that died.
+- Side effects already committed: audio played, requests sent, prefs written.
+- Objects a visited scene parents under something the game owns. Only roots can
+  move between scenes, so those stay.
+- Work a scene defers past the settle window — a coroutine, an `Invoke`, a web
+  request callback. No fixed wait covers it.
+- Anything the game itself creates during the walk, which is a new root like any
+  other and goes with them.
+- Mutated `ScriptableObject` and other asset state, which no scene owns.
 
 ## Agent keyboard input
 

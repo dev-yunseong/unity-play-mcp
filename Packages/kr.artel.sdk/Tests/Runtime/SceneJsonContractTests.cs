@@ -66,6 +66,43 @@ namespace Artel.Tests.Protocol
         }
 
         [Test]
+        public void Serialize_AllScenesCarriesBuildIndexAndPathPerScene()
+        {
+            var message = new AllScenesMessageDto
+            {
+                Type = "ALL_SCENES",
+                Id = 4,
+                Scenes = new List<ScannedSceneDto>
+                {
+                    new ScannedSceneDto
+                    {
+                        BuildIndex = 0,
+                        Path = "Assets/Scenes/Lobby.unity",
+                        Scene = new SceneDto { Id = 1, Type = "scene", Name = "Lobby" }
+                    },
+                    new ScannedSceneDto
+                    {
+                        BuildIndex = 1,
+                        Path = "Assets/Scenes/Game.unity",
+                        Scene = new SceneDto { Id = 2, Type = "scene", Name = "Game" }
+                    }
+                }
+            };
+
+            var root = JObject.Parse(JsonConvert.SerializeObject(message));
+
+            Assert.That((string)root["type"], Is.EqualTo("ALL_SCENES"));
+            Assert.That(root["scenes"], Has.Count.EqualTo(2));
+            Assert.That((int)root["scenes"]?[1]?["buildIndex"], Is.EqualTo(1));
+            Assert.That((string)root["scenes"]?[1]?["path"], Is.EqualTo("Assets/Scenes/Game.unity"));
+
+            // Each entry nests the same scene shape GAME_STATE sends, so a server parses one form.
+            Assert.That((string)root["scenes"]?[1]?["scene"]?["type"], Is.EqualTo("scene"));
+            Assert.That((string)root["scenes"]?[1]?["scene"]?["name"], Is.EqualTo("Game"));
+            Assert.That(root["scenes"]?[1]?["scene"]?["children"], Is.TypeOf<JArray>());
+        }
+
+        [Test]
         public void Serialize_ButtonDoesNotExposeTextFields()
         {
             var json = JsonConvert.SerializeObject(new ButtonComponentDto { Name = "login button" });

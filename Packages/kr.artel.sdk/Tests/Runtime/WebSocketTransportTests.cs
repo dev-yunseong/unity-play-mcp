@@ -224,6 +224,20 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
+        public void TestPage_ScansEverySceneAndRendersTheResultDead()
+        {
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"scan-all\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("sendAction('scan_all_scenes', [])"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("if (message.type === 'ALL_SCENES') renderAllScenes(message.scenes)"));
+
+            // Blocks from a scene the walk unloaded are gone by the time the page draws
+            // them, so only the scene that was already open stays clickable.
+            Assert.That(ArtelTestPage.Html, Does.Contain("renderNode(entry.scene, entry.scene.id === liveSceneId)"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("button.disabled = !interactive"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("input.disabled = !interactive"));
+        }
+
+        [Test]
         public void OnboardingViewModel_StartsInNeedsKeyWhenNoKeyStored()
         {
             var viewModel = CreateViewModel();

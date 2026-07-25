@@ -1,5 +1,9 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using Artel.Protocol.Dto;
 using Artel.Protocol.Mapping;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace Artel
@@ -7,26 +11,74 @@ namespace Artel
     /// <summary>
     /// 등록 시점의 씬 구성을 서버에 보고할 형태로 만든다.
     ///
-    /// 런타임에서는 로드된 씬만 내용을 스캔할 수 있다. 로드되지 않은 씬까지 강제로
-    /// 로드하면 Awake/Start가 실행되어 게임 상태를 건드리므로 하지 않는다. 대신
-    /// Build Settings의 씬 경로 목록으로 전체 씬의 존재만 보고한다.
+    /// 내용 스캔은 <see cref="AllSceneScanner"/>에 맡긴다. 런타임 scan_all_scenes와
+    /// 같은 씬 워크를 쓰므로 잔여 오브젝트 정리와 활성 씬 복구가 함께 따라온다.
+    /// 씬을 실제로 로드하는 비동기 작업이라 코루틴으로만 실행할 수 있다.
     /// </summary>
     internal static class SceneScanReporter
     {
-        public static SceneScanReportDto CreateReport()
+        public static IEnumerator CreateReport(Action<SceneScanReportDto> onCompleted)
         {
-            var report = new SceneScanReportDto();
-
-            for (var i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+            if (onCompleted == null)
             {
-                report.ScenesInBuild.Add(SceneUtility.GetScenePathByBuildIndex(i));
+                throw new ArgumentNullException(nameof(onCompleted));
             }
 
-            // ActionExecutor가 쓰는 스캐너와 타깃 맵을 공유하면 안 되므로 새 인스턴스로 스캔한다.
-            var scanner = new SceneScanner();
-            foreach (var scene in scanner.ScanLoadedScenes())
+            var report = ListBuildScenes();
+
+            // 스캔은 부가 정보다. 씬 워크가 어디서 터지더라도 등록 자체를 막으면 안 되므로
+            // 직접 돌리면서 예외를 삼킨다. 터지기 전까지 담은 씬은 그대로 보고에 남는다.
+            var walk = ScanEveryScene(report);
+            while (true)
             {
-                report.ScannedScenes.Add(SceneScanReportMapper.ToReport(SceneSnapshotMapper.ToDto(scene)));
+                object current;
+                try
+                {
+                    if (!walk.MoveNext())
+                    {
+                        break;
+                    }
+
+                    current = walk.Current;
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("Artel: 전체 씬 스캔이 중단되어 스캔한 데까지만 보고합니다. " + exception.Message);
+                    break;
+                }
+
+                yield return current;
+            }
+
+            onCompleted(report);
+        }
+
+        // ActionExecutor가 쓰는 스캐너와 타깃 맵을 공유하면 안 되므로 새 인스턴스로 스캔한다.
+        private static IEnumerator ScanEveryScene(SceneScanReportDto report)
+        {
+            List<ScannedSceneDto> scanned = null;
+            yield return new AllSceneScanner(new SceneScanner()).ScanAll(result => scanned = result);
+
+            foreach (var scene in scanned)
+            {
+                report.ScannedScenes.Add(SceneScanReportMapper.ToReport(scene.Scene));
+            }
+        }
+
+        // 목록을 못 만들어도 등록을 막을 이유는 없다.
+        private static SceneScanReportDto ListBuildScenes()
+        {
+            var report = new SceneScanReportDto();
+            try
+            {
+                for (var i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+                {
+                    report.ScenesInBuild.Add(SceneUtility.GetScenePathByBuildIndex(i));
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("Artel: Build Settings의 씬 목록을 읽지 못했습니다. " + exception.Message);
             }
 
             return report;
