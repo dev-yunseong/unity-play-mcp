@@ -100,6 +100,12 @@ namespace Artel
         private void CreateGui()
         {
             canvasObject = new GameObject("Artel Onboarding Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            // Parented to the manager so it rides along across scene loads. Left at
+            // the scene root it is destroyed with that scene, and this controller —
+            // which does survive — would be left holding a destroyed canvas and
+            // never rebuild it. CursorController and KeyboardStatusController
+            // already attach theirs the same way.
+            canvasObject.transform.SetParent(transform, false);
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = short.MaxValue - 1;
@@ -109,7 +115,7 @@ namespace Artel
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 1f;
 
-            createdEventSystem = EnsureEventSystem();
+            createdEventSystem = EnsureEventSystem(transform);
 
             var toggleButton = CreateButton(canvasObject.transform, "Artel", new Vector2(140f, 48f));
             AnchorTopRight(toggleButton.GetComponent<RectTransform>(), new Vector2(-24f, -24f));
@@ -322,14 +328,20 @@ namespace Artel
             rectTransform.offsetMax = new Vector2(-12f, -6f);
         }
 
-        private static GameObject EnsureEventSystem()
+        private static GameObject EnsureEventSystem(Transform owner)
         {
-            if (EventSystem.current == null)
+            if (EventSystem.current != null)
             {
-                return new GameObject("Artel EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+                return null;
             }
 
-            return null;
+            var eventSystem = new GameObject(
+                "Artel EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+            // Also parented to the manager: a scene that arrives without an
+            // EventSystem leaves the UI unclickable, and the one we made for that
+            // case must not disappear with the scene we made it in.
+            eventSystem.transform.SetParent(owner, false);
+            return eventSystem;
         }
     }
 }

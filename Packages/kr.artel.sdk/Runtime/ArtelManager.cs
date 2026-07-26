@@ -15,6 +15,13 @@ namespace Artel
     {
         private const float SceneScanIntervalSeconds = 1f;
 
+        /// <summary>
+        /// The one manager that survives scene loads. Static rather than looked up
+        /// each time because the check runs in Awake, before anything else can
+        /// register it.
+        /// </summary>
+        private static ArtelManager instance;
+
         [SerializeField] private bool connectOnEnable;
         [SerializeField] private Server server = new Server();
 
@@ -49,6 +56,23 @@ namespace Artel
 
         private void Awake()
         {
+            // The socket has to outlive the scene it was opened in. A QA run acts
+            // on the game, and acting frequently loads another scene — which used
+            // to destroy this object mid-run, closing the connection and failing
+            // the run at exactly the moment the interesting part began.
+            if (instance != null && instance != this)
+            {
+                // A second manager appears when a scene carrying one is loaded
+                // again. Keeping the first preserves the live connection; the
+                // newcomer would open a second and be rejected as a duplicate.
+                Destroy(gameObject);
+                return;
+            }
+
+            instance = this;
+            transform.SetParent(null);
+            DontDestroyOnLoad(gameObject);
+
             scanner = new SceneScanner();
             allSceneScanner = new AllSceneScanner(scanner);
             cursorController = GetComponent<CursorController>();
@@ -95,6 +119,17 @@ namespace Artel
         private void OnDisable()
         {
             StopTransport();
+        }
+
+        private void OnDestroy()
+        {
+            // Only the surviving manager clears the slot. A duplicate destroying
+            // itself in Awake must not blank the reference to the live one, or the
+            // next scene load would let a third instance through.
+            if (instance == this)
+            {
+                instance = null;
+            }
         }
 
         private void Update()
