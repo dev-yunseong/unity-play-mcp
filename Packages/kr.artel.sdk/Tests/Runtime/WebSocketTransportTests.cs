@@ -253,6 +253,9 @@ namespace Artel.Tests.Transport
 
             // Only a full scan reports inactive objects, and they have to read as inactive.
             Assert.That(ArtelTestPage.Html, Does.Contain("const inactive = node.active === false"));
+
+            // A button in a pinned scene is dead, so its onClick wiring is what explains it.
+            Assert.That(ArtelTestPage.Html, Does.Contain("for (const handler of component.onClick || [])"));
         }
 
         [Test]

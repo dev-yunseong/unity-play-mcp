@@ -212,6 +212,14 @@ namespace Artel
         button.disabled = !interactive;
         if (interactive) button.onclick = () => sendAction('button_click', [blockId]);
         wrap.appendChild(button);
+
+        // Only a full scan collects these, so a default scan renders nothing here.
+        for (const handler of component.onClick || []) {
+          const line = document.createElement('div');
+          line.className = 'label';
+          line.textContent = `onClick: ${handler.target || '(missing target)'} (${handler.targetType || 'unknown type'}) . ${handler.method || '(no method)'}`;
+          wrap.appendChild(line);
+        }
       } else if (component.type === 'editText') {
         const input = document.createElement('input');
         input.value = component.content || '';

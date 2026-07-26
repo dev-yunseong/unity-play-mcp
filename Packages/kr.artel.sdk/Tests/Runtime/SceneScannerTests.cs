@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor.Events;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -160,6 +161,25 @@ namespace Artel.Tests
                 components.OfType<TrackedComponent>().Any(component =>
                     component.ComponentType == typeof(SerializedFixtureBehaviour).FullName),
                 Is.False);
+        }
+
+        [Test]
+        public void Scan_Full_ReportsOnClickTargetTypeAndMethod()
+        {
+            var button = gameObject.AddComponent<Button>();
+            var listener = gameObject.AddComponent<TrackedFixtureBehaviour>();
+            UnityEventTools.AddPersistentListener(button.onClick, listener.Ping);
+
+            var full = new SceneScanner().Scan(SceneScanOptions.Full).Scene;
+            var handler = ButtonOf(full, gameObject.name).ClickHandlers.Single();
+
+            Assert.That(handler.Target, Is.EqualTo(gameObject.name));
+            Assert.That(handler.TargetType, Is.EqualTo(typeof(TrackedFixtureBehaviour).FullName));
+            Assert.That(handler.Method, Is.EqualTo(nameof(TrackedFixtureBehaviour.Ping)));
+
+            // The poller rescans constantly, so the default scan keeps paying nothing for this.
+            var byDefault = new SceneScanner().Scan().Scene;
+            Assert.That(ButtonOf(byDefault, gameObject.name).ClickHandlers, Is.Empty);
         }
 
         [Test]

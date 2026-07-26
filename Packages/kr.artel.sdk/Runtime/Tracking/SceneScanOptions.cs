@@ -11,8 +11,8 @@ namespace Artel.Tracking
     /// </remarks>
     internal readonly struct SceneScanOptions
     {
-        public static readonly SceneScanOptions Default = new SceneScanOptions(false, false);
-        public static readonly SceneScanOptions Full = new SceneScanOptions(true, true);
+        public static readonly SceneScanOptions Default = new SceneScanOptions(false, false, false);
+        public static readonly SceneScanOptions Full = new SceneScanOptions(true, true, true);
 
         /// <summary>
         /// Include every MonoBehaviour the game itself wrote, reading the fields Unity would
@@ -25,10 +25,21 @@ namespace Artel.Tracking
         /// </summary>
         public bool IncludeInactive { get; }
 
-        private SceneScanOptions(bool includeAllSerializedFields, bool includeInactive)
+        /// <summary>
+        /// Read each button's inspector-wired <c>onClick</c> calls into its component. A scene the
+        /// walk visited is unloaded before anyone can click it, so this is all the reader gets to
+        /// learn about what a button does.
+        /// </summary>
+        public bool IncludeButtonHandlers { get; }
+
+        private SceneScanOptions(
+            bool includeAllSerializedFields,
+            bool includeInactive,
+            bool includeButtonHandlers)
         {
             IncludeAllSerializedFields = includeAllSerializedFields;
             IncludeInactive = includeInactive;
+            IncludeButtonHandlers = includeButtonHandlers;
         }
     }
 }

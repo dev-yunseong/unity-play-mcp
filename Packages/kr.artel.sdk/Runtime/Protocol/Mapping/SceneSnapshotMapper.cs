@@ -83,7 +83,11 @@ namespace Artel.Protocol.Mapping
             SceneComponentDto dto;
             if (component is ButtonComponent button)
             {
-                dto = new ButtonComponentDto { Interactable = button.Interactable };
+                dto = new ButtonComponentDto
+                {
+                    Interactable = button.Interactable,
+                    OnClick = ToDto(button.ClickHandlers)
+                };
             }
             else if (component is TextComponent text)
             {
@@ -111,6 +115,29 @@ namespace Artel.Protocol.Mapping
             dto.States = states;
             dto.Actions = actions;
             return dto;
+        }
+
+        // Null rather than an empty list: a scan that did not collect handlers and a button with
+        // none both end up here, and neither is worth a field in the payload.
+        private static List<ButtonClickHandlerDto> ToDto(IReadOnlyList<ButtonClickHandler> handlers)
+        {
+            if (handlers.Count == 0)
+            {
+                return null;
+            }
+
+            var dtos = new List<ButtonClickHandlerDto>(handlers.Count);
+            foreach (var handler in handlers)
+            {
+                dtos.Add(new ButtonClickHandlerDto
+                {
+                    Target = handler.Target,
+                    TargetType = handler.TargetType,
+                    Method = handler.Method
+                });
+            }
+
+            return dtos;
         }
     }
 }
