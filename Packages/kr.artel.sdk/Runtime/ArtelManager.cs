@@ -345,6 +345,10 @@ namespace Artel
             {
                 Type = "ACTION_RESULT",
                 Id = nextMessageId++,
+                // Echoed so the caller can tell which ACTION this answers. `Id`
+                // cannot serve: it is this message's own number and shares no
+                // sequence with the request's.
+                RequestId = request.Id,
                 Results = results
             };
 
