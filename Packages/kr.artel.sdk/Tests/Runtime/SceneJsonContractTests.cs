@@ -151,6 +151,32 @@ namespace Artel.Tests.Protocol
             Assert.That((string)component["type"], Is.EqualTo("button"));
             Assert.That(component["content"], Is.Null);
             Assert.That(component["placeholder"], Is.Null);
+
+            // A default scan collects no handlers, and the field stays out of its payload.
+            Assert.That(component["onClick"], Is.Null);
+        }
+
+        [Test]
+        public void Serialize_ButtonCarriesOnClickTargetTypeAndMethod()
+        {
+            var json = JsonConvert.SerializeObject(new ButtonComponentDto
+            {
+                Name = "login button",
+                OnClick = new List<ButtonClickHandlerDto>
+                {
+                    new ButtonClickHandlerDto
+                    {
+                        Target = "Login Panel",
+                        TargetType = "Game.Ui.LoginPanel",
+                        Method = "Submit"
+                    }
+                }
+            });
+            var component = JObject.Parse(json);
+
+            Assert.That((string)component["onClick"]?[0]?["target"], Is.EqualTo("Login Panel"));
+            Assert.That((string)component["onClick"]?[0]?["targetType"], Is.EqualTo("Game.Ui.LoginPanel"));
+            Assert.That((string)component["onClick"]?[0]?["method"], Is.EqualTo("Submit"));
         }
 
         [Test]

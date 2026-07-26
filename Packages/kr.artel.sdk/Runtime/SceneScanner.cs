@@ -103,6 +103,7 @@ namespace Artel
     {
         private static readonly IReadOnlyList<TrackedState> EmptyStates = new List<TrackedState>();
         private static readonly IReadOnlyList<ActionInvocation> EmptyActions = new List<ActionInvocation>();
+        private static readonly IReadOnlyList<ButtonClickHandler> EmptyClickHandlers = new List<ButtonClickHandler>();
 
         private readonly Button button;
         private readonly InputField inputField;
@@ -181,7 +182,8 @@ namespace Artel
                     gameObjectName,
                     IsUsable(button),
                     EmptyStates,
-                    EmptyActions));
+                    EmptyActions,
+                    options.IncludeButtonHandlers ? ReadClickHandlers(button) : EmptyClickHandlers));
             }
 
             if (inputField != null)
@@ -313,6 +315,36 @@ namespace Artel
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Reads the onClick calls Unity serialized from the inspector.
+        /// </summary>
+        /// <remarks>
+        /// AddListener registrations live in a plain delegate with no public way to walk it, so a
+        /// button wired entirely in code reports nothing here rather than reporting it wrongly.
+        /// </remarks>
+        private static IReadOnlyList<ButtonClickHandler> ReadClickHandlers(Button button)
+        {
+            var count = button.onClick.GetPersistentEventCount();
+            if (count == 0)
+            {
+                return EmptyClickHandlers;
+            }
+
+            var handlers = new List<ButtonClickHandler>(count);
+            for (var i = 0; i < count; i++)
+            {
+                // A target whose object was deleted or never assigned still occupies a slot, and
+                // its method name is the only part left worth reporting.
+                var target = button.onClick.GetPersistentTarget(i);
+                handlers.Add(new ButtonClickHandler(
+                    target == null ? null : target.name,
+                    target == null ? null : target.GetType().FullName,
+                    button.onClick.GetPersistentMethodName(i)));
+            }
+
+            return handlers;
         }
 
         private static string GetPlaceholder(InputField target)
