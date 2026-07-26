@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Artel.Domain;
 using Artel.Tracking;
@@ -15,25 +16,33 @@ namespace Artel
 
         public SceneScanResult Scan()
         {
+            return Scan(SceneScanOptions.Default);
+        }
+
+        public SceneScanResult Scan(SceneScanOptions options)
+        {
             targetsById.Clear();
 
             var actionCommits = new List<ActionBatchCommit>();
             return new SceneScanResult(
-                ScanScene(SceneManager.GetActiveScene(), actionCommits),
+                ScanScene(SceneManager.GetActiveScene(), options, actionCommits),
                 actionCommits);
         }
 
-        private SceneSnapshot ScanScene(Scene scene, List<ActionBatchCommit> actionCommits)
+        private SceneSnapshot ScanScene(
+            Scene scene,
+            SceneScanOptions options,
+            List<ActionBatchCommit> actionCommits)
         {
             var children = new List<SceneBlock>();
             foreach (var root in scene.GetRootGameObjects())
             {
-                if (root == null || !root.activeInHierarchy)
+                if (root == null || (!options.IncludeInactive && !root.activeInHierarchy))
                 {
                     continue;
                 }
 
-                var child = ScanTransform(root.transform, actionCommits);
+                var child = ScanTransform(root.transform, options, actionCommits);
                 if (child != null)
                 {
                     children.Add(child);
@@ -51,9 +60,18 @@ namespace Artel
             return targetsById.TryGetValue(id, out target);
         }
 
-        private SceneBlock ScanTransform(Transform transform, List<ActionBatchCommit> actionCommits)
+        private SceneBlock ScanTransform(
+            Transform transform,
+            SceneScanOptions options,
+            List<ActionBatchCommit> actionCommits)
         {
-            if (transform == null || !transform.gameObject.activeInHierarchy)
+            if (transform == null)
+            {
+                return null;
+            }
+
+            var active = transform.gameObject.activeInHierarchy;
+            if (!active && !options.IncludeInactive)
             {
                 return null;
             }
@@ -65,7 +83,7 @@ namespace Artel
             var children = new List<SceneBlock>();
             for (var i = 0; i < transform.childCount; i++)
             {
-                var child = ScanTransform(transform.GetChild(i), actionCommits);
+                var child = ScanTransform(transform.GetChild(i), options, actionCommits);
                 if (child != null)
                 {
                     children.Add(child);
@@ -75,7 +93,8 @@ namespace Artel
             return new SceneBlock(
                 id,
                 transform.gameObject.name,
-                target.CreateComponents(transform.gameObject, stateReader, actionCommits),
+                active,
+                target.CreateComponents(transform.gameObject, stateReader, options, actionCommits),
                 children);
         }
     }
@@ -125,6 +144,7 @@ namespace Artel
         public IReadOnlyList<SceneComponent> CreateComponents(
             GameObject gameObject,
             StateReader stateReader,
+            SceneScanOptions options,
             List<ActionBatchCommit> actionCommits)
         {
             var components = new List<SceneComponent>();
@@ -167,8 +187,16 @@ namespace Artel
 
             foreach (var component in gameObject.GetComponents<Component>())
             {
+                // A GameObject whose script failed to compile or went missing reports a null
+                // component here.
+                if (component == null)
+                {
+                    continue;
+                }
+
                 var actionSource = component as IArtelActionSource;
-                if (actionSource == null && !stateReader.HasTrackedState(component.GetType()))
+                var readAllFields = options.IncludeAllSerializedFields && IsGameBehaviour(component);
+                if (actionSource == null && !readAllFields && !stateReader.HasTrackedState(component.GetType()))
                 {
                     continue;
                 }
@@ -183,11 +211,33 @@ namespace Artel
                 components.Add(new TrackedComponent(
                     component.GetType().FullName,
                     component.GetType().Name,
-                    stateReader.Read(component),
+                    stateReader.Read(component, readAllFields),
                     actions));
             }
 
             return components;
+        }
+
+        /// <summary>
+        /// A MonoBehaviour the game wrote, as opposed to one shipped by Unity or by this SDK.
+        /// </summary>
+        /// <remarks>
+        /// Reading every serialized field of the engine's own behaviours — Image, TMP_Text,
+        /// EventTrigger — buries the game's own data under hundreds of layout fields nobody asked
+        /// for, so the assembly a component comes from is the line.
+        /// </remarks>
+        private static bool IsGameBehaviour(Component component)
+        {
+            if (!(component is MonoBehaviour))
+            {
+                return false;
+            }
+
+            var assembly = component.GetType().Assembly.GetName().Name;
+            return assembly != "Artel.Runtime" &&
+                   !assembly.StartsWith("Unity", StringComparison.Ordinal) &&
+                   !assembly.StartsWith("System", StringComparison.Ordinal) &&
+                   !assembly.StartsWith("mscorlib", StringComparison.Ordinal);
         }
 
         public bool Click()

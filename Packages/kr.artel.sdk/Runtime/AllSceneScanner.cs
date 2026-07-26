@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Artel.Protocol.Dto;
 using Artel.Protocol.Mapping;
+using Artel.Tracking;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -28,7 +29,7 @@ namespace Artel
             this.scanner = scanner;
         }
 
-        public IEnumerator ScanAll(Action<List<ScannedSceneDto>> completed)
+        public IEnumerator ScanAll(SceneScanOptions options, Action<List<ScannedSceneDto>> completed)
         {
             var scanned = new List<ScannedSceneDto>();
             var originalScene = SceneManager.GetActiveScene();
@@ -66,7 +67,7 @@ namespace Artel
                     // The scan result's pending actions are deliberately left uncommitted. These
                     // scenes are being visited, not played, and dropping their recorded actions
                     // here would hide them from the next GAME_STATE.
-                    Scene = SceneSnapshotMapper.ToDto(scanner.Scan().Scene)
+                    Scene = SceneSnapshotMapper.ToDto(scanner.Scan(options).Scene)
                 });
 
                 if (!wasAlreadyLoaded)
@@ -89,7 +90,9 @@ namespace Artel
             SceneManager.SetActiveScene(originalScene);
 
             // Target ids come from whichever scene was scanned last, and that scene is now
-            // unloaded. Rescan so button_click and enter_text address live objects again.
+            // unloaded. Rescan so button_click and enter_text address live objects again — with
+            // the default options, so a full walk does not leave inactive objects sitting in the
+            // target map for the actions that follow it in the batch.
             scanner.Scan();
             completed(scanned);
         }

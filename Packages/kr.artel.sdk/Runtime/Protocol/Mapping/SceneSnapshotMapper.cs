@@ -43,6 +43,7 @@ namespace Artel.Protocol.Mapping
                 Id = block.Id,
                 Type = "block",
                 Name = block.Name,
+                Active = block.Active,
                 Components = components,
                 Children = children
             };

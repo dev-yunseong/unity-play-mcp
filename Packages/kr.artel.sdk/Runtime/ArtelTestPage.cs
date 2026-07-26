@@ -17,9 +17,14 @@ namespace Artel
     .controls input { color: #1f2328; }
     #key-duration { width: 96px; }
     .node { border-left: 2px solid #d0d7de; margin: 8px 0 8px 16px; padding-left: 12px; }
+    .node.inactive { border-left-style: dashed; opacity: 0.6; }
     .label { font-size: 12px; color: #57606a; margin-bottom: 4px; }
     .block { padding: 8px; background: #f6f8fa; }
     pre { background: #f6f8fa; padding: 12px; overflow: auto; }
+    #snapshot { border: 1px solid #d0d7de; padding: 12px; margin-bottom: 16px; }
+    #snapshot header { justify-content: space-between; }
+    #snapshot.empty { display: none; }
+    summary { font-size: 12px; color: #57606a; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -28,6 +33,7 @@ namespace Artel
     <button id=""connect"">Connect</button>
     <button id=""scan"">Scan</button>
     <button id=""scan-all"">Scan all scenes</button>
+    <button id=""scan-all-full"">Scan all scenes (full)</button>
     <span id=""status"">idle</span>
   </header>
   <section class=""controls"" aria-label=""Keyboard input"">
@@ -55,6 +61,17 @@ namespace Artel
     </label>
     <button id=""key-click"">Click key</button>
   </section>
+  <section id=""snapshot"" class=""empty"" aria-label=""Pinned scan"">
+    <header>
+      <span class=""label"" id=""snapshot-label""></span>
+      <button id=""snapshot-clear"">Clear</button>
+    </header>
+    <div id=""snapshot-scene""></div>
+    <details>
+      <summary>raw ALL_SCENES</summary>
+      <pre id=""snapshot-json""></pre>
+    </details>
+  </section>
   <main id=""scene""></main>
   <pre id=""log""></pre>
   <script>
@@ -62,15 +79,22 @@ namespace Artel
     let ws;
     let actionId = 1;
     let liveSceneId = null;
+    let scanMode = 'default';
     const status = document.getElementById('status');
     const sceneRoot = document.getElementById('scene');
     const log = document.getElementById('log');
     const keyCode = document.getElementById('key-code');
     const keyDuration = document.getElementById('key-duration');
+    const snapshot = document.getElementById('snapshot');
+    const snapshotLabel = document.getElementById('snapshot-label');
+    const snapshotScene = document.getElementById('snapshot-scene');
+    const snapshotJson = document.getElementById('snapshot-json');
 
     document.getElementById('connect').onclick = connect;
     document.getElementById('scan').onclick = scan;
-    document.getElementById('scan-all').onclick = scanAllScenes;
+    document.getElementById('scan-all').onclick = () => scanAllScenes();
+    document.getElementById('scan-all-full').onclick = () => scanAllScenes('full');
+    document.getElementById('snapshot-clear').onclick = clearSnapshot;
     document.getElementById('key-click').onclick = clickKey;
 
     function connect() {
@@ -86,9 +110,17 @@ namespace Artel
       ws.send(JSON.stringify({ jsonrpc: '2.0', id: actionId++, method: 'scan_scene', params: [] }));
     }
 
-    function scanAllScenes() {
-      status.textContent = 'scanning every scene…';
-      sendAction('scan_all_scenes', []);
+    function scanAllScenes(mode) {
+      status.textContent = mode ? `scanning every scene (${mode})…` : 'scanning every scene…';
+      scanMode = mode || 'default';
+      sendAction('scan_all_scenes', mode ? [mode] : []);
+    }
+
+    function clearSnapshot() {
+      snapshot.className = 'empty';
+      snapshotScene.innerHTML = '';
+      snapshotJson.textContent = '';
+      snapshotLabel.textContent = '';
     }
 
     function sendAction(method, params) {
@@ -118,7 +150,7 @@ namespace Artel
     function handleMessage(message) {
       log.textContent = JSON.stringify(message, null, 2);
       if (message.type === 'GAME_STATE') renderScene(message.scene);
-      if (message.type === 'ALL_SCENES') renderAllScenes(message.scenes);
+      if (message.type === 'ALL_SCENES') renderAllScenes(message.scenes, message);
     }
 
     function renderScene(scene) {
@@ -127,29 +159,39 @@ namespace Artel
       sceneRoot.appendChild(renderNode(scene, true));
     }
 
-    function renderAllScenes(scenes) {
-      status.textContent = `${(scenes || []).length} scenes scanned`;
-      sceneRoot.innerHTML = '';
+    // Drawn into its own pinned section rather than over the live scene: the poller
+    // pushes a GAME_STATE within a second of any change, and a scan that took the
+    // whole walk to produce would vanish under it. It stays until Clear.
+    function renderAllScenes(scenes, message) {
+      const entries = scenes || [];
+      status.textContent = `${entries.length} scenes scanned`;
+      snapshot.className = '';
+      snapshotLabel.textContent =
+        `${entries.length} scenes · ${scanMode} mode · ${new Date().toLocaleTimeString()}`;
+      snapshotJson.textContent = JSON.stringify(message, null, 2);
+      snapshotScene.innerHTML = '';
 
-      for (const entry of scenes || []) {
+      for (const entry of entries) {
         const label = document.createElement('div');
         label.className = 'label';
         label.textContent = `build #${entry.buildIndex} — ${entry.path}`;
-        sceneRoot.appendChild(label);
+        snapshotScene.appendChild(label);
 
         // The walk unloads every scene it opened, so those block ids address objects
         // that no longer exist and their controls are rendered dead. The scene the
         // game already had open survived it and stays clickable.
-        sceneRoot.appendChild(renderNode(entry.scene, entry.scene.id === liveSceneId));
+        snapshotScene.appendChild(renderNode(entry.scene, entry.scene.id === liveSceneId));
       }
     }
 
     function renderNode(node, interactive) {
       const wrap = document.createElement('div');
-      wrap.className = 'node';
+      const inactive = node.active === false;
+      wrap.className = inactive ? 'node inactive' : 'node';
       const label = document.createElement('div');
       label.className = 'label';
-      label.textContent = `${node.type} #${node.id} ${node.name || ''}`;
+      label.textContent =
+        `${node.type} #${node.id} ${node.name || ''}${inactive ? ' (inactive)' : ''}`;
       wrap.appendChild(label);
 
       for (const component of node.components || []) {
@@ -185,9 +227,19 @@ namespace Artel
         wrap.textContent = component.name || component.type;
       }
 
-      if ((component.states || []).length > 0 || (component.actions || []).length > 0) {
-        const metadata = document.createElement('pre');
-        metadata.textContent = JSON.stringify({ states: component.states, actions: component.actions }, null, 2);
+      const states = component.states || [];
+      const actions = component.actions || [];
+      if (states.length > 0 || actions.length > 0) {
+        // Open by default so values are readable without a click, but foldable —
+        // a full scan puts every serialized field of the component in here.
+        const metadata = document.createElement('details');
+        metadata.open = true;
+        const summary = document.createElement('summary');
+        summary.textContent = `${states.length} states · ${actions.length} actions`;
+        const body = document.createElement('pre');
+        body.textContent = JSON.stringify({ states, actions }, null, 2);
+        metadata.appendChild(summary);
+        metadata.appendChild(body);
         wrap.appendChild(metadata);
       }
 

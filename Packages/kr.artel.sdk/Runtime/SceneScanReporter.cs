@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Artel.Protocol.Dto;
 using Artel.Protocol.Mapping;
+using Artel.Tracking;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -57,7 +58,8 @@ namespace Artel
         private static IEnumerator ScanEveryScene(SceneScanReportDto report)
         {
             List<ScannedSceneDto> scanned = null;
-            yield return new AllSceneScanner(new SceneScanner()).ScanAll(result => scanned = result);
+            yield return new AllSceneScanner(new SceneScanner())
+                .ScanAll(SceneScanOptions.Default, result => scanned = result);
 
             foreach (var scene in scanned)
             {

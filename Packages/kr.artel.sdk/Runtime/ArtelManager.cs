@@ -327,8 +327,15 @@ namespace Artel
 
                 if (action.Method == "scan_all_scenes")
                 {
+                    if (!TryReadScanOptions(action.Parameters, out var scanOptions))
+                    {
+                        results.Add(ActionResultDto.Failure(
+                            action.Id, "scan_all_scenes params must be [] or [\"full\"]."));
+                        continue;
+                    }
+
                     List<ScannedSceneDto> scenes = null;
-                    yield return allSceneScanner.ScanAll(result => scenes = result);
+                    yield return allSceneScanner.ScanAll(scanOptions, result => scenes = result);
                     SendAllScenes(scenes);
                     results.Add(ActionResultDto.Success(action.Id));
                     continue;
@@ -356,6 +363,38 @@ namespace Artel
             {
                 webSocketTransport.Send(jsonCodec.Serialize(response));
             }
+        }
+
+        /// <summary>
+        /// Reads the optional scan mode of <c>scan_all_scenes</c>. No parameter keeps the original
+        /// behaviour, so callers written before the mode existed are unaffected.
+        /// </summary>
+        private static bool TryReadScanOptions(List<object> parameters, out SceneScanOptions options)
+        {
+            options = SceneScanOptions.Default;
+            if (parameters == null || parameters.Count == 0)
+            {
+                return true;
+            }
+
+            if (parameters.Count > 1)
+            {
+                return false;
+            }
+
+            var mode = parameters[0] as string;
+            if (mode == "default")
+            {
+                return true;
+            }
+
+            if (mode == "full")
+            {
+                options = SceneScanOptions.Full;
+                return true;
+            }
+
+            return false;
         }
 
         private void ReplyWithGameState(ArtelWebSocketMessage request)

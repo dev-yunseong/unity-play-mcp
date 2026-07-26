@@ -85,16 +85,52 @@ the walk spans many frames, so there is no top-level form.
 }
 ```
 
+### Full mode
+
+`params: ["full"]` widens the same walk. It reads every field Unity would
+serialize on the MonoBehaviours the game itself wrote — public fields and
+`[SerializeField]` private ones, whether or not they carry `[ArtelState]` — and
+it walks into inactive objects, which come back as blocks with
+`"active": false`. Everything else about the walk is unchanged.
+
+```json
+{ "type": "ACTION", "id": 10, "actions": [{ "id": 1, "method": "scan_all_scenes", "params": ["full"] }] }
+```
+
+Omitting `params` keeps the original behaviour: opted-in state only, active
+objects only. `GAME_STATE` and the poller are never affected by this mode.
+
+What full mode leaves out, on purpose:
+
+- Components shipped by Unity or by this SDK. Reading every field of `Image` or
+  `TMP_Text` buries the game's own data.
+- Properties. Unity does not serialize them, and a getter can have side effects.
+- References. A `UnityEngine.Object` field is reported as
+  `{ "instanceId", "name", "type" }`, never followed — one `GameObject` field
+  would otherwise drag the whole scene back into the payload.
+
+Values are lowered to plain JSON before they are sent, and the lowering is
+capped: 5 levels of nesting, 64 elements per array or list, 1024 characters per
+string, and a reference cycle is cut where it closes. Fields whose values a game
+stores in plain sight — tokens, keys — are sent as they are; nothing is masked.
+
 Each `scene` is the same shape `GAME_STATE` sends. Scenes are loaded
 `Additive`, scanned, then unloaded; a scene the game already has open is scanned
 in place and left alone. The original active scene is restored and rescanned
 afterwards, so `button_click` and `enter_text` target ids keep working.
 
-The local test page drives this from its **Scan all scenes** button. It lists
-every returned scene under its build index and path, drawn by the same renderer
-`GAME_STATE` uses. Controls belonging to a scene the walk unloaded are disabled,
-since clicking them would address nothing; the scene the game already had open
-stays clickable.
+The local test page drives this from its **Scan all scenes** and **Scan all
+scenes (full)** buttons. It lists every returned scene under its build index and
+path, drawn by the same renderer `GAME_STATE` uses. Controls belonging to a scene
+the walk unloaded are disabled, since clicking them would address nothing; the
+scene the game already had open stays clickable.
+
+The result is pinned in its own section, above the live scene, and stays there
+until **Clear** — the poller pushes a `GAME_STATE` within a second of any change,
+and a scan that took the whole walk to produce would otherwise vanish under it.
+Each component lists its states and actions, open by default and foldable, and
+inactive blocks are labelled and dimmed. The section also keeps the raw
+`ALL_SCENES` JSON behind a disclosure.
 
 This runs the game's other scenes, briefly. Their `Awake`, `OnEnable`, and
 `Start` execute — anything they do on load (audio, network calls, writing to

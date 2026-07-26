@@ -103,6 +103,46 @@ namespace Artel.Tests.Protocol
         }
 
         [Test]
+        public void Serialize_BlockCarriesActiveFlag()
+        {
+            var active = JObject.Parse(JsonConvert.SerializeObject(new SceneBlockDto { Name = "panel" }));
+            var inactive = JObject.Parse(
+                JsonConvert.SerializeObject(new SceneBlockDto { Name = "panel", Active = false }));
+
+            // Present on every block, not only the ones a full scan reveals, so a server reads one
+            // shape either way.
+            Assert.That((bool)active["active"], Is.True);
+            Assert.That((bool)inactive["active"], Is.False);
+        }
+
+        [Test]
+        public void Serialize_TrackedStateCarriesLoweredFieldValues()
+        {
+            var component = new TrackedComponentDto
+            {
+                ComponentType = "Game.PlayerController",
+                Name = "PlayerController",
+                States = new List<StateDto>
+                {
+                    new StateDto
+                    {
+                        Tag = string.Empty,
+                        Name = "Spawn",
+                        Type = "UnityEngine.Vector3",
+                        Value = new Dictionary<string, object> { { "x", 1f }, { "y", 2f }, { "z", 3f } }
+                    }
+                }
+            };
+
+            var json = JObject.Parse(JsonConvert.SerializeObject(component));
+            var state = json["states"]?[0];
+
+            Assert.That((string)json["type"], Is.EqualTo("Game.PlayerController"));
+            Assert.That((string)state?["tag"], Is.EqualTo(string.Empty));
+            Assert.That((float)state?["value"]?["y"], Is.EqualTo(2f));
+        }
+
+        [Test]
         public void Serialize_ButtonDoesNotExposeTextFields()
         {
             var json = JsonConvert.SerializeObject(new ButtonComponentDto { Name = "login button" });

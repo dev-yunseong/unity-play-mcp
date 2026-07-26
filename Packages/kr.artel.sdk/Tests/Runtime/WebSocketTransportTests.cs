@@ -227,14 +227,32 @@ namespace Artel.Tests.Transport
         public void TestPage_ScansEverySceneAndRendersTheResultDead()
         {
             Assert.That(ArtelTestPage.Html, Does.Contain("id=\"scan-all\""));
-            Assert.That(ArtelTestPage.Html, Does.Contain("sendAction('scan_all_scenes', [])"));
-            Assert.That(ArtelTestPage.Html, Does.Contain("if (message.type === 'ALL_SCENES') renderAllScenes(message.scenes)"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("sendAction('scan_all_scenes', mode ? [mode] : [])"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("if (message.type === 'ALL_SCENES') renderAllScenes(message.scenes, message)"));
 
             // Blocks from a scene the walk unloaded are gone by the time the page draws
             // them, so only the scene that was already open stays clickable.
             Assert.That(ArtelTestPage.Html, Does.Contain("renderNode(entry.scene, entry.scene.id === liveSceneId)"));
             Assert.That(ArtelTestPage.Html, Does.Contain("button.disabled = !interactive"));
             Assert.That(ArtelTestPage.Html, Does.Contain("input.disabled = !interactive"));
+        }
+
+        [Test]
+        public void TestPage_PinsTheFullScanResultOutsideTheLiveScene()
+        {
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"scan-all-full\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("scanAllScenes('full')"));
+
+            // The poller pushes a GAME_STATE within a second of any change. A scan that
+            // took the whole walk to produce has to survive that, so it is drawn into its
+            // own section and stays until Clear.
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"snapshot\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("snapshotScene.appendChild(renderNode(entry.scene"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("snapshotJson.textContent = JSON.stringify(message, null, 2)"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"snapshot-clear\""));
+
+            // Only a full scan reports inactive objects, and they have to read as inactive.
+            Assert.That(ArtelTestPage.Html, Does.Contain("const inactive = node.active === false"));
         }
 
         [Test]
