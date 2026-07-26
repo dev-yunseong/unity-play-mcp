@@ -11,5 +11,8 @@ namespace Artel.Protocol.Dto
 
         [JsonProperty("placeholder", NullValueHandling = NullValueHandling.Ignore)]
         public string Placeholder { get; set; }
+
+        [JsonProperty("interactable")]
+        public bool Interactable { get; set; }
     }
 }

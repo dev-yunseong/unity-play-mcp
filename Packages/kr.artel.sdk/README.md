@@ -227,6 +227,7 @@ components are listed separately, so one block can expose multiple capabilities:
       "type": "editText",
       "name": "email edit text",
       "placeholder": "example@artel.kr",
+      "interactable": true,
       "states": [],
       "actions": []
     }
@@ -234,6 +235,14 @@ components are listed separately, so one block can expose multiple capabilities:
   "children": []
 }
 ```
+
+`button` and `editText` carry `interactable`: whether a person could press or type
+into the target at scan time. It is false for a disabled component, a `Selectable`
+with `interactable` off, and one blocked by a parent `CanvasGroup`. `button_click`
+and `enter_text` on a target that is not interactable fail with
+`Target is not interactable: <id>` instead of invoking the handler. Blocks a full
+scan reveals with `"active": false` carry `"interactable": false` for the same
+reason: their UI cannot receive input while the object is off.
 
 The scene `id` is its Unity scene handle, and each block `id` is the
 `GameObject` instance ID. Treat both as opaque identifiers valid only while

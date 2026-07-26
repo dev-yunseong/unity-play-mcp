@@ -3,7 +3,8 @@
   "rootNamespace": "Artel.Tests.Protocol",
   "references": [
     "Artel.Runtime",
-    "Artel.Tracking.Fixtures"
+    "Artel.Tracking.Fixtures",
+    "Unity.TextMeshPro"
   ],
   "includePlatforms": [
     "Editor"

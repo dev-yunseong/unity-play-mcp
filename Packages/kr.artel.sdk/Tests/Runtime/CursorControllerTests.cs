@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Artel.Protocol.Dto;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -44,12 +45,7 @@ namespace Artel.Tests
         {
             controllerObject = new GameObject("cursor controller");
             var controller = controllerObject.AddComponent<CursorController>();
-            targetObject = new GameObject(
-                "button target",
-                typeof(RectTransform),
-                typeof(CanvasRenderer),
-                typeof(Image),
-                typeof(Button));
+            targetObject = NewButtonObject("button target");
             var button = targetObject.GetComponent<Button>();
             var cursorWasVisibleDuringClick = false;
             button.onClick.AddListener(() =>
@@ -72,6 +68,103 @@ namespace Artel.Tests
 
             Assert.That(result.IsSuccess, Is.True);
             Assert.That(cursorWasVisibleDuringClick, Is.True);
+        }
+
+        [Test]
+        public void ExecuteButtonClick_RefusesALockedButton()
+        {
+            controllerObject = new GameObject("cursor controller");
+            var controller = controllerObject.AddComponent<CursorController>();
+            targetObject = NewButtonObject("locked button");
+            var button = targetObject.GetComponent<Button>();
+            button.interactable = false;
+            var clicked = false;
+            button.onClick.AddListener(() => clicked = true);
+            var scanner = new SceneScanner();
+            scanner.Scan();
+            var executor = new ActionExecutor(scanner, controller);
+
+            ActionResultDto result = null;
+            Drain(executor.Execute(
+                7,
+                "button_click",
+                new List<object> { targetObject.GetInstanceID() },
+                value => result = value));
+
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Error, Does.Contain("not interactable"));
+            Assert.That(clicked, Is.False);
+        }
+
+        [Test]
+        public void ExecuteEnterText_RefusesALockedField()
+        {
+            controllerObject = new GameObject("cursor controller");
+            var controller = controllerObject.AddComponent<CursorController>();
+            targetObject = new GameObject(
+                "locked field",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image),
+                typeof(InputField));
+            var field = targetObject.GetComponent<InputField>();
+            field.text = "before";
+            field.interactable = false;
+            var scanner = new SceneScanner();
+            scanner.Scan();
+            var executor = new ActionExecutor(scanner, controller);
+
+            ActionResultDto result = null;
+            Drain(executor.Execute(
+                8,
+                "enter_text",
+                new List<object> { targetObject.GetInstanceID(), "after" },
+                value => result = value));
+
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Error, Does.Contain("not interactable"));
+            Assert.That(field.text, Is.EqualTo("before"));
+        }
+
+        [Test]
+        public void ExecuteEnterText_RefusesALockedTmpField()
+        {
+            // TMP_InputField is the field type most games actually ship, and it takes the other
+            // branch of the interactability check than the legacy InputField does.
+            controllerObject = new GameObject("cursor controller");
+            var controller = controllerObject.AddComponent<CursorController>();
+            targetObject = new GameObject(
+                "locked tmp field",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image),
+                typeof(TMP_InputField));
+            var field = targetObject.GetComponent<TMP_InputField>();
+            field.interactable = false;
+            var scanner = new SceneScanner();
+            scanner.Scan();
+            var executor = new ActionExecutor(scanner, controller);
+
+            ActionResultDto result = null;
+            Drain(executor.Execute(
+                9,
+                "enter_text",
+                new List<object> { targetObject.GetInstanceID(), "after" },
+                value => result = value));
+
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Error, Does.Contain("not interactable"));
+            Assert.That(field.text, Is.Empty);
+        }
+
+        private static GameObject NewButtonObject(string name)
+        {
+            return new GameObject(
+                name,
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image),
+                typeof(Button));
         }
 
         private static void Drain(System.Collections.IEnumerator routine)

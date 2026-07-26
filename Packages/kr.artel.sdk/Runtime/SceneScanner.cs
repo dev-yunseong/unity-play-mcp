@@ -114,6 +114,31 @@ namespace Artel
         public bool CanClick { get { return button != null; } }
         public bool CanEnterText { get { return inputField != null || tmpInputField != null; } }
 
+        /// <summary>
+        /// Whether the button would accept a press from a person right now.
+        /// </summary>
+        public bool IsClickInteractable { get { return IsUsable(button); } }
+
+        /// <summary>
+        /// Whether the field this target's <see cref="EnterText"/> would write into accepts typing
+        /// right now. It follows the same InputField-before-TMP_InputField order EnterText writes in.
+        /// </summary>
+        public bool IsTextEntryInteractable
+        {
+            get { return inputField != null ? IsUsable(inputField) : IsUsable(tmpInputField); }
+        }
+
+        /// <summary>
+        /// IsInteractable covers the component's own flag and a blocking CanvasGroup, but not a
+        /// disabled component or an inactive object — and Unity's own event system refuses to
+        /// deliver a click to those. The null check comes first: reading isActiveAndEnabled on a
+        /// destroyed object throws.
+        /// </summary>
+        private static bool IsUsable(Selectable selectable)
+        {
+            return selectable != null && selectable.isActiveAndEnabled && selectable.IsInteractable();
+        }
+
         private ScannedTarget(
             Button button,
             InputField inputField,
@@ -152,7 +177,11 @@ namespace Artel
 
             if (button != null)
             {
-                components.Add(new ButtonComponent(gameObjectName, EmptyStates, EmptyActions));
+                components.Add(new ButtonComponent(
+                    gameObjectName,
+                    IsUsable(button),
+                    EmptyStates,
+                    EmptyActions));
             }
 
             if (inputField != null)
@@ -161,6 +190,7 @@ namespace Artel
                     gameObjectName,
                     inputField.text,
                     GetPlaceholder(inputField),
+                    IsUsable(inputField),
                     EmptyStates,
                     EmptyActions));
             }
@@ -171,6 +201,7 @@ namespace Artel
                     gameObjectName,
                     tmpInputField.text,
                     GetPlaceholder(tmpInputField),
+                    IsUsable(tmpInputField),
                     EmptyStates,
                     EmptyActions));
             }
@@ -240,9 +271,13 @@ namespace Artel
                    !assembly.StartsWith("mscorlib", StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Refuses a button a person could not press. The executor already checked this before it
+        /// moved the cursor, but that move spans frames and the game can lock the button inside it.
+        /// </summary>
         public bool Click()
         {
-            if (button == null)
+            if (!IsUsable(button))
             {
                 return false;
             }
@@ -251,8 +286,16 @@ namespace Artel
             return true;
         }
 
+        /// <summary>
+        /// Refuses a field a person could not type into, for the same reason <see cref="Click"/> does.
+        /// </summary>
         public bool EnterText(string value)
         {
+            if (!IsTextEntryInteractable)
+            {
+                return false;
+            }
+
             if (inputField != null)
             {
                 inputField.text = value;

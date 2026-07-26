@@ -68,10 +68,19 @@ namespace Artel
                 yield break;
             }
 
+            if (!target.IsClickInteractable)
+            {
+                completed(ActionResultDto.Failure(actionId, NotInteractable(targetId)));
+                yield break;
+            }
+
             yield return cursorController.MoveTo(target.RectTransform);
+
+            // The target was a live Button before the cursor moved, so a refusal now means the game
+            // locked or tore it down while the cursor was on its way.
             completed(target.Click()
                 ? ActionResultDto.Success(actionId)
-                : ActionResultDto.Failure(actionId, "Target is not a Button: " + targetId));
+                : ActionResultDto.Failure(actionId, NotInteractable(targetId)));
         }
 
         private IEnumerator ExecuteEnterText(
@@ -97,11 +106,22 @@ namespace Artel
                 yield break;
             }
 
+            if (!target.IsTextEntryInteractable)
+            {
+                completed(ActionResultDto.Failure(actionId, NotInteractable(targetId)));
+                yield break;
+            }
+
             yield return cursorController.MoveTo(target.RectTransform);
             var value = parameters[1] == null ? string.Empty : parameters[1].ToString();
             completed(target.EnterText(value)
                 ? ActionResultDto.Success(actionId)
-                : ActionResultDto.Failure(actionId, "Target is not an EditText: " + targetId));
+                : ActionResultDto.Failure(actionId, NotInteractable(targetId)));
+        }
+
+        private static string NotInteractable(int targetId)
+        {
+            return "Target is not interactable: " + targetId;
         }
 
         private static ActionResultDto ExecuteKeyClick(int actionId, List<object> parameters)

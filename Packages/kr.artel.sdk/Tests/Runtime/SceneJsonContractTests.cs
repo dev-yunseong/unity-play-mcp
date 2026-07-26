@@ -152,5 +152,19 @@ namespace Artel.Tests.Protocol
             Assert.That(component["content"], Is.Null);
             Assert.That(component["placeholder"], Is.Null);
         }
+
+        [Test]
+        public void Serialize_CarriesWhetherTheTargetAcceptsInput()
+        {
+            // The server decides what to offer the agent from this field, so it has to ride along
+            // with every button and edit text rather than being inferred from the tree.
+            var button = JObject.Parse(JsonConvert.SerializeObject(
+                new ButtonComponentDto { Name = "login button", Interactable = false }));
+            var editText = JObject.Parse(JsonConvert.SerializeObject(
+                new EditTextComponentDto { Name = "email edit text", Interactable = true }));
+
+            Assert.That((bool)button["interactable"], Is.False);
+            Assert.That((bool)editText["interactable"], Is.True);
+        }
     }
 }

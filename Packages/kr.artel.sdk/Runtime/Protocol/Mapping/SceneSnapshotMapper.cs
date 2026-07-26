@@ -81,9 +81,9 @@ namespace Artel.Protocol.Mapping
             }
 
             SceneComponentDto dto;
-            if (component is ButtonComponent)
+            if (component is ButtonComponent button)
             {
-                dto = new ButtonComponentDto();
+                dto = new ButtonComponentDto { Interactable = button.Interactable };
             }
             else if (component is TextComponent text)
             {
@@ -94,7 +94,8 @@ namespace Artel.Protocol.Mapping
                 dto = new EditTextComponentDto
                 {
                     Content = editText.Content,
-                    Placeholder = editText.Placeholder
+                    Placeholder = editText.Placeholder,
+                    Interactable = editText.Interactable
                 };
             }
             else if (component is TrackedComponent tracked)
