@@ -3,6 +3,7 @@ using Artel.Domain;
 using Artel.Serialization;
 using Artel.Tracking;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Artel.Tests.Tracking
 {
@@ -60,7 +61,7 @@ namespace Artel.Tests.Tracking
             {
                 ScanCount++;
                 return new SceneScanResult(
-                    new SceneSnapshot(1, SceneName, new List<SceneBlock>()),
+                    new SceneSnapshot(1, SceneName, new Vector2Int(1920, 1080), new List<SceneBlock>()),
                     new List<ActionBatchCommit>());
             }
         }

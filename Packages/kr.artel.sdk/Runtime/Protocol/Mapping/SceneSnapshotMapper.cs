@@ -20,6 +20,7 @@ namespace Artel.Protocol.Mapping
                 Id = scene.Id,
                 Type = "scene",
                 Name = scene.Name,
+                Screen = new ScreenSizeDto { W = scene.Screen.x, H = scene.Screen.y },
                 Children = children
             };
         }
@@ -51,16 +52,15 @@ namespace Artel.Protocol.Mapping
         }
 
         /// <summary>
-        /// How many decimal places a coordinate keeps.
+        /// How many decimal places a world coordinate keeps.
         /// </summary>
         /// <remarks>
         /// The poller decides whether to send GAME_STATE by hashing this whole payload, so a raw
-        /// float turns a breathing idle animation or a one-pixel layout jitter into a scene change
-        /// and the state goes out again every tick. Four places is roughly a fifth of a pixel of
-        /// normalized screen space on a 1080p screen — finer than anything worth pointing at, and
-        /// coarse enough that a still scene stays still.
+        /// float turns a breathing idle animation into a scene change and the state goes out again
+        /// every tick. Screen rects avoid this by being whole pixels; world positions are in the
+        /// game's own units and need a place to round to.
         /// </remarks>
-        private const int CoordinateDecimals = 4;
+        private const int WorldDecimals = 4;
 
         private static BlockTransformDto ToDto(BlockTransform transform)
         {
@@ -68,23 +68,50 @@ namespace Artel.Protocol.Mapping
             {
                 World = new WorldPositionDto
                 {
-                    X = Quantize(transform.World.x),
-                    Y = Quantize(transform.World.y),
-                    Z = Quantize(transform.World.z)
+                    X = QuantizeWorld(transform.World.x),
+                    Y = QuantizeWorld(transform.World.y),
+                    Z = QuantizeWorld(transform.World.z)
                 },
                 Rect = new ScreenRectDto
                 {
-                    X = Quantize(transform.ScreenRect.x),
-                    Y = Quantize(transform.ScreenRect.y),
-                    W = Quantize(transform.ScreenRect.width),
-                    H = Quantize(transform.ScreenRect.height)
+                    X = ToPixels(transform.ScreenRect.x),
+                    Y = ToPixels(transform.ScreenRect.y),
+                    W = ToPixels(transform.ScreenRect.width),
+                    H = ToPixels(transform.ScreenRect.height)
                 },
                 OnScreen = transform.OnScreen
             };
         }
 
+        private static float QuantizeWorld(float value)
+        {
+            return IsWritable(value) ? (float)System.Math.Round(value, WorldDecimals) : 0f;
+        }
+
         /// <summary>
-        /// Rounds a coordinate, and flattens the values JSON cannot carry.
+        /// Rounds to a whole pixel, which is both the finest thing worth pointing at and a quantum
+        /// coarse enough that a still scene keeps hashing the same.
+        /// </summary>
+        private static int ToPixels(float value)
+        {
+            if (!IsWritable(value))
+            {
+                return 0;
+            }
+
+            // A rect measured against a huge world-space canvas can project past what an int
+            // holds, and an unchecked cast wraps it to a plausible-looking negative.
+            var rounded = System.Math.Round(value);
+            if (rounded > int.MaxValue)
+            {
+                return int.MaxValue;
+            }
+
+            return rounded < int.MinValue ? int.MinValue : (int)rounded;
+        }
+
+        /// <summary>
+        /// Whether JSON can carry the value at all.
         /// </summary>
         /// <remarks>
         /// A degenerate projection — a zero-scaled RectTransform, a camera with a collapsed
@@ -92,14 +119,9 @@ namespace Artel.Protocol.Mapping
         /// that a strict parser on the other end rejects. The whole payload would be lost over one
         /// bad object.
         /// </remarks>
-        private static float Quantize(float value)
+        private static bool IsWritable(float value)
         {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-            {
-                return 0f;
-            }
-
-            return (float)System.Math.Round(value, CoordinateDecimals);
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private static SceneComponentDto ToDto(SceneComponent component)
