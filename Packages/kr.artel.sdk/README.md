@@ -348,6 +348,36 @@ and `enter_text` on a target that is not interactable fail with
 scan reveals with `"active": false` carry `"interactable": false` for the same
 reason: their UI cannot receive input while the object is off.
 
+### What is on screen
+
+A scan also reports what the player can merely see, so that the readable scene is
+not limited to whatever happens to be a button. `image` is a uGUI `Image`,
+`sprite` is a `SpriteRenderer`:
+
+```json
+{
+  "type": "sprite",
+  "name": "enemy_goblin",
+  "sprite": "goblin_idle",
+  "states": [],
+  "actions": []
+}
+```
+
+`sprite` is the sprite asset's name and is absent when none is assigned — a
+flat-colour panel or an invisible raycast catcher. Those are reported anyway:
+they are still on screen, and an invisible one is still what the pointer lands on
+first.
+
+These carry no interaction of their own, but they are not inert. Every block
+reports the area it covers, so the pointer actions can aim at one exactly as they
+would at a button — which is the only way to drag something that was never built
+as a control.
+
+A `SpriteRenderer` is not a `RectTransform`, and a plain `Transform` is a point
+with no extent. Their `transform.rect` therefore comes from the renderer's own
+bounds rather than from the object's origin, or nothing could be aimed at them.
+
 The scene `id` is its Unity scene handle, and each block `id` is the
 `GameObject` instance ID. Treat both as opaque identifiers valid only while
 their Unity objects remain alive in the current process. Do not persist them
