@@ -17,6 +17,9 @@ namespace Artel.Protocol.Dto
         [JsonProperty("active")]
         public bool Active { get; set; } = true;
 
+        [JsonProperty("transform", NullValueHandling = NullValueHandling.Ignore)]
+        public BlockTransformDto Transform { get; set; }
+
         [JsonProperty("components")]
         public List<SceneComponentDto> Components { get; set; } = new List<SceneComponentDto>();
 

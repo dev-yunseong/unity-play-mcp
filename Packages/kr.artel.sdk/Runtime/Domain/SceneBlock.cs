@@ -14,6 +14,11 @@ namespace Artel.Domain
         /// </summary>
         public bool Active { get; }
 
+        /// <summary>
+        /// Where the block sits, in world space and on screen.
+        /// </summary>
+        public BlockTransform Transform { get; }
+
         public IReadOnlyList<SceneComponent> Components { get; }
         public IReadOnlyList<SceneBlock> Children { get; }
 
@@ -21,12 +26,14 @@ namespace Artel.Domain
             int id,
             string name,
             bool active,
+            BlockTransform transform,
             IReadOnlyList<SceneComponent> components,
             IReadOnlyList<SceneBlock> children)
         {
             Id = id;
             Name = name ?? string.Empty;
             Active = active;
+            Transform = transform;
             Components = components ?? throw new ArgumentNullException(nameof(components));
             Children = children ?? throw new ArgumentNullException(nameof(children));
         }

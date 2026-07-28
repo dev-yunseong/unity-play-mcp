@@ -48,12 +48,8 @@ namespace Artel
                 yield break;
             }
 
-            var targetCanvas = target.GetComponentInParent<Canvas>();
-            var targetCamera = targetCanvas != null && targetCanvas.renderMode != RenderMode.ScreenSpaceOverlay
-                ? targetCanvas.worldCamera
-                : null;
             var targetCenter = target.TransformPoint(target.rect.center);
-            var screenPosition = RectTransformUtility.WorldToScreenPoint(targetCamera, targetCenter);
+            var screenPosition = RectTransformUtility.WorldToScreenPoint(CanvasCamera.For(target), targetCenter);
 
             cursorTransform.gameObject.SetActive(true);
             cursorTransform.SetAsLastSibling();

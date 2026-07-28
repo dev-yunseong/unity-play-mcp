@@ -13,6 +13,7 @@ namespace Artel
     {
         private readonly Dictionary<int, ScannedTarget> targetsById = new Dictionary<int, ScannedTarget>();
         private readonly StateReader stateReader = new StateReader();
+        private readonly BlockTransformReader transformReader = new BlockTransformReader();
 
         public SceneScanResult Scan()
         {
@@ -22,6 +23,7 @@ namespace Artel
         public SceneScanResult Scan(SceneScanOptions options)
         {
             targetsById.Clear();
+            transformReader.BeginScan();
 
             var actionCommits = new List<ActionBatchCommit>();
             return new SceneScanResult(
@@ -94,6 +96,7 @@ namespace Artel
                 id,
                 transform.gameObject.name,
                 active,
+                transformReader.Read(transform),
                 target.CreateComponents(transform.gameObject, stateReader, options, actionCommits),
                 children);
         }

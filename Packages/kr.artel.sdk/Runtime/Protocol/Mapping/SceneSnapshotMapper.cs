@@ -44,9 +44,62 @@ namespace Artel.Protocol.Mapping
                 Type = "block",
                 Name = block.Name,
                 Active = block.Active,
+                Transform = ToDto(block.Transform),
                 Components = components,
                 Children = children
             };
+        }
+
+        /// <summary>
+        /// How many decimal places a coordinate keeps.
+        /// </summary>
+        /// <remarks>
+        /// The poller decides whether to send GAME_STATE by hashing this whole payload, so a raw
+        /// float turns a breathing idle animation or a one-pixel layout jitter into a scene change
+        /// and the state goes out again every tick. Four places is roughly a fifth of a pixel of
+        /// normalized screen space on a 1080p screen — finer than anything worth pointing at, and
+        /// coarse enough that a still scene stays still.
+        /// </remarks>
+        private const int CoordinateDecimals = 4;
+
+        private static BlockTransformDto ToDto(BlockTransform transform)
+        {
+            return new BlockTransformDto
+            {
+                World = new WorldPositionDto
+                {
+                    X = Quantize(transform.World.x),
+                    Y = Quantize(transform.World.y),
+                    Z = Quantize(transform.World.z)
+                },
+                Rect = new ScreenRectDto
+                {
+                    X = Quantize(transform.ScreenRect.x),
+                    Y = Quantize(transform.ScreenRect.y),
+                    W = Quantize(transform.ScreenRect.width),
+                    H = Quantize(transform.ScreenRect.height)
+                },
+                OnScreen = transform.OnScreen
+            };
+        }
+
+        /// <summary>
+        /// Rounds a coordinate, and flattens the values JSON cannot carry.
+        /// </summary>
+        /// <remarks>
+        /// A degenerate projection — a zero-scaled RectTransform, a camera with a collapsed
+        /// frustum — hands back NaN or an infinity, and Newtonsoft writes those as bare literals
+        /// that a strict parser on the other end rejects. The whole payload would be lost over one
+        /// bad object.
+        /// </remarks>
+        private static float Quantize(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                return 0f;
+            }
+
+            return (float)System.Math.Round(value, CoordinateDecimals);
         }
 
         private static SceneComponentDto ToDto(SceneComponent component)
