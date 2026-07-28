@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Artel.Protocol.Dto;
 using Newtonsoft.Json.Linq;
@@ -108,10 +109,15 @@ namespace Artel.Tests
                 NewAction(3, "move_mouse", Coordinates(DropPoint)),
                 NewAction(4, "mouse_up", new List<object>()));
 
+            // move_mouse glides, so the number of drag steps is a matter of frame rate. What has to
+            // hold is the order, and that the up arrives before the end of the drag — where Unity's
+            // own input module puts it.
+            Assert.That(source.Events.First(), Is.EqualTo("down"));
+            Assert.That(source.Events[1], Is.EqualTo("beginDrag"));
+            Assert.That(source.Events, Has.Some.EqualTo("drag"));
             Assert.That(
-                source.Events,
-                // The up arrives before the end of the drag, the order Unity's input module uses.
-                Is.EqualTo(new[] { "down", "beginDrag", "drag", "up", "endDrag" }));
+                source.Events.Skip(2).Where(name => name != "drag"),
+                Is.EqualTo(new[] { "up", "endDrag" }));
             Assert.That(destination.Events, Is.EqualTo(new[] { "drop" }));
         }
 

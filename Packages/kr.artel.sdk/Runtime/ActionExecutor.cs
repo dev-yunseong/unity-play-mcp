@@ -175,7 +175,8 @@ namespace Artel
                 yield break;
             }
 
-            yield return cursorController.MoveTo(new Vector2(x, Screen.height - y), pointerMoved);
+            yield return cursorController.MoveTo(
+                new Vector2(x, Screen.height - y), pointerMoved, glide: true);
             completed(ActionResultDto.Success(actionId));
         }
 

@@ -296,6 +296,12 @@ ways:
   frame rules the keys do. `mousePosition` reports the agent's pointer once
   `move_mouse` has been used, and the real one until then — a position is a
   single value, so it cannot combine the two the way a button can.
+
+  That claim is given up the moment the real mouse moves, and again when the
+  connection stops. Without both, a game goes on reading a pointer nobody is
+  driving: every `Input.mousePosition` in the project answers with wherever the
+  agent last left it, and the person at the machine cannot move anything until
+  play mode is restarted.
 - **uGUI.** The SDK dispatches `PointerEventData` through the scene's
   `EventSystem`, so `IPointerDownHandler`, `IBeginDragHandler`, `IDragHandler`,
   `IEndDragHandler`, `IDropHandler`, and `IPointerClickHandler` fire as they

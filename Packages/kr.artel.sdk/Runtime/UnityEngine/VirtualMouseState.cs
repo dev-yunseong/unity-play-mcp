@@ -14,6 +14,14 @@ namespace Artel
         private readonly ButtonPressState[] buttons = new ButtonPressState[ButtonCount];
 
         /// <summary>
+        /// How far the real mouse may drift before the person is taken to have grabbed it back.
+        /// A few pixels, because a resting mouse still reports jitter.
+        /// </summary>
+        private const float ReclaimPixels = 4f;
+
+        private Vector2 physicalWhenClaimed;
+
+        /// <summary>
         /// False until the agent moves the pointer for the first time, which is what lets the proxy
         /// keep reporting the real pointer in a session nobody is driving.
         /// </summary>
@@ -26,10 +34,42 @@ namespace Artel
             return button >= 0 && button < ButtonCount;
         }
 
-        public void MoveTo(Vector2 screenPosition)
+        public void MoveTo(Vector2 screenPosition, Vector2 physicalPosition)
         {
             Position = screenPosition;
+            physicalWhenClaimed = physicalPosition;
             HasPosition = true;
+        }
+
+        /// <summary>
+        /// Whether the agent's pointer is the one to report. It stops being so the moment the real
+        /// mouse moves: a person reaching for it means they want the game back, and a claim that
+        /// outlives them leaves the game reading a cursor nobody is driving.
+        /// </summary>
+        /// <remarks>
+        /// This gives the claim up as a side effect, because the read is the only moment the two
+        /// positions can be compared.
+        /// </remarks>
+        public bool OwnsPointer(Vector2 physicalPosition)
+        {
+            if (!HasPosition)
+            {
+                return false;
+            }
+
+            if ((physicalPosition - physicalWhenClaimed).sqrMagnitude > ReclaimPixels * ReclaimPixels)
+            {
+                ReleasePointer();
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>Hands the pointer back without disturbing the buttons, which have their own frame rules.</summary>
+        public void ReleasePointer()
+        {
+            HasPosition = false;
         }
 
         public void Press(int button, int currentFrame)

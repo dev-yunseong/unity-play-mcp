@@ -73,9 +73,10 @@ namespace Artel
         {
             get
             {
-                if (!VirtualMouse.HasPosition)
+                var physical = global::UnityEngine.Input.mousePosition;
+                if (!VirtualMouse.OwnsPointer(physical))
                 {
-                    return global::UnityEngine.Input.mousePosition;
+                    return physical;
                 }
 
                 var position = VirtualMouse.Position;
@@ -118,7 +119,7 @@ namespace Artel
 
         internal static void MoveMouse(Vector2 screenPosition)
         {
-            VirtualMouse.MoveTo(screenPosition);
+            VirtualMouse.MoveTo(screenPosition, global::UnityEngine.Input.mousePosition);
         }
 
         internal static void PressMouseButton(int button)
@@ -143,12 +144,15 @@ namespace Artel
 
         /// <summary>
         /// Lets go of everything the agent was holding. A run that ends mid-drag would otherwise
-        /// leave the game with a key or a button held down for the rest of the session.
+        /// leave the game with a key or a button held down for the rest of the session — and with
+        /// a pointer position frozen where the agent left it, which is worse: the game keeps
+        /// reading it forever and the person at the machine cannot move the mouse anywhere.
         /// </summary>
         internal static void ReleaseAllVirtualInput()
         {
             VirtualKeyboard.ReleaseAll(Time.frameCount);
             VirtualMouse.ReleaseAll(Time.frameCount);
+            VirtualMouse.ReleasePointer();
         }
 
         internal static void AdvanceFrame()
