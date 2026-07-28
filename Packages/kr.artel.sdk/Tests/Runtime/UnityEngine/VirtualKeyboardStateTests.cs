@@ -58,6 +58,61 @@ namespace Artel.Tests.Input
         }
 
         [Test]
+        public void Press_HoldsUntilReleaseInsteadOfExpiring()
+        {
+            var keyboard = new VirtualKeyboardState();
+            keyboard.Press(KeyCode.LeftShift, 10);
+
+            Assert.That(keyboard.GetKeyDown(KeyCode.LeftShift, 11, 1f), Is.True);
+            Assert.That(keyboard.GetKey(KeyCode.LeftShift, 11, 1f), Is.True);
+
+            // No duration to run out: the key is still down an hour of game time later.
+            Assert.That(keyboard.GetKey(KeyCode.LeftShift, 500, 3600f), Is.True);
+            Assert.That(keyboard.GetKeyUp(KeyCode.LeftShift, 500, 3600f), Is.False);
+
+            keyboard.Release(KeyCode.LeftShift, 500);
+
+            Assert.That(keyboard.GetKey(KeyCode.LeftShift, 500, 3600f), Is.True);
+            Assert.That(keyboard.GetKeyUp(KeyCode.LeftShift, 501, 3600.1f), Is.True);
+            Assert.That(keyboard.GetKey(KeyCode.LeftShift, 501, 3600.1f), Is.False);
+            Assert.That(keyboard.GetKeyUp(KeyCode.LeftShift, 502, 3600.2f), Is.False);
+        }
+
+        [Test]
+        public void Release_IgnoresAKeyThatWasNeverPressed()
+        {
+            var keyboard = new VirtualKeyboardState();
+            keyboard.Release(KeyCode.LeftShift, 10);
+
+            Assert.That(keyboard.GetKeyUp(KeyCode.LeftShift, 11, 1f), Is.False);
+            Assert.That(keyboard.GetKey(KeyCode.LeftShift, 11, 1f), Is.False);
+        }
+
+        [Test]
+        public void ReleaseAll_LetsGoOfEveryHeldKey()
+        {
+            var keyboard = new VirtualKeyboardState();
+            keyboard.Press(KeyCode.LeftShift, 1);
+            keyboard.Press(KeyCode.A, 1);
+
+            keyboard.ReleaseAll(4);
+
+            Assert.That(keyboard.GetKeyUp(KeyCode.LeftShift, 5, 1f), Is.True);
+            Assert.That(keyboard.GetKeyUp(KeyCode.A, 5, 1f), Is.True);
+            Assert.That(keyboard.AnyKey(5, 1f), Is.False);
+        }
+
+        [TestCase("key_down")]
+        [TestCase("key_up")]
+        public void ActionExecutor_RejectsAKeyHoldWithoutAKeyCode(string method)
+        {
+            var result = ExecuteAction(8, method, new List<object>());
+
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Error, Does.Contain(method + " requires params [keyCode]."));
+        }
+
+        [Test]
         public void ActionExecutor_AcceptsKeyCodeNameAndDuration()
         {
             var result = ExecuteAction(
@@ -113,7 +168,8 @@ namespace Artel.Tests.Input
 
         private ActionResultDto ExecuteAction(int actionId, string method, List<object> parameters)
         {
-            var executor = new ActionExecutor(new SceneScanner(), cursorController);
+            var executor = new ActionExecutor(
+                new SceneScanner(), cursorController, new PointerEventDispatcher());
             ActionResultDto result = null;
             Drain(executor.Execute(actionId, method, parameters, value => result = value));
             return result;

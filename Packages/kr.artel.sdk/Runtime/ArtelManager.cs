@@ -31,6 +31,7 @@ namespace Artel
         private AllSceneScanner allSceneScanner;
         private ActionExecutor actionExecutor;
         private CursorController cursorController;
+        private PointerEventDispatcher pointerEvents;
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
         private ArtelStreamHost streamHost;
@@ -91,7 +92,8 @@ namespace Artel
                 gameObject.AddComponent<KeyboardStatusController>();
             }
 
-            actionExecutor = new ActionExecutor(scanner, cursorController);
+            pointerEvents = new PointerEventDispatcher();
+            actionExecutor = new ActionExecutor(scanner, cursorController, pointerEvents);
             jsonCodec = new NewtonsoftJsonCodec();
             sceneStatePoller = new SceneStatePoller(
                 scanner,
@@ -190,6 +192,10 @@ namespace Artel
             // capture never outlives the connection that asked for it.
             streamHost.Stop();
 
+            // Ahead of the ownership checks: whoever owns the socket, a run that ends mid-drag must
+            // not leave the game holding a button nobody will ever send the release for.
+            ReleaseAgentInput();
+
             if (webSocketTransport == null)
             {
                 return;
@@ -207,6 +213,16 @@ namespace Artel
             Debug.Log("[Artel] WebSocket transport stopped.");
         }
 
+        /// <summary>
+        /// Lets go of every key and button the agent was holding, and ends any drag in progress on
+        /// the game's own terms so its handler sees the end it was waiting for.
+        /// </summary>
+        private void ReleaseAgentInput()
+        {
+            pointerEvents.ReleaseAll();
+            ArtelInput.ReleaseAllVirtualInput();
+        }
+
         internal bool HasWebSocketTransport { get { return webSocketTransport != null; } }
 
         /// <summary>
@@ -220,6 +236,7 @@ namespace Artel
                 return;
             }
 
+            ReleaseAgentInput();
             webSocketTransport = null;
             ownsTransport = true;
         }
