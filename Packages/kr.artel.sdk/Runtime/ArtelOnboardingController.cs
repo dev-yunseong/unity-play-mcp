@@ -13,6 +13,9 @@ namespace Artel
         private const int InstanceKeyCharacterLimit = 24;
 
         private static readonly Color PanelColor = new Color(0.08f, 0.09f, 0.12f, 0.94f);
+
+        // 덮개는 뒤를 비추면 안 된다. 알파가 1보다 작으면 가리려던 씬 전환이 그대로 비친다.
+        private static readonly Color CoverColor = new Color(0.05f, 0.06f, 0.08f, 1f);
         private static readonly Color ButtonColor = new Color(0.18f, 0.45f, 0.85f, 1f);
         private static readonly Color FieldColor = new Color(0.16f, 0.18f, 0.24f, 1f);
         private static readonly Color PlaceholderColor = new Color(0.62f, 0.65f, 0.72f, 1f);
@@ -23,11 +26,15 @@ namespace Artel
         private GameObject createdEventSystem;
         private GameObject panelObject;
         private GameObject advancedObject;
+        private GameObject coverObject;
         private InputField instanceKeyField;
         private Button registerButton;
         private Button connectButton;
         private Text statusText;
+        private Text coverStatusText;
+        private Text coverProgressText;
         private bool appliedShowPanel;
+        private bool registrationRunning;
         private ArtelOnboardingViewModel viewModel;
 
         private void Awake()
@@ -74,22 +81,81 @@ namespace Artel
 
         private void RegisterInstanceKey()
         {
+            // viewModel은 스캔이 끝나고 Register에 들어가야 Registering이 된다. 그때까지
+            // CanRegister가 살아 있으므로, 이 가드가 없으면 등록을 연타한 만큼 씬 워크가
+            // 겹쳐 돈다.
+            if (registrationRunning)
+            {
+                return;
+            }
+
             StartCoroutine(ScanScenesThenRegister());
         }
 
         // 스캔이 빌드 내 씬을 하나씩 로드했다 내리므로 등록은 그만큼 늦게 시작한다.
         private IEnumerator ScanScenesThenRegister()
         {
-            SceneScanReportDto sceneScan = null;
-            yield return SceneScanReporter.CreateReport(report => sceneScan = report);
+            registrationRunning = true;
 
-            yield return viewModel.Register(
-                artelManager.Server,
-                viewModel.KeyInput,
-                artelManager.SdkId,
-                artelManager.GameVersion,
-                artelManager.StartTransport,
-                sceneScan);
+            // 씬 워크가 올린 씬은 실제로 그려진다. 등록이 끝날 때까지 화면을 덮어 두는 것이
+            // 그 깜박임을 사람이 보지 않게 하는 유일한 방법이다. 오버레이 캔버스로 그리는
+            // 다른 씬의 UI까지 가려야 하므로 카메라를 꺼서는 부족하다.
+            ShowCover();
+            try
+            {
+                SceneScanReportDto sceneScan = null;
+                yield return SceneScanReporter.CreateReport(
+                    report => sceneScan = report,
+                    ShowScanProgress);
+
+                ShowScanProgress(0, 0);
+                yield return viewModel.Register(
+                    artelManager.Server,
+                    viewModel.KeyInput,
+                    artelManager.SdkId,
+                    artelManager.GameVersion,
+                    artelManager.StartTransport,
+                    sceneScan);
+            }
+            finally
+            {
+                registrationRunning = false;
+                HideCover();
+            }
+        }
+
+        private void ShowCover()
+        {
+            if (coverObject == null)
+            {
+                return;
+            }
+
+            coverProgressText.text = string.Empty;
+            coverStatusText.text = viewModel.Status;
+            coverObject.SetActive(true);
+        }
+
+        private void HideCover()
+        {
+            if (coverObject != null)
+            {
+                coverObject.SetActive(false);
+            }
+        }
+
+        // 씬 수만큼 로드와 언로드가 쌓여 몇 초씩 걸린다. 진행 숫자가 없으면 덮개가 멈춘
+        // 화면과 구분되지 않는다. sceneCount가 0이면 씬 워크가 끝났다는 뜻이다.
+        private void ShowScanProgress(int sceneNumber, int sceneCount)
+        {
+            if (coverProgressText == null)
+            {
+                return;
+            }
+
+            coverProgressText.text = sceneCount <= 0
+                ? string.Empty
+                : "씬 " + sceneNumber + " / " + sceneCount;
         }
 
         private void ConnectWebSocket()
@@ -153,9 +219,47 @@ namespace Artel
             advancedButton.onClick.AddListener(() => advancedObject.SetActive(!advancedObject.activeSelf));
 
             CreateAdvancedSection();
+            CreateCover();
 
             appliedShowPanel = viewModel.ShowPanel;
             panelObject.SetActive(appliedShowPanel);
+        }
+
+        private void CreateCover()
+        {
+            // 캔버스의 마지막 자식이므로 같은 캔버스의 패널 위에 그려지고, 이 캔버스의
+            // sortingOrder가 short.MaxValue - 1이라 게임 쪽 캔버스보다도 위다. 정렬 순서
+            // 상수를 건드리지 않고 화면을 덮기 위해 여기에 붙인다. 위에 남는 것은 가상
+            // 커서 캔버스(short.MaxValue)뿐인데, 커서는 보이는 편이 맞다.
+            coverObject = new GameObject("Scan Cover", typeof(RectTransform), typeof(Image));
+            coverObject.transform.SetParent(canvasObject.transform, false);
+
+            // raycastTarget이 켜진 채라 덮인 게임 UI로 클릭이 새지 않는다.
+            coverObject.GetComponent<Image>().color = CoverColor;
+            var coverRect = coverObject.GetComponent<RectTransform>();
+            coverRect.anchorMin = Vector2.zero;
+            coverRect.anchorMax = Vector2.one;
+            coverRect.offsetMin = Vector2.zero;
+            coverRect.offsetMax = Vector2.zero;
+
+            var title = CreateText(coverObject.transform, "Artel SDK", 30, TextAnchor.MiddleCenter);
+            CenterRect(title.rectTransform, new Vector2(0f, 52f), new Vector2(900f, 44f));
+
+            var message = CreateText(
+                coverObject.transform,
+                "게임 화면을 분석하는 중입니다. 잠시만 기다려 주세요.",
+                20,
+                TextAnchor.MiddleCenter);
+            CenterRect(message.rectTransform, new Vector2(0f, 4f), new Vector2(900f, 32f));
+
+            coverProgressText = CreateText(coverObject.transform, string.Empty, 18, TextAnchor.MiddleCenter);
+            CenterRect(coverProgressText.rectTransform, new Vector2(0f, -34f), new Vector2(900f, 28f));
+
+            coverStatusText = CreateText(coverObject.transform, string.Empty, 16, TextAnchor.MiddleCenter);
+            coverStatusText.color = PlaceholderColor;
+            CenterRect(coverStatusText.rectTransform, new Vector2(0f, -70f), new Vector2(900f, 28f));
+
+            coverObject.SetActive(false);
         }
 
         private void CreateAdvancedSection()
@@ -189,7 +293,8 @@ namespace Artel
 
         private void RefreshView()
         {
-            if (statusText == null)
+            // 덮개가 GUI에서 마지막에 만들어지므로, 이것이 있으면 나머지도 다 있다.
+            if (coverStatusText == null)
             {
                 return;
             }
@@ -200,6 +305,7 @@ namespace Artel
             }
 
             statusText.text = viewModel.Status;
+            coverStatusText.text = viewModel.Status;
             registerButton.interactable = viewModel.CanRegister;
             connectButton.interactable = viewModel.CanConnect;
 
@@ -316,6 +422,15 @@ namespace Artel
             rectTransform.anchorMin = new Vector2(0f, 1f);
             rectTransform.anchorMax = new Vector2(0f, 1f);
             rectTransform.pivot = new Vector2(0f, 1f);
+            rectTransform.anchoredPosition = position;
+            rectTransform.sizeDelta = size;
+        }
+
+        private static void CenterRect(RectTransform rectTransform, Vector2 position, Vector2 size)
+        {
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
             rectTransform.anchoredPosition = position;
             rectTransform.sizeDelta = size;
         }

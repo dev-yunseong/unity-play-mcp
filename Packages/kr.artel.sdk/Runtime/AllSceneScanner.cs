@@ -29,15 +29,25 @@ namespace Artel
             this.scanner = scanner;
         }
 
-        public IEnumerator ScanAll(SceneScanOptions options, Action<List<ScannedSceneDto>> completed)
+        /// <param name="progress">
+        /// Called as each scene is about to be visited, with the 1-based position of that scene
+        /// and the total. The walk loads and tears down one scene at a time, so a caller hiding
+        /// the screen for its duration has nothing else to show the player.
+        /// </param>
+        public IEnumerator ScanAll(
+            SceneScanOptions options,
+            Action<List<ScannedSceneDto>> completed,
+            Action<int, int> progress = null)
         {
             var scanned = new List<ScannedSceneDto>();
             var originalScene = SceneManager.GetActiveScene();
 
             var strays = new StraySpawnTracker();
 
-            for (var buildIndex = 0; buildIndex < SceneManager.sceneCountInBuildSettings; buildIndex++)
+            var sceneCount = SceneManager.sceneCountInBuildSettings;
+            for (var buildIndex = 0; buildIndex < sceneCount; buildIndex++)
             {
+                progress?.Invoke(buildIndex + 1, sceneCount);
                 var path = SceneUtility.GetScenePathByBuildIndex(buildIndex);
                 var scene = SceneManager.GetSceneByPath(path);
 

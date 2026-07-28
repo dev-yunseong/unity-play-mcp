@@ -357,6 +357,61 @@ namespace Artel.Tests.Transport
             }
         }
 
+        [Test]
+        public void OnboardingGui_HidesScanCoverUntilRegistrationRuns()
+        {
+            var host = new GameObject("Artel scan cover test");
+
+            // 매니저는 RequireComponent를 채우려고만 붙인다. 매니저의 Awake는
+            // DontDestroyOnLoad를 부르는데 그건 플레이 모드 전용이라 여기서 돌릴 수 없다.
+            host.AddComponent<ArtelManager>();
+            var controller = host.AddComponent<ArtelOnboardingController>();
+
+            try
+            {
+                InvokeLifecycle(controller, "Awake");
+                InvokeLifecycle(controller, "Start");
+
+                var canvas = GameObject.Find("Artel Onboarding Canvas");
+                var cover = canvas.transform.Find("Scan Cover");
+                Assert.That(cover, Is.Not.Null);
+
+                // 등록 중에만 켜진다. 켜진 채로 남으면 게임 화면이 통째로 가려진다.
+                Assert.That(cover.gameObject.activeSelf, Is.False);
+
+                // 캔버스의 마지막 자식이어야 같은 캔버스의 온보딩 패널 위에 그려진다.
+                Assert.That(cover.GetSiblingIndex(), Is.EqualTo(canvas.transform.childCount - 1));
+
+                var coverRect = cover.GetComponent<RectTransform>();
+                Assert.That(coverRect.anchorMin, Is.EqualTo(Vector2.zero));
+                Assert.That(coverRect.anchorMax, Is.EqualTo(Vector2.one));
+                Assert.That(coverRect.offsetMin, Is.EqualTo(Vector2.zero));
+                Assert.That(coverRect.offsetMax, Is.EqualTo(Vector2.zero));
+
+                // 반투명하면 가리려던 씬 전환이 그대로 비치고, raycastTarget이 꺼지면
+                // 덮인 게임 UI로 클릭이 샌다.
+                var coverImage = cover.GetComponent<Image>();
+                Assert.That(coverImage.color.a, Is.EqualTo(1f));
+                Assert.That(coverImage.raycastTarget, Is.True);
+            }
+            finally
+            {
+                var canvas = GameObject.Find("Artel Onboarding Canvas");
+                var eventSystem = GameObject.Find("Artel EventSystem");
+                if (canvas != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(canvas);
+                }
+
+                if (eventSystem != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(eventSystem);
+                }
+
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
         private static ArtelOnboardingViewModel CreateViewModel()
         {
             return new ArtelOnboardingViewModel(

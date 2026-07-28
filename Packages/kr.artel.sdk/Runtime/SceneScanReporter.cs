@@ -18,7 +18,13 @@ namespace Artel
     /// </summary>
     internal static class SceneScanReporter
     {
-        public static IEnumerator CreateReport(Action<SceneScanReportDto> onCompleted)
+        /// <param name="onProgress">
+        /// 씬 하나를 볼 때마다 (1부터 세는 현재 씬, 전체 씬 수)를 받는다. 씬 워크가 화면을
+        /// 점유하는 동안 진행 상황을 보여 주려는 호출자를 위한 것이다.
+        /// </param>
+        public static IEnumerator CreateReport(
+            Action<SceneScanReportDto> onCompleted,
+            Action<int, int> onProgress = null)
         {
             if (onCompleted == null)
             {
@@ -29,7 +35,7 @@ namespace Artel
 
             // 스캔은 부가 정보다. 씬 워크가 어디서 터지더라도 등록 자체를 막으면 안 되므로
             // 직접 돌리면서 예외를 삼킨다. 터지기 전까지 담은 씬은 그대로 보고에 남는다.
-            var walk = ScanEveryScene(report);
+            var walk = ScanEveryScene(report, onProgress);
             while (true)
             {
                 object current;
@@ -55,11 +61,11 @@ namespace Artel
         }
 
         // ActionExecutor가 쓰는 스캐너와 타깃 맵을 공유하면 안 되므로 새 인스턴스로 스캔한다.
-        private static IEnumerator ScanEveryScene(SceneScanReportDto report)
+        private static IEnumerator ScanEveryScene(SceneScanReportDto report, Action<int, int> onProgress)
         {
             List<ScannedSceneDto> scanned = null;
             yield return new AllSceneScanner(new SceneScanner())
-                .ScanAll(SceneScanOptions.Default, result => scanned = result);
+                .ScanAll(SceneScanOptions.Default, result => scanned = result, onProgress);
 
             foreach (var scene in scanned)
             {
