@@ -98,16 +98,13 @@ namespace Artel.Tracking
 
         private static BlockTransform Build(Vector3 world, Vector2 min, Vector2 max)
         {
-            var width = Mathf.Max(1, Screen.width);
-            var height = Mathf.Max(1, Screen.height);
-
             // Unity counts screen y from the bottom while every consumer of a video frame counts
             // it from the top, so the top edge comes from the larger y.
             var rect = new Rect(
-                min.x / width,
-                1f - (max.y / height),
-                (max.x - min.x) / width,
-                (max.y - min.y) / height);
+                min.x,
+                Screen.height - max.y,
+                max.x - min.x,
+                max.y - min.y);
 
             return new BlockTransform(world, rect, IsOnScreen(rect));
         }
@@ -118,7 +115,10 @@ namespace Artel.Tracking
         /// </summary>
         private static bool IsOnScreen(Rect rect)
         {
-            return rect.xMax > 0f && rect.xMin < 1f && rect.yMax > 0f && rect.yMin < 1f;
+            return rect.xMax > 0f
+                && rect.xMin < Screen.width
+                && rect.yMax > 0f
+                && rect.yMin < Screen.height;
         }
     }
 }

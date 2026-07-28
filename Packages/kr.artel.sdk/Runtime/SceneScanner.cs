@@ -54,6 +54,7 @@ namespace Artel
             return new SceneSnapshot(
                 scene.handle,
                 string.IsNullOrEmpty(scene.name) ? "Unity Scene" : scene.name,
+                new Vector2Int(Screen.width, Screen.height),
                 children);
         }
 

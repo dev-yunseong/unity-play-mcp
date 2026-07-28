@@ -77,15 +77,26 @@ screen 좌표를 SDK 가 함께 투영해 싣는다.
 
 ## 결정 사항
 
-### D1. screen 은 normalized 0..1, 원점 top-left
+### D1. screen 은 픽셀, 원점 top-left, 해상도를 씬에 동봉
 
-픽셀이 아니라 정규화 값으로 싣는다.
+**최초에 normalized 0..1 로 정했다가 픽셀 + 해상도로 뒤집었다.** 뒤집은 근거:
 
-- 스트림이 다운스케일될 수 있어 픽셀은 소비자가 보는 프레임과 어긋난다. 픽셀로
-  가려면 `SceneDto` 에 프레임 해상도를 함께 실어야 하는데, 그 해상도는 스트림
-  세션마다 달라지고 스트림이 꺼져 있으면 정의되지 않는다.
-- Unity screen 은 bottom-left 원점이지만 이미지/비전 모델과 소비자 쪽 좌표 관행은
-  top-left 다. SDK 에서 뒤집어 보내지 않으면 소비자마다 다르게 해석한다.
+- **정보량이 다르다.** 픽셀과 해상도가 있으면 normalized 는 나누기 한 번으로
+  나온다. 반대는 불가능하다 — normalized 만 받은 소비자는 화면 크기를 영영 알 수
+  없다. 같은 비용에 정보를 버릴 이유가 없다.
+- **양자화가 자연스러워진다.** normalized 4자리는 1080p 에서 약 0.2px 이라 미세
+  애니메이션에 해시가 흔들릴 여지가 남았다 (아래 Risks 에 적어뒀던 것). 픽셀은
+  정수 반올림이 곧 1px 양자라 이 문제가 사라진다.
+- 원점은 top-left. Unity screen 은 bottom-left 지만 영상 프레임과 비전 모델 관행은
+  top-left 다. SDK 에서 뒤집지 않으면 소비자마다 다르게 해석한다.
+
+대가는 하나다. 스트림이 다운스케일될 수 있어
+([ScreenVideoSource.cs:168](../../Packages/kr.artel.sdk/Runtime/Streaming/ScreenVideoSource.cs))
+소비자가 프레임 좌표로 옮길 때 `x * frameW / screen.w` 로 나누기가 하나 는다.
+명세에 명시한다.
+
+해상도는 블록마다가 아니라 `SceneDto.screen` 에 한 번 싣는다. 한 스캔은 한 화면을
+기준으로 재기 때문이다.
 
 ### D2. 좌표는 모든 블록에 넣되, 기본 스캔에서는 켠다
 
@@ -130,20 +141,21 @@ screen 좌표를 SDK 가 함께 투영해 싣는다.
         에 전달.
   - [ ] `Runtime/Protocol/Dto/BlockTransformDto.cs` 신규 —
         `world {x,y,z}`, `rect {x,y,w,h}`, `onScreen`.
+  - [ ] `Runtime/Protocol/Dto/ScreenSizeDto.cs` 신규 + `SceneDto.screen`.
   - [ ] `Runtime/Protocol/Dto/SceneBlockDto.cs` — `transform` 필드 추가.
   - [ ] `Runtime/Protocol/Mapping/SceneSnapshotMapper.cs` — 매핑 + **양자화**.
-        world 는 소수점 4자리, normalized rect 는 소수점 4자리 (1080p 기준
-        약 0.2px 해상도). 양자화는 매퍼 한 곳에서만 한다.
+        world 는 소수점 4자리, rect 는 정수 픽셀. `SceneDto.screen` 도 여기서
+        채운다. 양자화는 매퍼 한 곳에서만 한다.
   - [ ] `.meta` 파일 확인 — 신규 `.cs` 마다 필요하다. (현재 워킹 트리에 누락된
         `.meta` 가 이미 몇 개 있다. 이 작업 것만 챙기고 나머지는 건드리지 않는다.)
 
 - [ ] **Step 2: Tests**
-  - [ ] `SceneScannerTests` — Overlay canvas 아래 RectTransform 의 rect 가
-        기대 normalized 값으로 나오는지
+  - [ ] `BlockTransformTests` — Overlay canvas 아래 RectTransform 의 rect 가
+        기대 픽셀 값으로 나오는지
   - [ ] `SceneScannerTests` — RectTransform 없는 GameObject 의 world/screen
   - [ ] `SceneScannerTests` — 카메라 뒤 오브젝트가 `onScreen: false`
-  - [ ] `SceneScannerTests` — ScreenSpaceCamera canvas 가 Overlay 와 같은
-        normalized rect 를 내는지 (**이게 이 작업의 핵심 회귀 방어선**)
+  - [ ] `BlockTransformTests` — ScreenSpaceCamera canvas 가 Overlay 와 같은
+        픽셀 rect 를 내는지 (**이게 이 작업의 핵심 회귀 방어선**)
   - [ ] `SceneStateHashTrackerTests` — 양자화 임계 미만의 미세 이동이 해시를
         바꾸지 않는지
   - [ ] `SceneJsonContractTests` — 새 필드의 JSON 형태 고정
@@ -160,15 +172,15 @@ screen 좌표를 SDK 가 함께 투영해 싣는다.
   - `samples/WordVenture` 실행 후 `ArtelTestPage` 로 `GAME_STATE` 육안 확인
 - **Expected output:**
   - 각 블록에 `transform.world` / `transform.rect` / `transform.onScreen`
-  - 화면 좌상단 UI 의 rect x/y 가 0 에 가깝고, 우하단이 1 에 가까움
+  - 화면 좌상단 UI 의 rect x/y 가 0 에 가깝고, 우하단이 `screen.w`/`screen.h` 에 가까움
   - 게임을 가만히 둔 상태에서 `GAME_STATE` 가 반복 전송되지 않음 (해시 안정)
 
 ## Risks & Rollback
 
 - **Risks:**
-  - **양자화 자릿수가 모자라거나 과함.** 4자리는 1080p 에서 약 0.2px 이라 미세
-    애니메이션은 여전히 해시를 흔들 수 있다. Step 2 에서 실측하고, 흔들리면
-    3자리로 내린다 (약 2px — 클릭 타겟팅에는 충분).
+  - **양자화.** D1 을 픽셀로 뒤집으면서 해소됐다. rect 는 정수 픽셀로 반올림하고
+    world 만 소수점 4자리를 유지한다. 서브픽셀 흔들림이 해시를 바꾸지 않는 것은
+    `Map_RoundsCoordinatesSoAStillSceneHashesTheSame` 이 고정한다.
   - **payload 증가.** D2 에서 플래그 없이 가기로 했으므로 Step 2 의 실측이
     게이트다. 유의미하면 그 자리에서 플래그를 추가한다.
   - **`Camera.main` 이 null 인 씬.** 비-UI 오브젝트의 screen 투영이 불가능하다.
@@ -180,17 +192,18 @@ screen 좌표를 SDK 가 함께 투영해 싣는다.
 ## What actually landed
 
 Runtime and tests compile against Unity 2022.3.34f1, and the EditMode suite runs
-93 tests: 85 pass, 8 fail. The same 8 fail on a stashed baseline without any of
+95 tests: 87 pass, 8 fail. The same 8 fail on a stashed baseline without any of
 this work, so nothing here regressed them — they are PlayMode tests
 (`DontDestroyOnLoad`, `Awake`) dragged through EditMode by the temporary
-`testables` entry used to make the package's tests discoverable at all. All 7 new
+`testables` entry used to make the package's tests discoverable at all. All 9 new
 tests pass.
 
 Two Step 2 items are **not** done:
 
 - **Payload measurement.** The gate D2 set for itself never ran. Serialized,
-  `transform` costs roughly 110-130 bytes per block, so a 200-block scene grows
-  by about 25 KB — an estimate from the shape of the JSON, not a measurement.
+  `transform` costs roughly 90-110 bytes per block once rects are whole pixels, so
+  a 200-block scene grows by about 20 KB — an estimate from the shape of the JSON,
+  not a measurement.
   Measure before deciding the flag is unnecessary.
 - **Sample app check.** `samples/WordVenture` was never played through to eyeball
   a live `GAME_STATE`.
@@ -202,7 +215,8 @@ decision about the sample project.
 
 ## Open Questions
 
-- 소비자 (Agent / Orchestrator) 쪽이 normalized 를 받을 준비가 되어 있는지.
-  D1 은 SDK 관점에서 정한 것이고, 소비자가 이미 픽셀을 가정한 코드를 갖고 있다면
-  픽셀 + 해상도 동봉으로 바꾸는 편이 낫다. **구현 전에 Agent 담당과 확인 필요.**
+- 소비자 (Agent / Orchestrator) 가 프레임 좌표로 옮길 때 `screen` 으로 나누는
+  단계를 실제로 밟는지. 스트림을 다운스케일하지 않는 환경에서는 나누기를
+  빠뜨려도 우연히 맞아서, 해상도가 갈리는 순간에야 드러난다. **Agent 담당과
+  확인 필요.**
 - `scan_all_scenes` 에도 좌표가 필요한지. 현재는 Non-goal 로 뒀다.

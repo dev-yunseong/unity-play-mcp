@@ -7,20 +7,24 @@ namespace Artel.Domain
     /// </summary>
     /// <remarks>
     /// <see cref="World"/> is the object's own position and does not move when the camera does.
-    /// <see cref="ScreenRect"/> is that position projected onto what the player is looking at,
-    /// normalized to 0..1 with the origin at the top left. Neither covers the other: a UI element
-    /// under a ScreenSpaceOverlay canvas has a world position measured in screen pixels, and a
-    /// world-space object off the side of the frame still has a real position.
+    /// <see cref="ScreenRect"/> is that position projected onto what the player is looking at.
+    /// Neither covers the other: a UI element under a ScreenSpaceOverlay canvas has a world
+    /// position measured in screen pixels, and a world-space object off the side of the frame
+    /// still has a real position.
     /// </remarks>
     public readonly struct BlockTransform
     {
         public Vector3 World { get; }
 
         /// <summary>
-        /// The area the block covers on screen, normalized against the screen's own width and
-        /// height, with y growing downwards. Width and height are divided by different numbers, so
-        /// equal values are not a square.
+        /// The area the block covers on screen, in pixels, with the origin at the top left and y
+        /// growing downwards.
         /// </summary>
+        /// <remarks>
+        /// Measured against <see cref="SceneSnapshot.Screen"/>, which is not necessarily the size
+        /// of the video frame a reader is looking at — the stream downscales. Mapping one to the
+        /// other is a matter of scaling by the ratio between them.
+        /// </remarks>
         public Rect ScreenRect { get; }
 
         /// <summary>

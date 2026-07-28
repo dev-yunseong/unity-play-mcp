@@ -14,7 +14,11 @@ namespace Artel.Tests
 {
     public sealed class BlockTransformTests
     {
-        private const float Tolerance = 0.01f;
+        /// <summary>
+        /// Rects are pixels now, and a projection through a camera lands a fraction of one away
+        /// from the same rect drawn straight onto the screen.
+        /// </summary>
+        private const float Tolerance = 1f;
 
         private readonly List<GameObject> spawned = new List<GameObject>();
 
@@ -33,7 +37,7 @@ namespace Artel.Tests
         }
 
         [UnityTest]
-        public IEnumerator Scan_ReportsAnOverlayRectAsAFractionOfTheScreenFromTheTopLeft()
+        public IEnumerator Scan_ReportsAnOverlayRectInScreenPixelsFromTheTopLeft()
         {
             var panel = QuarterPanel("overlay panel", OverlayCanvas());
 
@@ -46,14 +50,27 @@ namespace Artel.Tests
             // Anchored to the bottom-left corner at half the width and a quarter of the height, so
             // its top edge sits three quarters of the way down a top-left origin.
             Assert.That(rect.x, Is.EqualTo(0f).Within(Tolerance));
-            Assert.That(rect.y, Is.EqualTo(0.75f).Within(Tolerance));
-            Assert.That(rect.width, Is.EqualTo(0.5f).Within(Tolerance));
-            Assert.That(rect.height, Is.EqualTo(0.25f).Within(Tolerance));
+            Assert.That(rect.y, Is.EqualTo(Screen.height * 0.75f).Within(Tolerance));
+            Assert.That(rect.width, Is.EqualTo(Screen.width * 0.5f).Within(Tolerance));
+            Assert.That(rect.height, Is.EqualTo(Screen.height * 0.25f).Within(Tolerance));
+        }
+
+        [Test]
+        public void Scan_ReportsTheScreenTheRectsWereMeasuredAgainst()
+        {
+            // A pixel rect says nothing on its own: x 860 is the middle of a 1920 screen and the
+            // right third of a 1280 one.
+            var scene = new SceneScanner().Scan().Scene;
+
+            Assert.That(scene.Screen.x, Is.EqualTo(Screen.width));
+            Assert.That(scene.Screen.y, Is.EqualTo(Screen.height));
+            Assert.That(SceneSnapshotMapper.ToDto(scene).Screen.W, Is.EqualTo(Screen.width));
         }
 
         /// <summary>
-        /// The point of normalizing at all: the same UI reports the same rect whichever way its
-        /// canvas is drawn, even though its world position differs wildly between the two.
+        /// The whole point of reporting a screen rect: the same UI lands in the same place
+        /// whichever way its canvas is drawn, even though its world position differs wildly
+        /// between the two.
         /// </summary>
         [UnityTest]
         public IEnumerator Scan_ReportsTheSameRectForAnOverlayAndAScreenSpaceCameraCanvas()
@@ -97,8 +114,8 @@ namespace Artel.Tests
             Assert.That(transform.OnScreen, Is.False);
 
             // How far off it sits is information a reader can act on, so the numbers survive.
-            Assert.That(transform.ScreenRect.x, Is.LessThan(-1f));
-            Assert.That(transform.ScreenRect.width, Is.EqualTo(0.5f).Within(Tolerance));
+            Assert.That(transform.ScreenRect.x, Is.LessThan(-Screen.width));
+            Assert.That(transform.ScreenRect.width, Is.EqualTo(Screen.width * 0.5f).Within(Tolerance));
         }
 
         [Test]
@@ -141,50 +158,67 @@ namespace Artel.Tests
         [Test]
         public void Map_RoundsCoordinatesSoAStillSceneHashesTheSame()
         {
-            var codec = new NewtonsoftJsonCodec();
-            var tracker = new SceneStateHashTracker(codec);
+            var tracker = new SceneStateHashTracker(new NewtonsoftJsonCodec());
 
-            var settled = Snapshot(new Vector3(1.000001f, 2.000002f, 3.000003f));
-            var jittered = Snapshot(new Vector3(1.000004f, 2.000005f, 3.000006f));
+            var settled = Snapshot(new Vector3(1.000001f, 2.000002f, 3f), new Rect(10f, 20f, 30f, 40f));
+            var jittered = Snapshot(new Vector3(1.000004f, 2.000005f, 3f), new Rect(10.4f, 20.3f, 30.2f, 40.1f));
 
             Assert.That(tracker.Observe(SceneSnapshotMapper.ToDto(settled)), Is.False);
 
-            // Movement under the quantum is noise from a breathing animation or a layout pass, and
-            // resending the whole scene for it would flood the socket.
+            // Sub-pixel drift is noise from a breathing animation or a layout pass, and resending
+            // the whole scene for it would flood the socket.
             Assert.That(tracker.Observe(SceneSnapshotMapper.ToDto(jittered)), Is.False);
 
-            // Movement above it is a real change and still gets through.
+            // A whole pixel of movement is a real change and still gets through.
             Assert.That(
-                tracker.Observe(SceneSnapshotMapper.ToDto(Snapshot(new Vector3(1.5f, 2f, 3f)))),
+                tracker.Observe(SceneSnapshotMapper.ToDto(
+                    Snapshot(new Vector3(1f, 2f, 3f), new Rect(12f, 20f, 30f, 40f)))),
                 Is.True);
+        }
+
+        [Test]
+        public void Map_ReportsScreenRectsAsWholePixels()
+        {
+            var rect = SceneSnapshotMapper
+                .ToDto(Snapshot(Vector3.zero, new Rect(10.6f, 20.4f, 30.5f, 40f)))
+                .Children.Single().Transform.Rect;
+
+            Assert.That(rect.X, Is.EqualTo(11));
+            Assert.That(rect.Y, Is.EqualTo(20));
+            Assert.That(rect.H, Is.EqualTo(40));
         }
 
         [Test]
         public void Map_FlattensCoordinatesJsonCannotCarry()
         {
-            var snapshot = Snapshot(new Vector3(float.NaN, float.PositiveInfinity, 1f));
-
-            var world = SceneSnapshotMapper.ToDto(snapshot).Children.Single().Transform.World;
+            var transform = SceneSnapshotMapper
+                .ToDto(Snapshot(
+                    new Vector3(float.NaN, float.PositiveInfinity, 1f),
+                    new Rect(float.NaN, 0f, float.PositiveInfinity, 0f)))
+                .Children.Single().Transform;
 
             // Newtonsoft writes NaN and Infinity as bare literals that a strict parser rejects, and
             // one bad object would cost the whole payload.
-            Assert.That(world.X, Is.EqualTo(0f));
-            Assert.That(world.Y, Is.EqualTo(0f));
-            Assert.That(world.Z, Is.EqualTo(1f));
+            Assert.That(transform.World.X, Is.EqualTo(0f));
+            Assert.That(transform.World.Y, Is.EqualTo(0f));
+            Assert.That(transform.World.Z, Is.EqualTo(1f));
+            Assert.That(transform.Rect.X, Is.EqualTo(0));
+            Assert.That(transform.Rect.W, Is.EqualTo(0));
         }
 
-        private static SceneSnapshot Snapshot(Vector3 world)
+        private static SceneSnapshot Snapshot(Vector3 world, Rect screenRect)
         {
             return new SceneSnapshot(
                 1,
                 "scene",
+                new Vector2Int(1920, 1080),
                 new List<SceneBlock>
                 {
                     new SceneBlock(
                         2,
                         "block",
                         true,
-                        new BlockTransform(world, new Rect(0f, 0f, 0.1f, 0.1f), true),
+                        new BlockTransform(world, screenRect, true),
                         new List<SceneComponent>(),
                         new List<SceneBlock>())
                 });
