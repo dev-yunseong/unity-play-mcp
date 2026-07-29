@@ -15,6 +15,10 @@ namespace Artel
         private readonly IScreenCapturer capturer;
         private readonly ICaptureUploader uploader;
 
+        // The time scale as it was when pause_time froze the game, so resume_time gives back the
+        // speed the game was actually running at rather than assuming 1. Null means not paused.
+        private float? scaleBeforePause;
+
         public ActionExecutor(
             SceneScanner scanner,
             CursorController cursorController,
@@ -48,6 +52,18 @@ namespace Artel
             if (method == "key_click")
             {
                 completed(ExecuteKeyClick(actionId, parameters));
+                yield break;
+            }
+
+            if (method == "pause_time")
+            {
+                completed(ExecutePauseTime(actionId));
+                yield break;
+            }
+
+            if (method == "resume_time")
+            {
+                completed(ExecuteResumeTime(actionId));
                 yield break;
             }
 
@@ -132,6 +148,59 @@ namespace Artel
             completed(target.EnterText(value)
                 ? ActionResultDto.Success(actionId)
                 : ActionResultDto.Failure(actionId, NotInteractable(targetId)));
+        }
+
+        /// <summary>
+        /// Freezes game time, leaving the SDK itself running.
+        /// </summary>
+        /// <remarks>
+        /// Everything this SDK waits on is already unscaled — the cursor walk, the scene settle,
+        /// the key hold — so a frozen game can still be scanned, clicked and typed into. That is
+        /// the point: it holds an animation, a countdown or a timed prompt still long enough to be
+        /// read, without the game moving on underneath the reading.
+        /// </remarks>
+        private ActionResultDto ExecutePauseTime(int actionId)
+        {
+            // Only the first pause records anything. A second one would record the frozen 0 and
+            // resume_time would then "resume" to a game that never moves again.
+            if (!scaleBeforePause.HasValue)
+            {
+                scaleBeforePause = Time.timeScale;
+            }
+
+            Time.timeScale = 0f;
+            return ActionResultDto.Success(actionId);
+        }
+
+        private ActionResultDto ExecuteResumeTime(int actionId)
+        {
+            if (!scaleBeforePause.HasValue)
+            {
+                // Restoring a scale nobody saved would silently overwrite whatever the game chose
+                // for itself — a slow-motion sequence, a difficulty modifier — so say so instead.
+                return ActionResultDto.Failure(
+                    actionId, "resume_time: game time was not paused by pause_time.");
+            }
+
+            Time.timeScale = scaleBeforePause.Value;
+            scaleBeforePause = null;
+            return ActionResultDto.Success(actionId);
+        }
+
+        /// <summary>
+        /// Undoes a pause the SDK is about to stop being able to undo.
+        /// </summary>
+        /// <remarks>
+        /// A run that dies while the game is paused would otherwise leave it frozen with the one
+        /// thing that could unfreeze it gone. Called when the manager shuts down.
+        /// </remarks>
+        public void RestoreTimeScale()
+        {
+            if (scaleBeforePause.HasValue)
+            {
+                Time.timeScale = scaleBeforePause.Value;
+                scaleBeforePause = null;
+            }
         }
 
         /// <summary>

@@ -131,6 +131,13 @@ namespace Artel
 
         private void OnDisable()
         {
+            // Before the transport goes: a game left frozen by pause_time can only be resumed
+            // through this SDK, so shutting down while paused would strand it.
+            if (actionExecutor != null)
+            {
+                actionExecutor.RestoreTimeScale();
+            }
+
             StopTransport();
         }
 
