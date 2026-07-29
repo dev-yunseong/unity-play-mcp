@@ -26,6 +26,18 @@ namespace Artel.Tests
         private GameObject eventSystemObject;
         private GameObject canvasObject;
 
+        [SetUp]
+        public void SetUp()
+        {
+            // A manager survives scene loads by design, so one left alive anywhere — by the project's
+            // own scene, or by a test that ran before this one — makes the manager built below a
+            // duplicate. Awake destroys duplicates, and a destroyed manager drives nothing.
+            foreach (var stale in Object.FindObjectsOfType<ArtelManager>(true))
+            {
+                Object.DestroyImmediate(stale.gameObject);
+            }
+        }
+
         [TearDown]
         public void TearDown()
         {

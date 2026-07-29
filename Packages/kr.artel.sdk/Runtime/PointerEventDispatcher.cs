@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -72,7 +73,15 @@ namespace Artel
         public void Press(int button)
         {
             var eventSystem = EventSystem.current;
-            if (eventSystem == null || !VirtualMouseState.IsButton(button) || pointers[button] != null)
+            if (eventSystem == null)
+            {
+                // Worth saying out loud: from the outside this is indistinguishable from a press
+                // that landed on nothing, and a game with a canvas is expected to have one.
+                Debug.LogWarning("[Artel] mouse_down found no EventSystem, so no uGUI element can answer it.");
+                return;
+            }
+
+            if (!VirtualMouseState.IsButton(button) || pointers[button] != null)
             {
                 return;
             }
@@ -111,6 +120,18 @@ namespace Artel
                 // and the threshold check below has to respect that.
                 ExecuteEvents.Execute(data.pointerDrag, data, ExecuteEvents.initializePotentialDrag);
             }
+
+            // One line per press, and a press is something the agent asked for, so this is not
+            // chatter. Without it a drag that does nothing is indistinguishable from a drag that
+            // was never delivered, and the difference is the whole diagnosis.
+            Debug.Log(string.Format(
+                "[Artel] mouse_down at ({0}, {1}) over {2} hits: {3}. press={4} drag={5}",
+                position.x,
+                position.y,
+                raycastResults.Count,
+                DescribeHits(),
+                Describe(data.pointerPress),
+                Describe(data.pointerDrag)));
 
             pointers[button] = data;
         }
@@ -176,6 +197,39 @@ namespace Artel
             }
 
             UpdateHover(null);
+        }
+
+        /// <summary>
+        /// Every hit and the raycaster that produced it. Which raycaster answered is the thing worth
+        /// knowing: a Canvas only brings a GraphicRaycaster, which cannot see a SpriteRenderer at
+        /// all, so a sprite needs a Physics2DRaycaster on the camera before any of this can reach it.
+        /// </summary>
+        private string DescribeHits()
+        {
+            if (raycastResults.Count == 0)
+            {
+                return "none";
+            }
+
+            var description = new StringBuilder();
+            foreach (var result in raycastResults)
+            {
+                if (description.Length > 0)
+                {
+                    description.Append(", ");
+                }
+
+                description.Append(result.gameObject == null ? "<null>" : result.gameObject.name);
+                description.Append(" via ");
+                description.Append(result.module == null ? "<none>" : result.module.GetType().Name);
+            }
+
+            return description.ToString();
+        }
+
+        private static string Describe(GameObject target)
+        {
+            return target == null ? "none" : target.name;
         }
 
         private static bool HasClearedDragThreshold(

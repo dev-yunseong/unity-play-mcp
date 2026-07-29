@@ -40,6 +40,9 @@ namespace Artel
         private readonly Queue<ArtelRequestDto> actionRequests = new Queue<ArtelRequestDto>();
         private bool processingActions;
 
+        /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
+        private bool ownsRuntime;
+
         public string SdkId { get; private set; }
         public string GameVersion { get; private set; }
         public Server Server { get { return server; } }
@@ -108,6 +111,7 @@ namespace Artel
 
             SdkId = ArtelSdkIdentity.LoadOrCreate();
             GameVersion = Application.version;
+            ownsRuntime = true;
         }
 
         private void OnEnable()
@@ -188,6 +192,15 @@ namespace Artel
 
         public void StopTransport()
         {
+            // A manager that lost the duplicate race in Awake returned before building any of this,
+            // and is then destroyed — which calls OnDisable, which lands here. It owns no socket,
+            // no stream and no dispatcher, so there is nothing to stop and every field below is
+            // null.
+            if (!ownsRuntime)
+            {
+                return;
+            }
+
             // Before the socket goes, so the closing STREAM_STATE still has somewhere to go and
             // capture never outlives the connection that asked for it.
             streamHost.Stop();
