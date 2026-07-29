@@ -309,8 +309,24 @@ ways:
   `EventSystem.pixelDragThreshold`, and a press that never travels reports a
   click instead.
 
-A scene with no `EventSystem` gets the polling half and nothing else, silently —
-a game that never used uGUI has nothing to miss.
+- **`OnMouse*` handlers.** `OnMouseEnter`, `OnMouseOver`, `OnMouseExit`,
+  `OnMouseDown`, `OnMouseDrag`, `OnMouseUp`, and `OnMouseUpAsButton` are called
+  on whatever collider the agent's pointer is over, for the left button, the way
+  the engine calls them for the real one.
+
+  These are not EventSystem events and no amount of input mocking reaches them:
+  the engine picks a collider from the OS cursor itself, and the legacy input
+  backend accepts no injected values. Most 2D Unity games are built on them, so
+  without this the agent cannot touch such a game at all. Picking follows the
+  engine's own rules — `Camera.eventMask`, `Physics2D.queriesHitTriggers`, 2D
+  colliders before 3D — and `OnMouseDrag` keeps going to the object the press
+  started on even after the pointer leaves it.
+
+  They run only while the agent holds the pointer. The engine goes on sending its
+  own from the real cursor, and both at once would deliver everything twice.
+
+A scene with no `EventSystem` gets the polling and `OnMouse*` halves and nothing
+else, silently — a game that never used uGUI has nothing to miss.
 
 What this does not change: `button_click` still invokes the button's `onClick`
 directly rather than going through the EventSystem, and it moves the cursor

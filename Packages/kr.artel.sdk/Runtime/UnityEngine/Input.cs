@@ -7,6 +7,7 @@ namespace Artel
     {
         private static readonly VirtualKeyboardState VirtualKeyboard = new VirtualKeyboardState();
         private static readonly VirtualMouseState VirtualMouse = new VirtualMouseState();
+        private static readonly VirtualMouseMessenger MouseMessenger = new VirtualMouseMessenger();
 
         public static bool GetKeyDown(KeyCode key)
         {
@@ -153,12 +154,24 @@ namespace Artel
             VirtualKeyboard.ReleaseAll(Time.frameCount);
             VirtualMouse.ReleaseAll(Time.frameCount);
             VirtualMouse.ReleasePointer();
+            MouseMessenger.Clear();
         }
 
         internal static void AdvanceFrame()
         {
             VirtualKeyboard.Refresh(Time.frameCount, Time.unscaledTime);
             VirtualMouse.Refresh(Time.frameCount);
+
+            // Only while the agent holds the pointer. The engine keeps sending its own OnMouse*
+            // from the real cursor, so driving ours at the same time would deliver everything twice.
+            if (VirtualMouse.OwnsPointer(global::UnityEngine.Input.mousePosition))
+            {
+                MouseMessenger.Tick(VirtualMouse.Position, VirtualMouse.GetButton(0, Time.frameCount));
+            }
+            else
+            {
+                MouseMessenger.Clear();
+            }
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -166,6 +179,7 @@ namespace Artel
         {
             VirtualKeyboard.Clear();
             VirtualMouse.Clear();
+            MouseMessenger.Clear();
         }
 
         private static bool TryParseKeyCode(string value, out KeyCode key)

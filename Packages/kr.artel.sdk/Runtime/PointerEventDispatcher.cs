@@ -133,6 +133,11 @@ namespace Artel
                 Describe(data.pointerPress),
                 Describe(data.pointerDrag)));
 
+            if (data.pointerDrag == null)
+            {
+                LogCollidersUnder(position);
+            }
+
             pointers[button] = data;
         }
 
@@ -197,6 +202,81 @@ namespace Artel
             }
 
             UpdateHover(null);
+        }
+
+        /// <summary>
+        /// Every 2D collider actually under the pointer, whether or not a raycast would return it.
+        /// A press that reaches nothing draggable is either aimed away from the target or aimed at
+        /// one the query skipped, and only the collider list tells the two apart — a trigger is
+        /// invisible to ray queries while <c>Physics2D.queriesHitTriggers</c> is off, and a drag
+        /// handler sitting on a collider nobody can hit looks exactly like no handler at all.
+        /// </summary>
+        private static void LogCollidersUnder(Vector2 screenPosition)
+        {
+            var camera = Camera.main;
+            if (camera == null)
+            {
+                Debug.Log("[Artel] no Camera.main, so the pointer cannot be turned into a world point.");
+                return;
+            }
+
+            var world = camera.ScreenToWorldPoint(screenPosition);
+            var found = new List<Collider2D>();
+            Physics2D.OverlapPoint(
+                world,
+                new ContactFilter2D { useTriggers = true, useLayerMask = false, useDepth = false },
+                found);
+
+            var description = new StringBuilder();
+            foreach (var collider in found)
+            {
+                if (description.Length > 0)
+                {
+                    description.Append(", ");
+                }
+
+                description.Append(collider.name);
+                description.Append(collider.isTrigger ? " (trigger" : " (solid");
+                description.Append(collider.enabled ? "" : ", disabled");
+                description.Append(", z=");
+                description.Append(collider.transform.position.z.ToString("0.##"));
+                description.Append(", layer=");
+                description.Append(LayerMask.LayerToName(collider.gameObject.layer));
+                description.Append(
+                    ExecuteEvents.GetEventHandler<IDragHandler>(collider.gameObject) == null
+                        ? ", no drag handler)"
+                        : ", HAS drag handler)");
+            }
+
+            // The overlap test above only looks at x and y. The raycaster shoots a ray from the
+            // camera instead, so a collider it skips is one the ray never reached: outside the clip
+            // range, off the event mask, or past a hit limit. These are the values that say which.
+            var ray = camera.ScreenPointToRay(screenPosition);
+            var alongTheRay = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
+            var rayHits = new StringBuilder();
+            foreach (var hit in alongTheRay)
+            {
+                if (rayHits.Length > 0)
+                {
+                    rayHits.Append(", ");
+                }
+
+                rayHits.Append(hit.collider.name);
+                rayHits.Append('@');
+                rayHits.Append(hit.distance.ToString("0.##"));
+            }
+
+            Debug.Log(string.Format(
+                "[Artel] colliders under the pointer: {0}. queriesHitTriggers={1}\n" +
+                "  camera={2} near={3} far={4} cullingMask={5}\n" +
+                "  along the ray: {6}",
+                description.Length == 0 ? "none" : description.ToString(),
+                Physics2D.queriesHitTriggers,
+                camera.name,
+                camera.nearClipPlane,
+                camera.farClipPlane,
+                camera.cullingMask,
+                rayHits.Length == 0 ? "none" : rayHits.ToString()));
         }
 
         /// <summary>
