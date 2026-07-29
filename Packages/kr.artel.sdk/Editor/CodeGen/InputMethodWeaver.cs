@@ -13,7 +13,11 @@ namespace Artel.CodeGen
             "GetKey",
             "GetKeyUp",
             "get_anyKey",
-            "get_anyKeyDown"
+            "get_anyKeyDown",
+            "get_mousePosition",
+            "GetMouseButton",
+            "GetMouseButtonDown",
+            "GetMouseButtonUp"
         };
 
         private readonly ModuleDefinition module;

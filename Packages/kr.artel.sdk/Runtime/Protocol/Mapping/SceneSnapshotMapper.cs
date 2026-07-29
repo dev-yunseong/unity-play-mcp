@@ -177,6 +177,12 @@ namespace Artel.Protocol.Mapping
                     Interactable = editText.Interactable
                 };
             }
+            else if (component is VisualComponent visual)
+            {
+                dto = visual.Kind == VisualKind.Sprite
+                    ? (SceneComponentDto)new SpriteComponentDto { Sprite = visual.SpriteName }
+                    : new ImageComponentDto { Sprite = visual.SpriteName };
+            }
             else if (component is TrackedComponent tracked)
             {
                 dto = new TrackedComponentDto { ComponentType = tracked.ComponentType };

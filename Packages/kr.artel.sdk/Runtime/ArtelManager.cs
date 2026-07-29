@@ -32,6 +32,7 @@ namespace Artel
         private AllSceneScanner allSceneScanner;
         private ActionExecutor actionExecutor;
         private CursorController cursorController;
+        private PointerEventDispatcher pointerEvents;
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
         private ArtelStreamHost streamHost;
@@ -39,6 +40,9 @@ namespace Artel
         private long nextMessageId = 1;
         private readonly Queue<ArtelRequestDto> actionRequests = new Queue<ArtelRequestDto>();
         private bool processingActions;
+
+        /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
+        private bool ownsRuntime;
 
         public string SdkId { get; private set; }
         public string GameVersion { get; private set; }
@@ -92,10 +96,12 @@ namespace Artel
                 gameObject.AddComponent<KeyboardStatusController>();
             }
 
+            pointerEvents = new PointerEventDispatcher();
             jsonCodec = new NewtonsoftJsonCodec();
             actionExecutor = new ActionExecutor(
                 scanner,
                 cursorController,
+                pointerEvents,
                 new ScreenCapturer(),
                 // The key is read at upload time, not now: onboarding may still be waiting for the
                 // player to paste one, and a capture asked for before that should say so rather
@@ -114,6 +120,7 @@ namespace Artel
 
             SdkId = ArtelSdkIdentity.LoadOrCreate();
             GameVersion = Application.version;
+            ownsRuntime = true;
         }
 
         private static string ReadInstanceKey()
@@ -206,9 +213,22 @@ namespace Artel
 
         public void StopTransport()
         {
+            // A manager that lost the duplicate race in Awake returned before building any of this,
+            // and is then destroyed — which calls OnDisable, which lands here. It owns no socket,
+            // no stream and no dispatcher, so there is nothing to stop and every field below is
+            // null.
+            if (!ownsRuntime)
+            {
+                return;
+            }
+
             // Before the socket goes, so the closing STREAM_STATE still has somewhere to go and
             // capture never outlives the connection that asked for it.
             streamHost.Stop();
+
+            // Ahead of the ownership checks: whoever owns the socket, a run that ends mid-drag must
+            // not leave the game holding a button nobody will ever send the release for.
+            ReleaseAgentInput();
 
             if (webSocketTransport == null)
             {
@@ -227,6 +247,16 @@ namespace Artel
             Debug.Log("[Artel] WebSocket transport stopped.");
         }
 
+        /// <summary>
+        /// Lets go of every key and button the agent was holding, and ends any drag in progress on
+        /// the game's own terms so its handler sees the end it was waiting for.
+        /// </summary>
+        private void ReleaseAgentInput()
+        {
+            pointerEvents.ReleaseAll();
+            ArtelInput.ReleaseAllVirtualInput();
+        }
+
         internal bool HasWebSocketTransport { get { return webSocketTransport != null; } }
 
         /// <summary>
@@ -240,6 +270,7 @@ namespace Artel
                 return;
             }
 
+            ReleaseAgentInput();
             webSocketTransport = null;
             ownsTransport = true;
         }

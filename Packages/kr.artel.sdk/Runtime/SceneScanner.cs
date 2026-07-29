@@ -114,6 +114,8 @@ namespace Artel
         private readonly TMP_InputField tmpInputField;
         private readonly Text text;
         private readonly TMP_Text tmpText;
+        private readonly Image image;
+        private readonly SpriteRenderer spriteRenderer;
 
         public RectTransform RectTransform { get; }
         public bool CanClick { get { return button != null; } }
@@ -150,6 +152,8 @@ namespace Artel
             TMP_InputField tmpInputField,
             Text text,
             TMP_Text tmpText,
+            Image image,
+            SpriteRenderer spriteRenderer,
             RectTransform rectTransform)
         {
             this.button = button;
@@ -157,6 +161,8 @@ namespace Artel
             this.tmpInputField = tmpInputField;
             this.text = text;
             this.tmpText = tmpText;
+            this.image = image;
+            this.spriteRenderer = spriteRenderer;
             RectTransform = rectTransform;
         }
 
@@ -168,6 +174,8 @@ namespace Artel
                 gameObject.GetComponent<TMP_InputField>(),
                 gameObject.GetComponent<Text>(),
                 gameObject.GetComponent<TMP_Text>(),
+                gameObject.GetComponent<Image>(),
+                gameObject.GetComponent<SpriteRenderer>(),
                 gameObject.GetComponent<RectTransform>());
         }
 
@@ -220,6 +228,28 @@ namespace Artel
             if (tmpText != null)
             {
                 components.Add(new TextComponent(gameObjectName, tmpText.text, EmptyStates, EmptyActions));
+            }
+
+            // Reported even with no sprite assigned. A flat-colour panel is still something on
+            // screen, and an invisible one is still something the pointer would land on first.
+            if (image != null)
+            {
+                components.Add(new VisualComponent(
+                    gameObjectName,
+                    VisualKind.Image,
+                    image.sprite == null ? null : image.sprite.name,
+                    EmptyStates,
+                    EmptyActions));
+            }
+
+            if (spriteRenderer != null)
+            {
+                components.Add(new VisualComponent(
+                    gameObjectName,
+                    VisualKind.Sprite,
+                    spriteRenderer.sprite == null ? null : spriteRenderer.sprite.name,
+                    EmptyStates,
+                    EmptyActions));
             }
 
             foreach (var component in gameObject.GetComponents<Component>())

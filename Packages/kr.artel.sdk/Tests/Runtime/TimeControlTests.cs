@@ -80,11 +80,11 @@ namespace Artel.Tests
         }
 
         /// <summary>
-        /// Null collaborators: no time action touches the scene, the cursor or the capturer.
+        /// Null scanner and cursor: no time action touches the scene or the pointer.
         /// </summary>
         private static ActionExecutor NewExecutor()
         {
-            return new ActionExecutor(null, null);
+            return new ActionExecutor(null, null, new PointerEventDispatcher());
         }
 
         private static ActionResultDto Run(ActionExecutor executor, int actionId, string method)

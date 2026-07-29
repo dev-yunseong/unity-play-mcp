@@ -309,7 +309,7 @@ namespace Artel.Tests
         {
             var scanner = new SceneScanner();
             scanner.Scan();
-            return new ActionExecutor(scanner, null, capturer, uploader);
+            return new ActionExecutor(scanner, null, new PointerEventDispatcher(), capturer, uploader);
         }
 
         private static ActionResultDto Run(ActionExecutor executor, List<object> parameters)

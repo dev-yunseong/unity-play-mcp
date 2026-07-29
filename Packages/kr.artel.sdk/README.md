@@ -40,7 +40,8 @@ WebSocket server and manages both test servers:
 
 - WebSocket URL: `ws://127.0.0.1:17311/ws`
 - Scan request: `{ "jsonrpc": "2.0", "id": 1, "method": "scan_scene", "params": [] }`
-- Action message: `ACTION` with `button_click`, `enter_text`, `key_click`, `scan_scene`, and `scan_all_scenes`
+- Action message: `ACTION` with `button_click`, `enter_text`, `key_click`, `key_down`,
+  `key_up`, `move_mouse`, `mouse_down`, `mouse_up`, `scan_scene`, and `scan_all_scenes`
 
 ## Ordering a scan against actions
 
@@ -236,6 +237,117 @@ is true for that frame, `GetKey` remains true for the requested duration, and
 `GetKeyUp` is true for one frame when the duration ends. These values are frame
 snapshots and can be read by multiple callers without being consumed.
 
+### Holding a key
+
+`key_click` decides in advance how long the key stays down. When the agent
+cannot know that yet — a charge that lasts until something on screen changes, a
+modifier held across several other actions — `key_down` and `key_up` split the
+press in two:
+
+```json
+{
+  "type": "ACTION",
+  "id": 3,
+  "actions": [
+    { "id": 1, "method": "key_down", "params": ["LeftShift"] },
+    { "id": 2, "method": "button_click", "params": [12345] },
+    { "id": 3, "method": "key_up", "params": ["LeftShift"] }
+  ]
+}
+```
+
+Both take a `KeyCode` enum name or numeric value. Nothing but `key_up` ends the
+hold, so a client that forgets one leaves the key down for the rest of the run.
+The SDK releases everything it is holding when the connection stops, which
+bounds the damage to that connection.
+
+## Agent pointer input
+
+`move_mouse` puts the pointer at a screen position, and `mouse_down` /
+`mouse_up` hold and release a button. The queue runs a batch in order, so drag
+and drop needs no action of its own — it is those three in sequence:
+
+```json
+{
+  "type": "ACTION",
+  "id": 4,
+  "actions": [
+    { "id": 1, "method": "move_mouse", "params": [420, 300] },
+    { "id": 2, "method": "mouse_down", "params": [] },
+    { "id": 3, "method": "move_mouse", "params": [880, 300] },
+    { "id": 4, "method": "mouse_up", "params": [] }
+  ]
+}
+```
+
+`move_mouse` takes the coordinates a scan already reported: pixels from the top
+left of the screen, the same space as a block's `transform.rect`. Aiming at
+something the agent just saw is therefore its `rect` numbers, unchanged — the
+SDK flips them into Unity's bottom-left screen space itself, so no caller has to
+know that space exists. `mouse_down` and `mouse_up` take `[]` for the left
+button, or `[0]`, `[1]`, `[2]` for left, right, and middle.
+
+These reach the game two ways at once, because games take pointer input two
+ways:
+
+- **Polling.** `Input.mousePosition`, `Input.GetMouseButton`,
+  `GetMouseButtonDown`, and `GetMouseButtonUp` are rewritten to `ArtelInput` by
+  the same IL post-processor that handles the key calls. Button state follows the
+  frame rules the keys do. `mousePosition` reports the agent's pointer once
+  `move_mouse` has been used, and the real one until then — a position is a
+  single value, so it cannot combine the two the way a button can.
+
+  That claim is given up the moment the real mouse moves, and again when the
+  connection stops. Without both, a game goes on reading a pointer nobody is
+  driving: every `Input.mousePosition` in the project answers with wherever the
+  agent last left it, and the person at the machine cannot move anything until
+  play mode is restarted.
+- **uGUI.** The SDK dispatches `PointerEventData` through the scene's
+  `EventSystem`, so `IPointerDownHandler`, `IBeginDragHandler`, `IDragHandler`,
+  `IEndDragHandler`, `IDropHandler`, and `IPointerClickHandler` fire as they
+  would for a person. A drag begins only once the pointer has travelled past
+  `EventSystem.pixelDragThreshold`, and a press that never travels reports a
+  click instead.
+
+- **`OnMouse*` handlers.** `OnMouseEnter`, `OnMouseOver`, `OnMouseExit`,
+  `OnMouseDown`, `OnMouseDrag`, `OnMouseUp`, and `OnMouseUpAsButton` are called
+  on whatever collider the agent's pointer is over, for the left button, the way
+  the engine calls them for the real one.
+
+  These are not EventSystem events and no amount of input mocking reaches them:
+  the engine picks a collider from the OS cursor itself, and the legacy input
+  backend accepts no injected values. Most 2D Unity games are built on them, so
+  without this the agent cannot touch such a game at all. Picking follows the
+  engine's own rules: a ray from `Camera.main` filtered by `Camera.eventMask`,
+  the nearest hit of 2D and 3D, and one object rather than everything under the
+  pointer. `OnMouseDrag` keeps going to the object the press started on even
+  after the pointer leaves it.
+
+  Matching the engine is the point, including where it fails. A collider the
+  engine cannot pick is one a person cannot click, and an agent that reaches it
+  anyway would report a game working when it does not. Two gaps follow from
+  this: a scene that renders interactive objects through a camera other than
+  `Camera.main` is not covered, and overlapping sprites at the same depth are
+  resolved by ray distance, which is not the order they are drawn in.
+
+  They run only while the agent holds the pointer. The engine goes on sending its
+  own from the real cursor, and both at once would deliver everything twice.
+
+A scene with no `EventSystem` gets the polling and `OnMouse*` halves and nothing
+else, silently — a game that never used uGUI has nothing to miss.
+
+What this does not change: `button_click` still invokes the button's `onClick`
+directly rather than going through the EventSystem, and it moves the cursor
+without firing hover events. The two paths are separate on purpose, so adding
+pointer events does not alter what an existing `button_click` does to a game.
+
+A held button has the same forgetting problem a held key does, with a worse
+failure: the game stays mid-drag. Stopping the connection releases every button
+and ends any drag in progress, so the game's `IEndDragHandler` still runs.
+
+The on-screen status panel shows the agent's pointer position and any button it
+is holding, beneath the pressed keys.
+
 `GAME_STATE.scene` uses one block per active `GameObject`. Supported Unity UI
 components are listed separately, so one block can expose multiple capabilities:
 
@@ -265,6 +377,36 @@ and `enter_text` on a target that is not interactable fail with
 `Target is not interactable: <id>` instead of invoking the handler. Blocks a full
 scan reveals with `"active": false` carry `"interactable": false` for the same
 reason: their UI cannot receive input while the object is off.
+
+### What is on screen
+
+A scan also reports what the player can merely see, so that the readable scene is
+not limited to whatever happens to be a button. `image` is a uGUI `Image`,
+`sprite` is a `SpriteRenderer`:
+
+```json
+{
+  "type": "sprite",
+  "name": "enemy_goblin",
+  "sprite": "goblin_idle",
+  "states": [],
+  "actions": []
+}
+```
+
+`sprite` is the sprite asset's name and is absent when none is assigned — a
+flat-colour panel or an invisible raycast catcher. Those are reported anyway:
+they are still on screen, and an invisible one is still what the pointer lands on
+first.
+
+These carry no interaction of their own, but they are not inert. Every block
+reports the area it covers, so the pointer actions can aim at one exactly as they
+would at a button — which is the only way to drag something that was never built
+as a control.
+
+A `SpriteRenderer` is not a `RectTransform`, and a plain `Transform` is a point
+with no extent. Their `transform.rect` therefore comes from the renderer's own
+bounds rather than from the object's origin, or nothing could be aimed at them.
 
 The scene `id` is its Unity scene handle, and each block `id` is the
 `GameObject` instance ID. Treat both as opaque identifiers valid only while
