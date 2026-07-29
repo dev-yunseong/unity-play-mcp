@@ -60,6 +60,31 @@ namespace Artel
       <input id=""key-duration"" type=""number"" value=""0.5"" min=""0.01"" step=""0.05"">
     </label>
     <button id=""key-click"">Click key</button>
+    <button id=""key-down"">Hold</button>
+    <button id=""key-up"">Release</button>
+  </section>
+  <section id=""pointer-controls"" aria-label=""Pointer"">
+    <strong>Pointer (px from top left)</strong>
+    <label>
+      X
+      <input id=""pointer-x"" type=""number"" value=""400"" step=""10"">
+    </label>
+    <label>
+      Y
+      <input id=""pointer-y"" type=""number"" value=""300"" step=""10"">
+    </label>
+    <label>
+      Button
+      <select id=""pointer-button"">
+        <option value=""0"">Left</option>
+        <option value=""1"">Right</option>
+        <option value=""2"">Middle</option>
+      </select>
+    </label>
+    <button id=""pointer-move"">Move</button>
+    <button id=""pointer-down"">Press</button>
+    <button id=""pointer-up"">Release</button>
+    <button id=""pointer-drag"">Drag to here</button>
   </section>
   <section id=""snapshot"" class=""empty"" aria-label=""Pinned scan"">
     <header>
@@ -85,6 +110,9 @@ namespace Artel
     const log = document.getElementById('log');
     const keyCode = document.getElementById('key-code');
     const keyDuration = document.getElementById('key-duration');
+    const pointerX = document.getElementById('pointer-x');
+    const pointerY = document.getElementById('pointer-y');
+    const pointerButton = document.getElementById('pointer-button');
     const snapshot = document.getElementById('snapshot');
     const snapshotLabel = document.getElementById('snapshot-label');
     const snapshotScene = document.getElementById('snapshot-scene');
@@ -96,6 +124,12 @@ namespace Artel
     document.getElementById('scan-all-full').onclick = () => scanAllScenes('full');
     document.getElementById('snapshot-clear').onclick = clearSnapshot;
     document.getElementById('key-click').onclick = clickKey;
+    document.getElementById('key-down').onclick = () => holdKey('key_down');
+    document.getElementById('key-up').onclick = () => holdKey('key_up');
+    document.getElementById('pointer-move').onclick = movePointer;
+    document.getElementById('pointer-down').onclick = () => pressPointer('mouse_down');
+    document.getElementById('pointer-up').onclick = () => pressPointer('mouse_up');
+    document.getElementById('pointer-drag').onclick = dragPointer;
 
     function connect() {
       ws = new WebSocket(wsUrl);
@@ -124,6 +158,10 @@ namespace Artel
     }
 
     function sendAction(method, params) {
+      sendActions([[method, params]]);
+    }
+
+    function sendActions(steps) {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         status.textContent = 'connect first';
         return;
@@ -132,7 +170,8 @@ namespace Artel
       ws.send(JSON.stringify({
         type: 'ACTION',
         id: actionId++,
-        actions: [{ id: actionId++, jsonrpc: '2.0', method, params }]
+        actions: steps.map(([method, params]) =>
+          ({ id: actionId++, jsonrpc: '2.0', method, params }))
       }));
     }
 
@@ -145,6 +184,50 @@ namespace Artel
       }
 
       sendAction('key_click', [key, duration]);
+    }
+
+    function holdKey(method) {
+      const key = keyCode.value.trim();
+      if (!key) {
+        status.textContent = 'invalid key input';
+        return;
+      }
+
+      sendAction(method, [key]);
+    }
+
+    function readPointerTarget() {
+      const x = Number(pointerX.value);
+      const y = Number(pointerY.value);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        status.textContent = 'invalid pointer position';
+        return null;
+      }
+
+      return [x, y];
+    }
+
+    function movePointer() {
+      const target = readPointerTarget();
+      if (target) sendAction('move_mouse', target);
+    }
+
+    function pressPointer(method) {
+      sendAction(method, [Number(pointerButton.value)]);
+    }
+
+    // One batch, because the queue is what keeps the press, the travel, and the
+    // release in order. Sent as three messages they could interleave with a scan.
+    function dragPointer() {
+      const target = readPointerTarget();
+      if (!target) return;
+
+      const button = Number(pointerButton.value);
+      sendActions([
+        ['mouse_down', [button]],
+        ['move_mouse', target],
+        ['mouse_up', [button]]
+      ]);
     }
 
     function handleMessage(message) {

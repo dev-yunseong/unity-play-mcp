@@ -47,6 +47,78 @@ namespace Artel.Tests
         }
 
         [Test]
+        public void Scan_ReportsAnImageWithItsSpriteName()
+        {
+            gameObject.AddComponent<CanvasRenderer>();
+            var image = gameObject.AddComponent<Image>();
+            image.sprite = CreateSprite("hp_bar_fill");
+
+            var component = ComponentsOf(gameObject).OfType<VisualComponent>().Single();
+
+            Assert.That(component.Kind, Is.EqualTo(VisualKind.Image));
+            Assert.That(component.SpriteName, Is.EqualTo("hp_bar_fill"));
+        }
+
+        [Test]
+        public void Scan_ReportsAFlatColourImageWithNoSprite()
+        {
+            // A panel or an invisible raycast catcher has no sprite, and is still both on screen and
+            // in the way of anything the pointer aims at behind it.
+            gameObject.AddComponent<CanvasRenderer>();
+            gameObject.AddComponent<Image>();
+
+            var component = ComponentsOf(gameObject).OfType<VisualComponent>().Single();
+
+            Assert.That(component.Kind, Is.EqualTo(VisualKind.Image));
+            Assert.That(component.SpriteName, Is.Null);
+        }
+
+        [Test]
+        public void Scan_ReportsASpriteRendererAsItsOwnKind()
+        {
+            gameObject.AddComponent<SpriteRenderer>().sprite = CreateSprite("goblin_idle");
+
+            var component = ComponentsOf(gameObject).OfType<VisualComponent>().Single();
+
+            Assert.That(component.Kind, Is.EqualTo(VisualKind.Sprite));
+            Assert.That(component.SpriteName, Is.EqualTo("goblin_idle"));
+        }
+
+        [Test]
+        public void Scan_GivesASpriteTheAreaItCoversRatherThanAPoint()
+        {
+            // A SpriteRenderer is not a RectTransform, and the point a plain Transform reports has
+            // no extent — nothing could be aimed at it.
+            var cameraObject = new GameObject("main camera", typeof(Camera)) { tag = "MainCamera" };
+            // Back from the origin, or the sprite sits on the near plane and projects as unusable.
+            cameraObject.transform.position = new Vector3(0f, 0f, -10f);
+            spawned.Add(cameraObject);
+            gameObject.AddComponent<SpriteRenderer>().sprite = CreateSprite("goblin_idle");
+
+            var block = new SceneScanner().Scan().Scene.Children
+                .Single(child => child.Name == gameObject.name);
+
+            Assert.That(block.Transform.OnScreen, Is.True);
+            Assert.That(block.Transform.ScreenRect.width, Is.GreaterThan(0f));
+            Assert.That(block.Transform.ScreenRect.height, Is.GreaterThan(0f));
+        }
+
+        private static Sprite CreateSprite(string name)
+        {
+            var texture = new Texture2D(32, 32);
+            var sprite = Sprite.Create(texture, new Rect(0f, 0f, 32f, 32f), new Vector2(0.5f, 0.5f));
+            sprite.name = name;
+            return sprite;
+        }
+
+        private static IReadOnlyList<SceneComponent> ComponentsOf(GameObject target)
+        {
+            return new SceneScanner().Scan().Scene.Children
+                .Single(child => child.Name == target.name)
+                .Components;
+        }
+
+        [Test]
         public void Scan_UsesUnitySceneAndGameObjectIdentifiers()
         {
             var scanner = new SceneScanner();

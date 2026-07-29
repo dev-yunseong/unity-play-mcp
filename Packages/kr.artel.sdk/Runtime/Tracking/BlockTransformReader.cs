@@ -28,7 +28,48 @@ namespace Artel.Tracking
         public BlockTransform Read(Transform transform)
         {
             var rectTransform = transform as RectTransform;
-            return rectTransform != null ? ReadRect(rectTransform) : ReadPoint(transform);
+            if (rectTransform != null)
+            {
+                return ReadRect(rectTransform);
+            }
+
+            // A sprite is not a RectTransform, so without this it would report a point and nothing
+            // could be aimed at it — the whole area it covers would be zero wide.
+            var renderer = transform.GetComponent<Renderer>();
+            return renderer != null ? ReadBounds(transform, renderer) : ReadPoint(transform);
+        }
+
+        private BlockTransform ReadBounds(Transform transform, Renderer renderer)
+        {
+            var world = transform.position;
+            if (sceneCamera == null)
+            {
+                return new BlockTransform(world, NoRect, false);
+            }
+
+            var bounds = renderer.bounds;
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+
+            // All eight corners rather than four: the bounds are a world-space box, and a rotated
+            // or perspective-projected one does not keep its front face as the outermost edge.
+            for (var corner = 0; corner < 8; corner++)
+            {
+                var point = sceneCamera.WorldToScreenPoint(new Vector3(
+                    (corner & 1) == 0 ? bounds.min.x : bounds.max.x,
+                    (corner & 2) == 0 ? bounds.min.y : bounds.max.y,
+                    (corner & 4) == 0 ? bounds.min.z : bounds.max.z));
+
+                if (IsBehind(sceneCamera, point))
+                {
+                    return new BlockTransform(world, NoRect, false);
+                }
+
+                min = Vector2.Min(min, point);
+                max = Vector2.Max(max, point);
+            }
+
+            return Build(world, min, max);
         }
 
         private BlockTransform ReadRect(RectTransform rectTransform)

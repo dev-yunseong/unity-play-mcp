@@ -5,26 +5,55 @@ namespace Artel
 {
     internal sealed class VirtualKeyboardState
     {
-        private readonly Dictionary<KeyCode, KeyClickState> clicks =
-            new Dictionary<KeyCode, KeyClickState>();
+        private readonly Dictionary<KeyCode, KeyPressState> presses =
+            new Dictionary<KeyCode, KeyPressState>();
 
         public void Click(KeyCode key, float durationSeconds, int currentFrame)
         {
-            clicks[key] = new KeyClickState(currentFrame + 1, durationSeconds);
+            presses[key] = new KeyPressState(currentFrame + 1, durationSeconds);
+        }
+
+        /// <summary>
+        /// Holds a key until <see cref="Release"/> asks for it back. A duration cannot express this:
+        /// the agent decides when to let go, often several actions later.
+        /// </summary>
+        public void Press(KeyCode key, int currentFrame)
+        {
+            presses[key] = new KeyPressState(currentFrame + 1, null);
+        }
+
+        /// <summary>
+        /// Releases on the frame after the request, matching where a press starts, so a consumer
+        /// polling in its own Update sees the release regardless of script execution order.
+        /// </summary>
+        public void Release(KeyCode key, int currentFrame)
+        {
+            if (presses.TryGetValue(key, out var state))
+            {
+                Release(state, currentFrame);
+            }
+        }
+
+        public void ReleaseAll(int currentFrame)
+        {
+            foreach (var state in presses.Values)
+            {
+                Release(state, currentFrame);
+            }
         }
 
         public bool GetKeyDown(KeyCode key, int frame, float time)
         {
             return TryGetState(key, frame, time, out var state) &&
                    state.StartFrame == frame &&
-                   !state.ReleaseFrame.HasValue;
+                   IsHeldOn(state, frame);
         }
 
         public bool GetKey(KeyCode key, int frame, float time)
         {
             return TryGetState(key, frame, time, out var state) &&
                    state.StartTime.HasValue &&
-                   !state.ReleaseFrame.HasValue;
+                   IsHeldOn(state, frame);
         }
 
         public bool GetKeyUp(KeyCode key, int frame, float time)
@@ -36,9 +65,9 @@ namespace Artel
         public bool AnyKey(int frame, float time)
         {
             Refresh(frame, time);
-            foreach (var state in clicks.Values)
+            foreach (var state in presses.Values)
             {
-                if (state.StartTime.HasValue && !state.ReleaseFrame.HasValue)
+                if (state.StartTime.HasValue && IsHeldOn(state, frame))
                 {
                     return true;
                 }
@@ -50,9 +79,9 @@ namespace Artel
         public bool AnyKeyDown(int frame, float time)
         {
             Refresh(frame, time);
-            foreach (var state in clicks.Values)
+            foreach (var state in presses.Values)
             {
-                if (state.StartFrame == frame && !state.ReleaseFrame.HasValue)
+                if (state.StartFrame == frame && IsHeldOn(state, frame))
                 {
                     return true;
                 }
@@ -64,7 +93,7 @@ namespace Artel
         public void Refresh(int frame, float time)
         {
             var expiredKeys = new List<KeyCode>();
-            foreach (var pair in clicks)
+            foreach (var pair in presses)
             {
                 Refresh(pair.Value, frame, time);
                 if (pair.Value.ReleaseFrame.HasValue && pair.Value.ReleaseFrame.Value < frame)
@@ -75,18 +104,28 @@ namespace Artel
 
             foreach (var key in expiredKeys)
             {
-                clicks.Remove(key);
+                presses.Remove(key);
             }
         }
 
         public void Clear()
         {
-            clicks.Clear();
+            presses.Clear();
         }
 
-        private bool TryGetState(KeyCode key, int frame, float time, out KeyClickState state)
+        private static void Release(KeyPressState state, int currentFrame)
         {
-            if (!clicks.TryGetValue(key, out state))
+            if (state.ReleaseFrame.HasValue)
+            {
+                return;
+            }
+
+            state.ReleaseFrame = currentFrame + 1;
+        }
+
+        private bool TryGetState(KeyCode key, int frame, float time, out KeyPressState state)
+        {
+            if (!presses.TryGetValue(key, out state))
             {
                 return false;
             }
@@ -95,7 +134,17 @@ namespace Artel
             return true;
         }
 
-        private static void Refresh(KeyClickState state, int frame, float time)
+        /// <summary>
+        /// A release scheduled for a later frame leaves the key down until that frame arrives. An
+        /// expired duration schedules the release on the current frame, so the same test reports
+        /// that key as already up.
+        /// </summary>
+        private static bool IsHeldOn(KeyPressState state, int frame)
+        {
+            return !state.ReleaseFrame.HasValue || frame < state.ReleaseFrame.Value;
+        }
+
+        private static void Refresh(KeyPressState state, int frame, float time)
         {
             if (frame < state.StartFrame || state.ReleaseFrame.HasValue)
             {
@@ -107,22 +156,30 @@ namespace Artel
                 state.StartTime = time;
             }
 
-            if (time >= state.StartTime.Value + state.DurationSeconds)
+            if (!state.DurationSeconds.HasValue)
+            {
+                return;
+            }
+
+            if (time >= state.StartTime.Value + state.DurationSeconds.Value)
             {
                 state.ReleaseFrame = frame;
             }
         }
 
-        private sealed class KeyClickState
+        private sealed class KeyPressState
         {
-            public KeyClickState(int startFrame, float durationSeconds)
+            public KeyPressState(int startFrame, float? durationSeconds)
             {
                 StartFrame = startFrame;
                 DurationSeconds = durationSeconds;
             }
 
             public int StartFrame { get; }
-            public float DurationSeconds { get; }
+
+            /// <summary>Null for a hold, which only an explicit release ends.</summary>
+            public float? DurationSeconds { get; }
+
             public float? StartTime { get; set; }
             public int? ReleaseFrame { get; set; }
         }

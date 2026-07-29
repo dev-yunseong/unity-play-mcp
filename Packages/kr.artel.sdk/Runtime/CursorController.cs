@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
@@ -41,36 +42,65 @@ namespace Artel
             }
         }
 
-        public IEnumerator MoveTo(RectTransform target)
+        public IEnumerator MoveTo(RectTransform target, Action<Vector2> moved)
         {
-            if (target == null || cursorTransform == null)
+            if (target == null)
             {
                 yield break;
             }
 
             var targetCenter = target.TransformPoint(target.rect.center);
-            var screenPosition = RectTransformUtility.WorldToScreenPoint(CanvasCamera.For(target), targetCenter);
+            yield return MoveTo(
+                RectTransformUtility.WorldToScreenPoint(CanvasCamera.For(target), targetCenter),
+                moved);
+        }
+
+        /// <summary>
+        /// Reports every intermediate position, not just the destination. A drag is made of the
+        /// positions along the way — a handler that only ever saw the endpoint would be watching
+        /// something teleport.
+        /// </summary>
+        /// <param name="glide">
+        /// Forces the travel even when smooth movement is off. A pointer move is the one case where
+        /// the path is the point: a held button turns it into a drag, and a jump from start to end
+        /// gives the game a single drag event to work out what happened from.
+        /// </param>
+        public IEnumerator MoveTo(Vector2 screenPosition, Action<Vector2> moved, bool glide = false)
+        {
+            if (cursorTransform == null)
+            {
+                yield break;
+            }
 
             cursorTransform.gameObject.SetActive(true);
             cursorTransform.SetAsLastSibling();
 
-            if (!smoothMovement || movementDurationSeconds <= 0f)
+            if ((!smoothMovement && !glide) || movementDurationSeconds <= 0f)
             {
-                cursorTransform.position = screenPosition;
+                PlaceCursor(screenPosition, moved);
                 yield break;
             }
 
-            var startPosition = cursorTransform.position;
+            var startPosition = (Vector2)cursorTransform.position;
             var elapsed = 0f;
             while (elapsed < movementDurationSeconds)
             {
                 elapsed += Time.unscaledDeltaTime;
                 var progress = Mathf.Clamp01(elapsed / movementDurationSeconds);
-                cursorTransform.position = Vector2.Lerp(startPosition, screenPosition, SmoothStep(progress));
+                PlaceCursor(Vector2.Lerp(startPosition, screenPosition, SmoothStep(progress)), moved);
                 yield return null;
             }
 
+            PlaceCursor(screenPosition, moved);
+        }
+
+        private void PlaceCursor(Vector2 screenPosition, Action<Vector2> moved)
+        {
             cursorTransform.position = screenPosition;
+            if (moved != null)
+            {
+                moved(screenPosition);
+            }
         }
 
         private static float SmoothStep(float value)

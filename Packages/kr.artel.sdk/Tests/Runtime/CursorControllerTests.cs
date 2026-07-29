@@ -28,7 +28,7 @@ namespace Artel.Tests
             var target = targetObject.GetComponent<RectTransform>();
             target.position = new Vector3(120f, 240f, 0f);
 
-            var movement = controller.MoveTo(target);
+            var movement = controller.MoveTo(target, null);
             while (movement.MoveNext())
             {
             }
@@ -56,7 +56,7 @@ namespace Artel.Tests
             });
             var scanner = new SceneScanner();
             scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller);
+            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             var execution = executor.Execute(
@@ -82,7 +82,7 @@ namespace Artel.Tests
             button.onClick.AddListener(() => clicked = true);
             var scanner = new SceneScanner();
             scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller);
+            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             Drain(executor.Execute(
@@ -112,7 +112,7 @@ namespace Artel.Tests
             field.interactable = false;
             var scanner = new SceneScanner();
             scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller);
+            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             Drain(executor.Execute(
@@ -143,7 +143,7 @@ namespace Artel.Tests
             field.interactable = false;
             var scanner = new SceneScanner();
             scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller);
+            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             Drain(executor.Execute(
