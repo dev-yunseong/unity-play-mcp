@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Artel.Capture;
 using Artel.Domain;
 using Artel.Protocol.Dto;
 using Artel.Serialization;
@@ -91,8 +92,15 @@ namespace Artel
                 gameObject.AddComponent<KeyboardStatusController>();
             }
 
-            actionExecutor = new ActionExecutor(scanner, cursorController);
             jsonCodec = new NewtonsoftJsonCodec();
+            actionExecutor = new ActionExecutor(
+                scanner,
+                cursorController,
+                new ScreenCapturer(),
+                // The key is read at upload time, not now: onboarding may still be waiting for the
+                // player to paste one, and a capture asked for before that should say so rather
+                // than upload with a stale value.
+                new CaptureUploader(jsonCodec, () => server, ReadInstanceKey));
             sceneStatePoller = new SceneStatePoller(
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
@@ -106,6 +114,11 @@ namespace Artel
 
             SdkId = ArtelSdkIdentity.LoadOrCreate();
             GameVersion = Application.version;
+        }
+
+        private static string ReadInstanceKey()
+        {
+            return ArtelInstanceKey.TryLoad(out var instanceKey) ? instanceKey : string.Empty;
         }
 
         private void OnEnable()

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using Artel.Capture;
 using Artel.Protocol.Dto;
 using UnityEngine;
 
@@ -11,11 +12,19 @@ namespace Artel
     {
         private readonly SceneScanner scanner;
         private readonly CursorController cursorController;
+        private readonly IScreenCapturer capturer;
+        private readonly ICaptureUploader uploader;
 
-        public ActionExecutor(SceneScanner scanner, CursorController cursorController)
+        public ActionExecutor(
+            SceneScanner scanner,
+            CursorController cursorController,
+            IScreenCapturer capturer = null,
+            ICaptureUploader uploader = null)
         {
             this.scanner = scanner;
             this.cursorController = cursorController;
+            this.capturer = capturer;
+            this.uploader = uploader;
         }
 
         public IEnumerator Execute(
@@ -39,6 +48,12 @@ namespace Artel
             if (method == "key_click")
             {
                 completed(ExecuteKeyClick(actionId, parameters));
+                yield break;
+            }
+
+            if (method == "capture_screen")
+            {
+                yield return ExecuteCaptureScreen(actionId, parameters, completed);
                 yield break;
             }
 
@@ -117,6 +132,83 @@ namespace Artel
             completed(target.EnterText(value)
                 ? ActionResultDto.Success(actionId)
                 : ActionResultDto.Failure(actionId, NotInteractable(targetId)));
+        }
+
+        /// <summary>
+        /// Captures the screen, or one element's area of it, and uploads it.
+        /// </summary>
+        /// <remarks>
+        /// Runs inside the same batch as the actions before it, so a capture asked for after a
+        /// click sees the screen that click produced — the ordering `scan_scene` already relies on.
+        /// </remarks>
+        private IEnumerator ExecuteCaptureScreen(
+            int actionId,
+            List<object> parameters,
+            Action<ActionResultDto> completed)
+        {
+            if (capturer == null || uploader == null)
+            {
+                completed(ActionResultDto.Failure(
+                    actionId, "This build cannot capture the screen."));
+                yield break;
+            }
+
+            if (!CaptureRequestReader.TryRead(parameters, out var request, out var paramsError))
+            {
+                completed(ActionResultDto.Failure(actionId, paramsError));
+                yield break;
+            }
+
+            Rect? pixelRect = null;
+            var clipped = false;
+            if (!request.IsFullScreen)
+            {
+                var targetId = request.TargetId.Value;
+                if (!scanner.TryGetTarget(targetId, out var target))
+                {
+                    completed(ActionResultDto.Failure(actionId, "Unknown target id: " + targetId));
+                    yield break;
+                }
+
+                var screen = new Rect(0f, 0f, Mathf.Max(2, Screen.width), Mathf.Max(2, Screen.height));
+                if (!CaptureRect.TryResolve(target.RectTransform, request.Padding, screen, out var region))
+                {
+                    completed(ActionResultDto.Failure(
+                        actionId, "Target is entirely off screen: " + targetId));
+                    yield break;
+                }
+
+                pixelRect = region.PixelRect;
+                clipped = region.Clipped;
+            }
+
+            var image = default(CapturedImage);
+            yield return capturer.Capture(request, pixelRect, captured => image = captured);
+            if (!image.IsSuccess)
+            {
+                completed(ActionResultDto.Failure(actionId, image.Error));
+                yield break;
+            }
+
+            var upload = default(CaptureUpload);
+            yield return uploader.Upload(image, request, uploaded => upload = uploaded);
+            if (!upload.IsSuccess)
+            {
+                completed(ActionResultDto.Failure(actionId, upload.Error));
+                yield break;
+            }
+
+            completed(ActionResultDto.Success(actionId, new CaptureResultDto
+            {
+                CaptureId = upload.CaptureId,
+                Url = upload.Url,
+                ExpiresAt = upload.ExpiresAt,
+                MimeType = request.ContentType,
+                Width = image.Width,
+                Height = image.Height,
+                TargetId = request.TargetId,
+                Clipped = clipped
+            }));
         }
 
         private static string NotInteractable(int targetId)
