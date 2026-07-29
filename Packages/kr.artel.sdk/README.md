@@ -318,9 +318,17 @@ ways:
   the engine picks a collider from the OS cursor itself, and the legacy input
   backend accepts no injected values. Most 2D Unity games are built on them, so
   without this the agent cannot touch such a game at all. Picking follows the
-  engine's own rules — `Camera.eventMask`, `Physics2D.queriesHitTriggers`, 2D
-  colliders before 3D — and `OnMouseDrag` keeps going to the object the press
-  started on even after the pointer leaves it.
+  engine's own rules: a ray from `Camera.main` filtered by `Camera.eventMask`,
+  the nearest hit of 2D and 3D, and one object rather than everything under the
+  pointer. `OnMouseDrag` keeps going to the object the press started on even
+  after the pointer leaves it.
+
+  Matching the engine is the point, including where it fails. A collider the
+  engine cannot pick is one a person cannot click, and an agent that reaches it
+  anyway would report a game working when it does not. Two gaps follow from
+  this: a scene that renders interactive objects through a camera other than
+  `Camera.main` is not covered, and overlapping sprites at the same depth are
+  resolved by ray distance, which is not the order they are drawn in.
 
   They run only while the agent holds the pointer. The engine goes on sending its
   own from the real cursor, and both at once would deliver everything twice.

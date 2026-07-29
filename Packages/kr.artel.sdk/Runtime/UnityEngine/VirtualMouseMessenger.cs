@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using global::UnityEngine;
 
 namespace Artel
@@ -30,7 +29,6 @@ namespace Artel
         private const string MouseUp = "OnMouseUp";
         private const string MouseUpAsButton = "OnMouseUpAsButton";
 
-        private readonly List<Collider2D> overlapping = new List<Collider2D>();
         private readonly RaycastHit[] spatialHits = new RaycastHit[8];
 
         private GameObject hovered;
@@ -108,13 +106,20 @@ namespace Artel
         }
 
         /// <summary>
-        /// The nearest collider under the pointer, in the layers the camera answers events for.
+        /// The one object the engine would deliver to: the nearest hit along a ray from the camera,
+        /// 2D and 3D compared on the same distance, filtered by <see cref="Camera.eventMask"/>.
         /// </summary>
         /// <remarks>
-        /// <see cref="Camera.eventMask"/> rather than the culling mask, and rather than any
-        /// raycaster component: it is the mask the engine itself filters these messages by. The 2D
-        /// overlap runs first because a 2D collider sits on a plane a ray can miss entirely when the
-        /// sprite is nearer than the camera's near clip.
+        /// A ray rather than a 2D overlap test, even though an overlap would find sprites a ray can
+        /// miss. Matching the engine matters more than reaching more: something the engine cannot
+        /// pick is something a person cannot click, and an agent that clicks it anyway reports a
+        /// game working when it does not.
+        /// <para>
+        /// One target, not everything under the pointer — the engine picks a single hit and sends
+        /// to it, which is why a game with overlapping sprites at the same depth resolves the
+        /// ambiguity itself. Only <c>Camera.main</c> is consulted; the engine walks every camera,
+        /// so a scene that renders interactive objects through a second one is not covered.
+        /// </para>
         /// </remarks>
         private GameObject Pick(Vector2 screenPosition)
         {
@@ -124,65 +129,20 @@ namespace Artel
                 return null;
             }
 
-            var world = camera.ScreenToWorldPoint(screenPosition);
-            overlapping.Clear();
-            Physics2D.OverlapPoint(
-                world,
-                new ContactFilter2D
-                {
-                    useTriggers = Physics2D.queriesHitTriggers,
-                    useLayerMask = true,
-                    layerMask = camera.eventMask,
-                    useDepth = false
-                },
-                overlapping);
-
-            var nearest = Nearest(overlapping, camera);
-            if (nearest != null)
-            {
-                return nearest;
-            }
+            var ray = camera.ScreenPointToRay(screenPosition);
+            var flat = Physics2D.GetRayIntersection(ray, camera.farClipPlane, camera.eventMask);
 
             var hitCount = Physics.RaycastNonAlloc(
-                camera.ScreenPointToRay(screenPosition),
-                spatialHits,
-                camera.farClipPlane,
-                camera.eventMask);
+                ray, spatialHits, camera.farClipPlane, camera.eventMask);
 
-            var closest = float.MaxValue;
-            GameObject spatial = null;
+            var closest = flat.collider == null ? float.MaxValue : flat.distance;
+            var nearest = flat.collider == null ? null : flat.collider.gameObject;
             for (var index = 0; index < hitCount; index++)
             {
                 if (spatialHits[index].distance < closest)
                 {
                     closest = spatialHits[index].distance;
-                    spatial = spatialHits[index].collider.gameObject;
-                }
-            }
-
-            return spatial;
-        }
-
-        /// <summary>
-        /// Nearest to the camera, since overlap results come in no particular order and the engine
-        /// delivers to whatever is in front.
-        /// </summary>
-        private static GameObject Nearest(List<Collider2D> candidates, Camera camera)
-        {
-            var closest = float.MaxValue;
-            GameObject nearest = null;
-            foreach (var candidate in candidates)
-            {
-                if (candidate == null || !candidate.enabled)
-                {
-                    continue;
-                }
-
-                var distance = camera.transform.InverseTransformPoint(candidate.transform.position).z;
-                if (distance < closest)
-                {
-                    closest = distance;
-                    nearest = candidate.gameObject;
+                    nearest = spatialHits[index].collider.gameObject;
                 }
             }
 
