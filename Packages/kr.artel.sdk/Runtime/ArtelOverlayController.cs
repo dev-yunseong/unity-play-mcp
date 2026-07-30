@@ -8,7 +8,7 @@ using UnityEngine.UI;
 namespace Artel
 {
     [RequireComponent(typeof(ArtelManager))]
-    public sealed class ArtelOnboardingController : MonoBehaviour
+    public sealed class ArtelOverlayController : MonoBehaviour
     {
         private const int InstanceKeyCharacterLimit = 24;
 
@@ -35,7 +35,7 @@ namespace Artel
         private Text coverProgressText;
         private bool appliedShowPanel;
         private bool registrationRunning;
-        private ArtelOnboardingViewModel viewModel;
+        private ArtelOverlayViewModel viewModel;
 
         private void Awake()
         {
@@ -44,7 +44,7 @@ namespace Artel
                 artelManager = GetComponent<ArtelManager>();
             }
 
-            viewModel = new ArtelOnboardingViewModel(
+            viewModel = new ArtelOverlayViewModel(
                 new ArtelSdkRegistrationClient(new NewtonsoftJsonCodec()));
             viewModel.Changed += RefreshView;
         }
@@ -165,7 +165,7 @@ namespace Artel
 
         private void CreateGui()
         {
-            canvasObject = new GameObject("Artel Onboarding Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            canvasObject = new GameObject("Artel Overlay Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             // Parented to the manager so it rides along across scene loads. Left at
             // the scene root it is destroyed with that scene, and this controller —
             // which does survive — would be left holding a destroyed canvas and
@@ -187,7 +187,7 @@ namespace Artel
             AnchorTopRight(toggleButton.GetComponent<RectTransform>(), new Vector2(-24f, -24f));
             toggleButton.onClick.AddListener(() => panelObject.SetActive(!panelObject.activeSelf));
 
-            panelObject = new GameObject("Onboarding Panel", typeof(RectTransform), typeof(Image));
+            panelObject = new GameObject("Artel Panel", typeof(RectTransform), typeof(Image));
             panelObject.transform.SetParent(canvasObject.transform, false);
             panelObject.GetComponent<Image>().color = PanelColor;
             var panelRect = panelObject.GetComponent<RectTransform>();
@@ -231,7 +231,7 @@ namespace Artel
             // sortingOrder가 short.MaxValue - 1이라 게임 쪽 캔버스보다도 위다. 정렬 순서
             // 상수를 건드리지 않고 화면을 덮기 위해 여기에 붙인다. 위에 남는 것은 가상
             // 커서 캔버스(short.MaxValue)뿐인데, 커서는 보이는 편이 맞다.
-            coverObject = new GameObject("Scan Cover", typeof(RectTransform), typeof(Image));
+            coverObject = new GameObject("Artel Overlay Cover", typeof(RectTransform), typeof(Image));
             coverObject.transform.SetParent(canvasObject.transform, false);
 
             // raycastTarget이 켜진 채라 덮인 게임 UI로 클릭이 새지 않는다.

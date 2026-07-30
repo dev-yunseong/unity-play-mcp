@@ -6,17 +6,17 @@ using UnityEngine.Networking;
 
 namespace Artel
 {
-    internal sealed class ArtelOnboardingViewModel
+    internal sealed class ArtelOverlayViewModel
     {
         private const long NotFoundStatusCode = 404;
 
         private readonly ArtelSdkRegistrationClient registrationClient;
         private string keyInput = string.Empty;
 
-        public ArtelOnboardingViewModel(ArtelSdkRegistrationClient registrationClient)
+        public ArtelOverlayViewModel(ArtelSdkRegistrationClient registrationClient)
         {
             this.registrationClient = registrationClient ?? throw new ArgumentNullException(nameof(registrationClient));
-            State = ArtelOnboardingState.NeedsKey;
+            State = ArtelConnectionState.NeedsKey;
             ShowPanel = true;
             Status = "대시보드에서 발급받은 인스턴스 키를 입력해 주세요.";
         }
@@ -24,7 +24,7 @@ namespace Artel
         public event Action Changed;
 
         public string Status { get; private set; }
-        public ArtelOnboardingState State { get; private set; }
+        public ArtelConnectionState State { get; private set; }
         public bool ShowPanel { get; private set; }
         public bool HasStoredKey { get; private set; }
 
@@ -46,12 +46,12 @@ namespace Artel
 
         public bool CanRegister
         {
-            get { return State != ArtelOnboardingState.Registering && !string.IsNullOrWhiteSpace(keyInput); }
+            get { return State != ArtelConnectionState.Registering && !string.IsNullOrWhiteSpace(keyInput); }
         }
 
         public bool CanConnect
         {
-            get { return State != ArtelOnboardingState.Registering && HasStoredKey; }
+            get { return State != ArtelConnectionState.Registering && HasStoredKey; }
         }
 
         /// <summary>
@@ -75,7 +75,7 @@ namespace Artel
                 Status = "대시보드에서 발급받은 인스턴스 키를 입력해 주세요.";
             }
 
-            State = ArtelOnboardingState.NeedsKey;
+            State = ArtelConnectionState.NeedsKey;
             NotifyChanged();
         }
 
@@ -87,7 +87,7 @@ namespace Artel
             Action connect,
             SceneScanReportDto sceneScan = null)
         {
-            if (State == ArtelOnboardingState.Registering)
+            if (State == ArtelConnectionState.Registering)
             {
                 yield break;
             }
@@ -108,7 +108,7 @@ namespace Artel
             }
 
             KeyInput = trimmedKey;
-            State = ArtelOnboardingState.Registering;
+            State = ArtelConnectionState.Registering;
             SetStatus("인스턴스 키를 등록하는 중...");
 
             UnityWebRequest request;
@@ -152,7 +152,7 @@ namespace Artel
 
             ArtelInstanceKey.Save(trimmedKey);
             HasStoredKey = true;
-            State = ArtelOnboardingState.Connecting;
+            State = ArtelConnectionState.Connecting;
             SetStatus("등록에 성공했습니다. 실시간 서버에 연결하는 중...");
             Connect(connect);
         }
@@ -172,12 +172,12 @@ namespace Artel
             try
             {
                 connect();
-                State = ArtelOnboardingState.Connected;
+                State = ArtelConnectionState.Connected;
                 SetStatus("실시간 서버 연결을 시작했습니다.");
             }
             catch (Exception exception)
             {
-                State = ArtelOnboardingState.NeedsKey;
+                State = ArtelConnectionState.NeedsKey;
                 ShowPanel = true;
                 SetStatus("연결 실패: " + exception.Message);
             }
@@ -188,14 +188,14 @@ namespace Artel
             ArtelInstanceKey.Clear();
             HasStoredKey = false;
             keyInput = string.Empty;
-            State = ArtelOnboardingState.NeedsKey;
+            State = ArtelConnectionState.NeedsKey;
             ShowPanel = true;
             SetStatus("저장된 인스턴스 키를 지웠습니다.");
         }
 
         private void FailRegistration(string status)
         {
-            State = ArtelOnboardingState.NeedsKey;
+            State = ArtelConnectionState.NeedsKey;
             ShowPanel = true;
             SetStatus(status);
         }

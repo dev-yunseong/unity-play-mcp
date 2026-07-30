@@ -1,6 +1,6 @@
 namespace Artel
 {
-    internal enum ArtelOnboardingState
+    internal enum ArtelConnectionState
     {
         NeedsKey,
         Registering,
