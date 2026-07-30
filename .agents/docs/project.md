@@ -26,12 +26,40 @@ Fill this document during project initialization. Agents must verify commands ag
 | Format | TODO |
 | Lint | TODO |
 | Type-check | TODO |
-| Unit tests | TODO |
+| Unit tests | See `## Running package tests` below |
 | Integration tests | TODO |
 | Build | TODO |
 | Install Notion CLI | `curl -fsSL https://ntn.dev \| bash` |
 | Verify Notion CLI auth | `ntn whoami` |
 | Set up Jira credentials | `cp .jira.env.example .jira.env` |
+
+## Running package tests
+
+The repository root is not a Unity project — the only one is the `samples/WordVenture`
+submodule, and its `Packages/manifest.json` has no `testables` entry, so the Test Runner
+does not discover `Packages/kr.artel.sdk/Tests` there. Create a throwaway project that
+declares the package as a testable and run against that:
+
+```bash
+/Applications/Unity/Hub/Editor/2022.3.34f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -runTests -testPlatform EditMode \
+  -projectPath <throwaway-project> \
+  -testResults results.xml -logFile unity.log
+```
+
+The throwaway project needs `ProjectSettings/ProjectVersion.txt`
+(`m_EditorVersion: 2022.3.34f1`) and a `Packages/manifest.json` carrying the package's own
+dependencies from its `package.json`, every `com.unity.modules.*` the runtime touches
+(`physics` is required — `VirtualMouseMessenger` uses `RaycastHit`), a `file:` reference to
+`Packages/kr.artel.sdk`, and `"testables": ["kr.artel.sdk"]`.
+
+Exit code 2 means tests ran and some failed; parse `results.xml` rather than reading the
+exit code alone. Eight EditMode tests fail in a bare throwaway project for environmental
+reasons, not regressions: three `ActionBatchTests` and
+`ArtelManager_CreatesOverlayGuiAutomatically` call `DontDestroyOnLoad`, which is play-mode
+only; two `CursorControllerTests` and `SerializedFieldReaderTests` throw; and
+`CreateReport_ListsBuildScenesAndScansThem` finds no build scenes. Take a baseline on the
+merge-base commit before attributing any failure to a change.
 
 Notion access goes through the `ntn` CLI. Agents follow
 `.agents/skills/notion-cli/SKILL.md`, which Claude Code reaches through the
