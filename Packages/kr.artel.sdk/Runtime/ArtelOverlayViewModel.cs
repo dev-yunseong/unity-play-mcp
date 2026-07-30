@@ -26,6 +26,12 @@ namespace Artel
         public string Status { get; private set; }
         public ArtelConnectionState State { get; private set; }
         public bool ShowPanel { get; private set; }
+
+        /// <summary>
+        /// True while <see cref="Status"/> describes a failure. The failing statuses share no
+        /// prefix — one of them has none at all — so substring matching cannot stand in for this.
+        /// </summary>
+        public bool HasError { get; private set; }
         public bool HasStoredKey { get; private set; }
 
         public string KeyInput
@@ -76,6 +82,7 @@ namespace Artel
             }
 
             State = ArtelConnectionState.NeedsKey;
+            HasError = false;
             NotifyChanged();
         }
 
@@ -109,6 +116,7 @@ namespace Artel
 
             KeyInput = trimmedKey;
             State = ArtelConnectionState.Registering;
+            HasError = false;
             SetStatus("인스턴스 키를 등록하는 중...");
 
             UnityWebRequest request;
@@ -152,6 +160,7 @@ namespace Artel
 
             ArtelInstanceKey.Save(trimmedKey);
             HasStoredKey = true;
+            HasError = false;
             State = ArtelConnectionState.Connecting;
             SetStatus("등록에 성공했습니다. 실시간 서버에 연결하는 중...");
             Connect(connect);
@@ -173,12 +182,14 @@ namespace Artel
             {
                 connect();
                 State = ArtelConnectionState.Connected;
+                HasError = false;
                 SetStatus("실시간 서버 연결을 시작했습니다.");
             }
             catch (Exception exception)
             {
                 State = ArtelConnectionState.NeedsKey;
                 ShowPanel = true;
+                HasError = true;
                 SetStatus("연결 실패: " + exception.Message);
             }
         }
@@ -190,6 +201,7 @@ namespace Artel
             keyInput = string.Empty;
             State = ArtelConnectionState.NeedsKey;
             ShowPanel = true;
+            HasError = false;
             SetStatus("저장된 인스턴스 키를 지웠습니다.");
         }
 
@@ -197,6 +209,7 @@ namespace Artel
         {
             State = ArtelConnectionState.NeedsKey;
             ShowPanel = true;
+            HasError = true;
             SetStatus(status);
         }
 

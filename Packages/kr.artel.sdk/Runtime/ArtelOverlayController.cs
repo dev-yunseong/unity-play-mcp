@@ -12,13 +12,29 @@ namespace Artel
     {
         private const int InstanceKeyCharacterLimit = 24;
 
-        private static readonly Color PanelColor = new Color(0.08f, 0.09f, 0.12f, 0.94f);
+        // artel-home의 src/styles/tokens.css에서 가져온 값. CSS를 C#으로 자동 동기화할
+        // 수단이 없으므로, 16진 리터럴로 적어 두는 것이 원본과 대조하는 유일한 방법이다.
+        // Color32를 쓰는 이유는 컴파일 타임에 걸리기 때문이다. ColorUtility로 파싱하면
+        // 오타가 런타임에 조용히 잘못된 색이 된다.
+        private static readonly Color BgSurface = new Color32(0x10, 0x15, 0x1B, 0xFF);
+        private static readonly Color BgRaised = new Color32(0x17, 0x1D, 0x25, 0xFF);
+        private static readonly Color BorderStrong = new Color32(0x3B, 0x48, 0x57, 0xFF);
+        private static readonly Color TextPrimary = new Color32(0xF4, 0xF7, 0xFA, 0xFF);
+        private static readonly Color TextSecondary = new Color32(0xA7, 0xB0, 0xBC, 0xFF);
+        private static readonly Color TextMuted = new Color32(0x70, 0x7B, 0x88, 0xFF);
+        private static readonly Color ActionPrimary = new Color32(0x24, 0xC7, 0xE8, 0xFF);
+        private static readonly Color StatusCritical = new Color32(0xFF, 0x63, 0x4F, 0xFF);
+        private static readonly Color StatusSuccess = new Color32(0x48, 0xC7, 0x8E, 0xFF);
+
+        // --color-bg-canvas. primary 버튼의 글자색이기도 하다. #24C7E8이 밝아서 흰 글자는
+        // 대비 기준을 넘지 못한다. artel-home의 .button--primary도 같은 이유로
+        // color: var(--color-bg-canvas)를 쓴다.
+        private static readonly Color BgCanvas = new Color32(0x09, 0x0C, 0x10, 0xFF);
 
         // 덮개는 뒤를 비추면 안 된다. 알파가 1보다 작으면 가리려던 씬 전환이 그대로 비친다.
-        private static readonly Color CoverColor = new Color(0.05f, 0.06f, 0.08f, 1f);
-        private static readonly Color ButtonColor = new Color(0.18f, 0.45f, 0.85f, 1f);
-        private static readonly Color FieldColor = new Color(0.16f, 0.18f, 0.24f, 1f);
-        private static readonly Color PlaceholderColor = new Color(0.62f, 0.65f, 0.72f, 1f);
+        // 그래서 --color-overlay-scrim(72%)이나 -stream(88%)을 쓸 수 없고 BgCanvas를
+        // 알파 1로 쓴다.
+        private static readonly Color CoverColor = BgCanvas;
 
         [SerializeField] private ArtelManager artelManager;
 
@@ -189,7 +205,7 @@ namespace Artel
 
             panelObject = new GameObject("Artel Panel", typeof(RectTransform), typeof(Image));
             panelObject.transform.SetParent(canvasObject.transform, false);
-            panelObject.GetComponent<Image>().color = PanelColor;
+            panelObject.GetComponent<Image>().color = BgSurface;
             var panelRect = panelObject.GetComponent<RectTransform>();
             panelRect.anchorMin = new Vector2(1f, 1f);
             panelRect.anchorMax = new Vector2(1f, 1f);
@@ -207,11 +223,11 @@ namespace Artel
             SetRect(instanceKeyField.GetComponent<RectTransform>(), new Vector2(20f, -58f), new Vector2(400f, 44f));
             instanceKeyField.onValueChanged.AddListener(value => viewModel.KeyInput = value);
 
-            registerButton = CreateButton(panelObject.transform, "등록", new Vector2(400f, 44f));
+            registerButton = CreateButton(panelObject.transform, "등록", new Vector2(400f, 44f), primary: true);
             SetRect(registerButton.GetComponent<RectTransform>(), new Vector2(20f, -110f), new Vector2(400f, 44f));
             registerButton.onClick.AddListener(RegisterInstanceKey);
 
-            statusText = CreateText(panelObject.transform, string.Empty, 15, TextAnchor.UpperLeft);
+            statusText = CreateText(panelObject.transform, string.Empty, 15, TextAnchor.UpperLeft, TextSecondary);
             SetRect(statusText.rectTransform, new Vector2(20f, -162f), new Vector2(400f, 66f));
 
             var advancedButton = CreateButton(panelObject.transform, "고급", new Vector2(400f, 34f));
@@ -249,14 +265,16 @@ namespace Artel
                 coverObject.transform,
                 "게임 화면을 분석하는 중입니다. 잠시만 기다려 주세요.",
                 20,
-                TextAnchor.MiddleCenter);
+                TextAnchor.MiddleCenter,
+                TextSecondary);
             CenterRect(message.rectTransform, new Vector2(0f, 4f), new Vector2(900f, 32f));
 
-            coverProgressText = CreateText(coverObject.transform, string.Empty, 18, TextAnchor.MiddleCenter);
+            coverProgressText = CreateText(
+                coverObject.transform, string.Empty, 18, TextAnchor.MiddleCenter, TextMuted);
             CenterRect(coverProgressText.rectTransform, new Vector2(0f, -34f), new Vector2(900f, 28f));
 
-            coverStatusText = CreateText(coverObject.transform, string.Empty, 16, TextAnchor.MiddleCenter);
-            coverStatusText.color = PlaceholderColor;
+            coverStatusText = CreateText(
+                coverObject.transform, string.Empty, 16, TextAnchor.MiddleCenter, TextMuted);
             CenterRect(coverStatusText.rectTransform, new Vector2(0f, -70f), new Vector2(900f, 28f));
 
             coverObject.SetActive(false);
@@ -305,6 +323,8 @@ namespace Artel
             }
 
             statusText.text = viewModel.Status;
+            // 실패를 문장으로만 알리면 눈에 걸리지 않는다.
+            statusText.color = StatusColor();
             coverStatusText.text = viewModel.Status;
             registerButton.interactable = viewModel.CanRegister;
             connectButton.interactable = viewModel.CanConnect;
@@ -316,7 +336,18 @@ namespace Artel
             }
         }
 
-        private static InputField CreateInputField(Transform parent, string placeholderLabel, int characterLimit)
+        private Color StatusColor()
+        {
+            if (viewModel.State == ArtelConnectionState.Connected)
+            {
+                return StatusSuccess;
+            }
+
+            return viewModel.HasError ? StatusCritical : TextSecondary;
+        }
+
+        private static InputField CreateInputField(
+            Transform parent, string placeholderLabel, int characterLimit, int fontSize = 18)
         {
             var fieldObject = new GameObject(
                 "인스턴스 키 InputField",
@@ -324,17 +355,25 @@ namespace Artel
                 typeof(Image),
                 typeof(InputField));
             fieldObject.transform.SetParent(parent, false);
-            var background = fieldObject.GetComponent<Image>();
-            background.color = FieldColor;
 
-            var text = CreateText(fieldObject.transform, string.Empty, 18, TextAnchor.MiddleLeft);
+            // 테두리는 겉 Image, 배경은 1유닛 들여 깐 자식 Image. 텍스트 자식들을 이 뒤에
+            // 만들어야 배경 위에 그려진다.
+            var background = fieldObject.GetComponent<Image>();
+            background.color = BorderStrong;
+            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+            fill.transform.SetParent(fieldObject.transform, false);
+            fill.GetComponent<Image>().color = BgRaised;
+            Inset(fill.GetComponent<RectTransform>(), 1f);
+
+            var text = CreateText(fieldObject.transform, string.Empty, fontSize, TextAnchor.MiddleLeft);
             text.name = "Text";
             text.supportRichText = false;
             StretchInside(text.rectTransform);
 
-            var placeholder = CreateText(fieldObject.transform, placeholderLabel, 16, TextAnchor.MiddleLeft);
+            var placeholder = CreateText(
+                fieldObject.transform, placeholderLabel, fontSize - 2, TextAnchor.MiddleLeft);
             placeholder.name = "Placeholder";
-            placeholder.color = PlaceholderColor;
+            placeholder.color = TextMuted;
             placeholder.fontStyle = FontStyle.Italic;
             StretchInside(placeholder.rectTransform);
 
@@ -348,14 +387,36 @@ namespace Artel
             return inputField;
         }
 
-        private static Button CreateButton(Transform parent, string label, Vector2 size)
+        // primary는 화면에서 지금 눌러야 하는 버튼 하나에만 쓴다. 나머지는 secondary로
+        // 물러나 있어야 그 하나가 눈에 띈다. artel-home의 .button--primary /
+        // .button--secondary와 같은 구분이다.
+        private static Button CreateButton(Transform parent, string label, Vector2 size, bool primary = false)
         {
             var buttonObject = new GameObject(label + " Button", typeof(RectTransform), typeof(Image), typeof(Button));
             buttonObject.transform.SetParent(parent, false);
             buttonObject.GetComponent<RectTransform>().sizeDelta = size;
-            buttonObject.GetComponent<Image>().color = ButtonColor;
 
-            var text = CreateText(buttonObject.transform, label, 17, TextAnchor.MiddleCenter);
+            if (primary)
+            {
+                buttonObject.GetComponent<Image>().color = ActionPrimary;
+            }
+            else
+            {
+                // 테두리는 겉 Image를 테두리색으로 두고 안쪽에 배경색 Image를 1유닛 들여
+                // 깔아 낸다. uGUI Image에는 테두리 속성이 없다.
+                buttonObject.GetComponent<Image>().color = BorderStrong;
+                var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+                fill.transform.SetParent(buttonObject.transform, false);
+                fill.GetComponent<Image>().color = BgRaised;
+                Inset(fill.GetComponent<RectTransform>(), 1f);
+            }
+
+            var text = CreateText(
+                buttonObject.transform,
+                label,
+                17,
+                TextAnchor.MiddleCenter,
+                primary ? BgCanvas : TextPrimary);
             text.rectTransform.anchorMin = Vector2.zero;
             text.rectTransform.anchorMax = Vector2.one;
             text.rectTransform.offsetMin = Vector2.zero;
@@ -363,7 +424,16 @@ namespace Artel
             return buttonObject.GetComponent<Button>();
         }
 
-        private static Text CreateText(Transform parent, string value, int fontSize, TextAnchor alignment)
+        private static void Inset(RectTransform rectTransform, float amount)
+        {
+            rectTransform.anchorMin = Vector2.zero;
+            rectTransform.anchorMax = Vector2.one;
+            rectTransform.offsetMin = new Vector2(amount, amount);
+            rectTransform.offsetMax = new Vector2(-amount, -amount);
+        }
+
+        private static Text CreateText(
+            Transform parent, string value, int fontSize, TextAnchor alignment, Color? color = null)
         {
             var textObject = new GameObject("Text", typeof(RectTransform), typeof(Text));
             textObject.transform.SetParent(parent, false);
@@ -371,7 +441,7 @@ namespace Artel
             text.text = value;
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.fontSize = fontSize;
-            text.color = Color.white;
+            text.color = color ?? TextPrimary;
             text.alignment = alignment;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Truncate;
@@ -388,7 +458,7 @@ namespace Artel
             var backgroundRect = backgroundObject.GetComponent<RectTransform>();
             SetRect(backgroundRect, Vector2.zero, new Vector2(28f, 28f));
             var background = backgroundObject.GetComponent<Image>();
-            background.color = new Color(0.22f, 0.24f, 0.3f, 1f);
+            background.color = BgRaised;
 
             var checkmarkObject = new GameObject("Checkmark", typeof(RectTransform), typeof(Image));
             checkmarkObject.transform.SetParent(backgroundObject.transform, false);
@@ -398,7 +468,7 @@ namespace Artel
             checkmarkRect.offsetMin = Vector2.zero;
             checkmarkRect.offsetMax = Vector2.zero;
             var checkmark = checkmarkObject.GetComponent<Image>();
-            checkmark.color = ButtonColor;
+            checkmark.color = ActionPrimary;
 
             var text = CreateText(toggleObject.transform, label, 16, TextAnchor.MiddleLeft);
             SetRect(text.rectTransform, new Vector2(40f, 0f), new Vector2(180f, 28f));
