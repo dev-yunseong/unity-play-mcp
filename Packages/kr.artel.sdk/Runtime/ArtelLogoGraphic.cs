@@ -9,6 +9,18 @@ namespace Artel
         internal static readonly Color32 Charcoal = new Color32(0x20, 0x23, 0x2B, 0xFF);
         internal static readonly Color32 Coral = new Color32(0xF0, 0x4B, 0x3A, 0xFF);
 
+        private Color32 bodyColor = Charcoal;
+
+        public Color32 BodyColor
+        {
+            get => bodyColor;
+            set
+            {
+                bodyColor = value;
+                SetVerticesDirty();
+            }
+        }
+
         private const float StrokeWidth = 9f;
         private static readonly Vector2[] BodyPoints =
         {
@@ -24,7 +36,7 @@ namespace Artel
         {
             vertexHelper.Clear();
 
-            AddPolyline(vertexHelper, BodyPoints, Charcoal);
+            AddPolyline(vertexHelper, BodyPoints, bodyColor);
             AddStroke(vertexHelper, new Vector2(36f, 56f), new Vector2(52f, 46f), Coral);
         }
 

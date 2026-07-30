@@ -16,10 +16,13 @@ namespace Artel.Tests.Transport
     {
         private const string PlayerPrefsKey = "Artel.SdkId";
         private const string InstanceKeyPlayerPrefsKey = "Artel.InstanceKey";
+        private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
         private string originalSdkId;
         private bool hadOriginalSdkId;
         private string originalInstanceKey;
         private bool hadOriginalInstanceKey;
+        private int originalDarkTheme;
+        private bool hadOriginalDarkTheme;
 
         [SetUp]
         public void SetUp()
@@ -28,7 +31,10 @@ namespace Artel.Tests.Transport
             originalSdkId = PlayerPrefs.GetString(PlayerPrefsKey);
             hadOriginalInstanceKey = PlayerPrefs.HasKey(InstanceKeyPlayerPrefsKey);
             originalInstanceKey = PlayerPrefs.GetString(InstanceKeyPlayerPrefsKey);
+            hadOriginalDarkTheme = PlayerPrefs.HasKey(DarkThemePlayerPrefsKey);
+            originalDarkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey);
             PlayerPrefs.DeleteKey(InstanceKeyPlayerPrefsKey);
+            PlayerPrefs.DeleteKey(DarkThemePlayerPrefsKey);
         }
 
         [TearDown]
@@ -50,6 +56,15 @@ namespace Artel.Tests.Transport
             else
             {
                 PlayerPrefs.DeleteKey(InstanceKeyPlayerPrefsKey);
+            }
+
+            if (hadOriginalDarkTheme)
+            {
+                PlayerPrefs.SetInt(DarkThemePlayerPrefsKey, originalDarkTheme);
+            }
+            else
+            {
+                PlayerPrefs.DeleteKey(DarkThemePlayerPrefsKey);
             }
 
             PlayerPrefs.Save();
@@ -323,7 +338,8 @@ namespace Artel.Tests.Transport
                 var canvas = GameObject.Find("Artel Overlay Canvas");
                 Assert.That(canvas, Is.Not.Null);
                 var buttons = canvas.GetComponentsInChildren<Button>(true);
-                var smoothCursorToggle = canvas.GetComponentInChildren<Toggle>(true);
+                var toggles = canvas.GetComponentsInChildren<Toggle>(true);
+                var smoothCursorToggle = Array.Find(toggles, toggle => toggle.name == "부드러운 커서 Toggle");
                 var instanceKeyField = canvas.GetComponentInChildren<InputField>(true);
                 var registerButton = Array.Find(buttons, button => button.name == "등록 Button");
                 var connectButton = Array.Find(buttons, button => button.name == "연결 Button");
@@ -341,7 +357,8 @@ namespace Artel.Tests.Transport
                 Assert.That(connectButton.interactable, Is.False);
                 Assert.That(smoothCursorToggle, Is.Not.Null);
                 Assert.That(smoothCursorToggle.isOn, Is.False);
-                Assert.That(canvas.GetComponentsInChildren<ArtelLogoGraphic>(true), Has.Length.EqualTo(2));
+                Assert.That(Array.Find(toggles, toggle => toggle.name == "다크 모드 Toggle"), Is.Not.Null);
+                Assert.That(canvas.GetComponentsInChildren<ArtelLogoGraphic>(true), Has.Length.EqualTo(3));
             }
             finally
             {
@@ -532,11 +549,44 @@ namespace Artel.Tests.Transport
                 var checkmark = canvas.transform.Find("Artel Panel/Advanced Section/부드러운 커서 Toggle/Background/Checkmark")
                     .GetComponent<Image>();
 
-                Assert.That(logos, Has.Length.EqualTo(2));
+                Assert.That(logos, Has.Length.EqualTo(3));
                 Assert.That(registerButton.image.color, Is.EqualTo((Color)ArtelLogoGraphic.Coral));
                 Assert.That(checkmark.color, Is.EqualTo((Color)new Color32(0x24, 0xC7, 0xE8, 0xFF)));
                 Assert.That(ArtelLogoGraphic.Charcoal, Is.EqualTo(new Color32(0x20, 0x23, 0x2B, 0xFF)));
                 Assert.That(ArtelLogoGraphic.Coral, Is.EqualTo(new Color32(0xF0, 0x4B, 0x3A, 0xFF)));
+            });
+        }
+
+        [Test]
+        public void OverlayGui_ThemeTogglePersistsAndReversesLogoBody()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                var darkThemeToggle = Array.Find(
+                    canvas.GetComponentsInChildren<Toggle>(true),
+                    toggle => toggle.name == "다크 모드 Toggle");
+
+                Assert.That(darkThemeToggle, Is.Not.Null);
+                Assert.That(darkThemeToggle.isOn, Is.True);
+                Assert.That(
+                    Array.Find(
+                        canvas.GetComponentsInChildren<Button>(true),
+                        button => button.name == "Artel Button")
+                    .transform.Find("Artel Logo"),
+                    Is.Not.Null);
+                Assert.That(
+                    canvas.GetComponentInChildren<ArtelLogoGraphic>(true).BodyColor,
+                    Is.EqualTo((Color32)Color.white));
+
+                darkThemeToggle.isOn = false;
+
+                var currentCanvas = (GameObject)typeof(ArtelOverlayController)
+                    .GetField("canvasObject", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(controller);
+                Assert.That(PlayerPrefs.GetInt(DarkThemePlayerPrefsKey), Is.Zero);
+                Assert.That(
+                    currentCanvas.GetComponentInChildren<ArtelLogoGraphic>(true).BodyColor,
+                    Is.EqualTo(ArtelLogoGraphic.Charcoal));
             });
         }
 

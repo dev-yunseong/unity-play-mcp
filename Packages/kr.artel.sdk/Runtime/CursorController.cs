@@ -10,6 +10,7 @@ namespace Artel
         private const int CursorWidth = 36;
         private const int CursorHeight = 48;
         private const int OverlaySortingOrder = short.MaxValue;
+        private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
 
         [SerializeField] private bool smoothMovement;
         [SerializeField] private float movementDurationSeconds = 0.35f;
@@ -17,6 +18,7 @@ namespace Artel
         private RectTransform cursorTransform;
         private Texture2D cursorTexture;
         private Sprite cursorSprite;
+        private bool darkTheme;
 
         public bool SmoothMovement
         {
@@ -26,7 +28,20 @@ namespace Artel
 
         private void Awake()
         {
+            darkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey, 1) != 0;
             CreateCursor();
+        }
+
+        private void Update()
+        {
+            var currentDarkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey, 1) != 0;
+            if (darkTheme == currentDarkTheme)
+            {
+                return;
+            }
+
+            darkTheme = currentDarkTheme;
+            PaintCursorTexture(cursorTexture, darkTheme);
         }
 
         private void OnDestroy()
@@ -126,7 +141,7 @@ namespace Artel
             cursorTransform.pivot = new Vector2(0f, 1f);
             cursorTransform.sizeDelta = new Vector2(CursorWidth, CursorHeight);
 
-            cursorTexture = CreateCursorTexture();
+            cursorTexture = CreateCursorTexture(darkTheme);
             cursorSprite = Sprite.Create(
                 cursorTexture,
                 new Rect(0f, 0f, CursorWidth, CursorHeight),
@@ -139,7 +154,7 @@ namespace Artel
             cursorObject.SetActive(false);
         }
 
-        private static Texture2D CreateCursorTexture()
+        private static Texture2D CreateCursorTexture(bool darkTheme)
         {
             var texture = new Texture2D(CursorWidth, CursorHeight, TextureFormat.RGBA32, false)
             {
@@ -147,7 +162,16 @@ namespace Artel
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp
             };
+            PaintCursorTexture(texture, darkTheme);
+            return texture;
+        }
+
+        private static void PaintCursorTexture(Texture2D texture, bool darkTheme)
+        {
             var pixels = new Color32[CursorWidth * CursorHeight];
+            var borderColor = darkTheme
+                ? new Color32(244, 247, 250, 255)
+                : ArtelLogoGraphic.Charcoal;
 
             for (var distanceFromTop = 0; distanceFromTop < CursorHeight; distanceFromTop++)
             {
@@ -157,8 +181,8 @@ namespace Artel
                     if (IsCursorShape(x, distanceFromTop))
                     {
                         pixels[(y * CursorWidth) + x] = IsCursorBorder(x, distanceFromTop)
-                            ? new Color32(12, 22, 38, 255)
-                            : new Color32(72, 200, 255, 255);
+                            ? borderColor
+                            : ArtelLogoGraphic.Coral;
                         continue;
                     }
 
@@ -170,8 +194,7 @@ namespace Artel
             }
 
             texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-            return texture;
+            texture.Apply(false, false);
         }
 
         private static bool IsCursorShape(int x, int distanceFromTop)
