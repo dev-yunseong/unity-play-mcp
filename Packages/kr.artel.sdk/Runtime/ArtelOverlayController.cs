@@ -50,6 +50,7 @@ namespace Artel
         private Button connectButton;
         private Text statusText;
         private Text gateErrorText;
+        private Text coverMessageText;
         private Text coverStatusText;
         private Text coverProgressText;
         private bool appliedShowPanel;
@@ -60,6 +61,9 @@ namespace Artel
         // 등록이 계속 실패할 때 이것이 게임으로 돌아가는 유일한 길이다. 되돌아오는 길은
         // 고급 섹션의 키 지우기·연결이며, 둘 다 이 값을 지운다.
         private bool gateDismissed;
+
+        // 프로세스가 사는 동안 한 번만 걷는다. ScanScenesThenRegister 참조.
+        private SceneScanReportDto cachedSceneScan;
         private ArtelOverlayViewModel viewModel;
 
         private void Awake()
@@ -117,7 +121,7 @@ namespace Artel
             StartCoroutine(ScanScenesThenRegister());
         }
 
-        // 스캔이 빌드 내 씬을 하나씩 로드했다 내리므로 등록은 그만큼 늦게 시작한다.
+        // 첫 등록은 씬 워크가 끝날 때까지 늦게 시작한다. 두 번째부터는 캐시를 쓴다.
         private IEnumerator ScanScenesThenRegister()
         {
             registrationRunning = true;
@@ -130,22 +134,35 @@ namespace Artel
             // registrationRunning은 RefreshView가 읽는다. 뒤집은 직후 직접 불러야 하는데,
             // 이 플래그는 컨트롤러 로컬이라 viewModel.Changed가 뜨지 않는다.
             coverProgressText.text = string.Empty;
+            coverMessageText.text = cachedSceneScan == null
+                ? "게임 화면을 분석하는 중입니다. 잠시만 기다려 주세요."
+                : "인스턴스 키를 확인하는 중입니다. 잠시만 기다려 주세요.";
             RefreshView();
             try
             {
-                SceneScanReportDto sceneScan = null;
-                yield return SceneScanReporter.CreateReport(
-                    report => sceneScan = report,
-                    ShowScanProgress);
+                // 스캔은 씬을 하나씩 로드했다 내리므로 씬 수만큼 몇 초씩 걸린다. 빌드에 담긴
+                // 씬은 프로세스가 사는 동안 바뀌지 않으니 한 번만 걷고 재사용한다. 등록이
+                // 실패해 다시 시도할 때 이 캐시가 없으면 매번 전체 씬을 다시 걷는다.
+                //
+                // ponytail: 에디터에서 플레이 중에 씬을 편집하면 캐시가 낡는다. 플레이를
+                // 다시 시작하면 지워지므로 그대로 둔다. 런타임 무효화가 필요해지면
+                // AllSceneScanner 쪽에 변경 신호를 만들어야 한다.
+                if (cachedSceneScan == null)
+                {
+                    yield return SceneScanReporter.CreateReport(
+                        report => cachedSceneScan = report,
+                        ShowScanProgress);
 
-                ShowScanProgress(0, 0);
+                    ShowScanProgress(0, 0);
+                }
+
                 yield return viewModel.Register(
                     artelManager.Server,
                     viewModel.KeyInput,
                     artelManager.SdkId,
                     artelManager.GameVersion,
                     artelManager.StartTransport,
-                    sceneScan);
+                    cachedSceneScan);
             }
             finally
             {
@@ -278,13 +295,13 @@ namespace Artel
             var title = CreateText(progressContent.transform, "Artel SDK", 30, TextAnchor.MiddleCenter);
             CenterRect(title.rectTransform, new Vector2(0f, 52f), new Vector2(900f, 44f));
 
-            var message = CreateText(
+            coverMessageText = CreateText(
                 progressContent.transform,
                 "게임 화면을 분석하는 중입니다. 잠시만 기다려 주세요.",
                 20,
                 TextAnchor.MiddleCenter,
                 TextSecondary);
-            CenterRect(message.rectTransform, new Vector2(0f, 4f), new Vector2(900f, 32f));
+            CenterRect(coverMessageText.rectTransform, new Vector2(0f, 4f), new Vector2(900f, 32f));
 
             coverProgressText = CreateText(
                 progressContent.transform, string.Empty, 18, TextAnchor.MiddleCenter, TextMuted);

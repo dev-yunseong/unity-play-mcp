@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Reflection;
 using System.Text;
 using Artel.Domain;
@@ -6,6 +7,7 @@ using Artel.Protocol.Dto;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 using UnityEngine.UI;
 
 namespace Artel.Tests.Transport
@@ -515,6 +517,65 @@ namespace Artel.Tests.Transport
                     ContrastRatio(registerButton.image.color, label.color),
                     Is.GreaterThanOrEqualTo(4.5f));
             });
+        }
+
+        [UnityTest]
+        public IEnumerator OverlayGui_ScansScenesOnceAndReusesTheReport()
+        {
+            var host = new GameObject("Artel scan cache test");
+            host.AddComponent<ArtelManager>();
+            var controller = host.AddComponent<ArtelOverlayController>();
+
+            try
+            {
+                InvokeLifecycle(controller, "Awake");
+                InvokeLifecycle(controller, "Start");
+
+                yield return RunRegistration(controller);
+                var firstReport = CachedSceneScan(controller);
+                Assert.That(firstReport, Is.Not.Null);
+
+                // 등록이 실패해 다시 시도하는 경로. 캐시가 없으면 여기서 전체 씬을 다시
+                // 걷는다 — 씬 수만큼 몇 초씩.
+                yield return RunRegistration(controller);
+                Assert.That(CachedSceneScan(controller), Is.SameAs(firstReport));
+            }
+            finally
+            {
+                var canvas = GameObject.Find("Artel Overlay Canvas");
+                var eventSystem = GameObject.Find("Artel EventSystem");
+                if (canvas != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(canvas);
+                }
+
+                if (eventSystem != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(eventSystem);
+                }
+
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        // StartCoroutine은 EditMode에서 돌지 않으므로 코루틴을 직접 꺼내 펌프한다.
+        private static IEnumerator RunRegistration(ArtelOverlayController controller)
+        {
+            var coroutine = (IEnumerator)controller.GetType()
+                .GetMethod("ScanScenesThenRegister", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(controller, null);
+
+            while (coroutine.MoveNext())
+            {
+                yield return coroutine.Current;
+            }
+        }
+
+        private static object CachedSceneScan(ArtelOverlayController controller)
+        {
+            return controller.GetType()
+                .GetField("cachedSceneScan", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(controller);
         }
 
         private static float ContrastRatio(Color a, Color b)
