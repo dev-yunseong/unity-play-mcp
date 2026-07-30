@@ -341,6 +341,7 @@ namespace Artel.Tests.Transport
                 Assert.That(connectButton.interactable, Is.False);
                 Assert.That(smoothCursorToggle, Is.Not.Null);
                 Assert.That(smoothCursorToggle.isOn, Is.False);
+                Assert.That(canvas.GetComponentsInChildren<ArtelLogoGraphic>(true), Has.Length.EqualTo(2));
             }
             finally
             {
@@ -517,6 +518,81 @@ namespace Artel.Tests.Transport
                     ContrastRatio(registerButton.image.color, label.color),
                     Is.GreaterThanOrEqualTo(4.5f));
             });
+        }
+
+        [Test]
+        public void OverlayGui_UsesBrandCoralOnlyForActionAccent()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                var logos = canvas.GetComponentsInChildren<ArtelLogoGraphic>(true);
+                var registerButton = Array.Find(
+                    canvas.GetComponentsInChildren<Button>(true),
+                    button => button.name == "등록 Button");
+                var checkmark = canvas.transform.Find("Artel Panel/Advanced Section/부드러운 커서 Toggle/Background/Checkmark")
+                    .GetComponent<Image>();
+
+                Assert.That(logos, Has.Length.EqualTo(2));
+                Assert.That(registerButton.image.color, Is.EqualTo((Color)ArtelLogoGraphic.Coral));
+                Assert.That(checkmark.color, Is.EqualTo((Color)new Color32(0x24, 0xC7, 0xE8, 0xFF)));
+                Assert.That(ArtelLogoGraphic.Charcoal, Is.EqualTo(new Color32(0x20, 0x23, 0x2B, 0xFF)));
+                Assert.That(ArtelLogoGraphic.Coral, Is.EqualTo(new Color32(0xF0, 0x4B, 0x3A, 0xFF)));
+            });
+        }
+
+        [Test]
+        public void ArtelLogoGraphic_DrawsFiveCharcoalSegmentsAndOneCoralSegment()
+        {
+            var logoObject = new GameObject("Artel logo mesh test", typeof(RectTransform), typeof(ArtelLogoGraphic));
+            var vertexHelper = new VertexHelper();
+
+            try
+            {
+                logoObject.GetComponent<RectTransform>().sizeDelta = new Vector2(64f, 64f);
+                typeof(ArtelLogoGraphic)
+                    .GetMethod(
+                        "OnPopulateMesh",
+                        BindingFlags.Instance | BindingFlags.NonPublic,
+                        null,
+                        new[] { typeof(VertexHelper) },
+                        null)
+                    .Invoke(logoObject.GetComponent<ArtelLogoGraphic>(), new object[] { vertexHelper });
+
+                // 본체는 선분별 quad가 아니라 공유 miter join을 가진 하나의 strip이다.
+                Assert.That(vertexHelper.currentVertCount, Is.EqualTo(16));
+                Assert.That(vertexHelper.currentIndexCount, Is.EqualTo(36));
+
+                var mesh = new Mesh();
+                vertexHelper.FillMesh(mesh);
+                Assert.That(Array.FindAll(mesh.colors32, color => color.Equals(ArtelLogoGraphic.Charcoal)), Has.Length.EqualTo(12));
+                Assert.That(Array.FindAll(mesh.colors32, color => color.Equals(ArtelLogoGraphic.Coral)), Has.Length.EqualTo(4));
+
+                var expectedControlPoints = new[]
+                {
+                    new Vector2(20f, -8f),
+                    new Vector2(20f, 14f),
+                    new Vector2(0f, 26f),
+                    new Vector2(-20f, 14f),
+                    new Vector2(-20f, -14f),
+                    new Vector2(-2f, -24f),
+                    new Vector2(4f, -24f),
+                    new Vector2(20f, -14f)
+                };
+                var vertices = mesh.vertices;
+                for (var index = 0; index < expectedControlPoints.Length; index++)
+                {
+                    var midpoint = ((Vector2)vertices[index * 2] + (Vector2)vertices[(index * 2) + 1]) * 0.5f;
+                    Assert.That(midpoint.x, Is.EqualTo(expectedControlPoints[index].x).Within(0.001f));
+                    Assert.That(midpoint.y, Is.EqualTo(expectedControlPoints[index].y).Within(0.001f));
+                }
+
+                UnityEngine.Object.DestroyImmediate(mesh);
+            }
+            finally
+            {
+                vertexHelper.Dispose();
+                UnityEngine.Object.DestroyImmediate(logoObject);
+            }
         }
 
         [UnityTest]

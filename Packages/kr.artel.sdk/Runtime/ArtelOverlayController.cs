@@ -22,13 +22,13 @@ namespace Artel
         private static readonly Color TextPrimary = new Color32(0xF4, 0xF7, 0xFA, 0xFF);
         private static readonly Color TextSecondary = new Color32(0xA7, 0xB0, 0xBC, 0xFF);
         private static readonly Color TextMuted = new Color32(0x70, 0x7B, 0x88, 0xFF);
+        private static readonly Color BrandAccent = ArtelLogoGraphic.Coral;
         private static readonly Color ActionPrimary = new Color32(0x24, 0xC7, 0xE8, 0xFF);
         private static readonly Color StatusCritical = new Color32(0xFF, 0x63, 0x4F, 0xFF);
         private static readonly Color StatusSuccess = new Color32(0x48, 0xC7, 0x8E, 0xFF);
 
-        // --color-bg-canvas. primary 버튼의 글자색이기도 하다. #24C7E8이 밝아서 흰 글자는
-        // 대비 기준을 넘지 못한다. artel-home의 .button--primary도 같은 이유로
-        // color: var(--color-bg-canvas)를 쓴다.
+        // --color-bg-canvas. primary 버튼의 글자색이기도 하다. coral과 5.3:1 대비라
+        // 일반 크기 텍스트의 WCAG AA 기준을 넘는다.
         private static readonly Color BgCanvas = new Color32(0x09, 0x0C, 0x10, 0xFF);
 
         // 덮개는 뒤를 비추면 안 된다. 알파가 1보다 작으면 가리려던 씬 전환이 그대로 비친다.
@@ -292,8 +292,10 @@ namespace Artel
             progressContent.transform.SetParent(coverObject.transform, false);
             Inset(progressContent.GetComponent<RectTransform>(), 0f);
 
+            CreateLogo(progressContent.transform, new Vector2(0f, 104f), 72f);
+
             var title = CreateText(progressContent.transform, "Artel SDK", 30, TextAnchor.MiddleCenter);
-            CenterRect(title.rectTransform, new Vector2(0f, 52f), new Vector2(900f, 44f));
+            CenterRect(title.rectTransform, new Vector2(0f, 38f), new Vector2(900f, 44f));
 
             coverMessageText = CreateText(
                 progressContent.transform,
@@ -301,15 +303,15 @@ namespace Artel
                 20,
                 TextAnchor.MiddleCenter,
                 TextSecondary);
-            CenterRect(coverMessageText.rectTransform, new Vector2(0f, 4f), new Vector2(900f, 32f));
+            CenterRect(coverMessageText.rectTransform, new Vector2(0f, -10f), new Vector2(900f, 32f));
 
             coverProgressText = CreateText(
                 progressContent.transform, string.Empty, 18, TextAnchor.MiddleCenter, TextMuted);
-            CenterRect(coverProgressText.rectTransform, new Vector2(0f, -34f), new Vector2(900f, 28f));
+            CenterRect(coverProgressText.rectTransform, new Vector2(0f, -48f), new Vector2(900f, 28f));
 
             coverStatusText = CreateText(
                 progressContent.transform, string.Empty, 16, TextAnchor.MiddleCenter, TextMuted);
-            CenterRect(coverStatusText.rectTransform, new Vector2(0f, -70f), new Vector2(900f, 28f));
+            CenterRect(coverStatusText.rectTransform, new Vector2(0f, -84f), new Vector2(900f, 28f));
         }
 
         // 게임 화면 거리에서 읽히도록 artel-home의 타이포보다 한 단계 크게 잡는다.
@@ -323,6 +325,8 @@ namespace Artel
             gateContent = new GameObject("Gate Content", typeof(RectTransform));
             gateContent.transform.SetParent(coverObject.transform, false);
             Inset(gateContent.GetComponent<RectTransform>(), 0f);
+
+            CreateLogo(gateContent.transform, new Vector2(0f, 220f), 72f);
 
             var title = CreateText(gateContent.transform, "Artel SDK", 32, TextAnchor.MiddleCenter);
             CenterRect(title.rectTransform, new Vector2(0f, 148f), new Vector2(900f, 48f));
@@ -521,7 +525,7 @@ namespace Artel
 
             if (primary)
             {
-                buttonObject.GetComponent<Image>().color = ActionPrimary;
+                buttonObject.GetComponent<Image>().color = BrandAccent;
             }
             else
             {
@@ -569,6 +573,21 @@ namespace Artel
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Truncate;
             return text;
+        }
+
+        private static void CreateLogo(Transform parent, Vector2 position, float size)
+        {
+            var badge = new GameObject("Artel Logo", typeof(RectTransform), typeof(Image));
+            badge.transform.SetParent(parent, false);
+            var badgeImage = badge.GetComponent<Image>();
+            badgeImage.color = TextPrimary;
+            badgeImage.raycastTarget = false;
+            CenterRect(badge.GetComponent<RectTransform>(), position, new Vector2(size, size));
+
+            var mark = new GameObject("Mark", typeof(RectTransform), typeof(ArtelLogoGraphic));
+            mark.transform.SetParent(badge.transform, false);
+            mark.GetComponent<ArtelLogoGraphic>().raycastTarget = false;
+            Inset(mark.GetComponent<RectTransform>(), 8f);
         }
 
         private static Toggle CreateToggle(Transform parent, string label)
