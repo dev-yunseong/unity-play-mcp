@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Reflection;
 using System.Text;
 using Artel.Domain;
@@ -6,6 +7,7 @@ using Artel.Protocol.Dto;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 using UnityEngine.UI;
 
 namespace Artel.Tests.Transport
@@ -259,13 +261,13 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OnboardingViewModel_StartsInNeedsKeyWhenNoKeyStored()
+        public void OverlayViewModel_StartsInNeedsKeyWhenNoKeyStored()
         {
             var viewModel = CreateViewModel();
 
             viewModel.Initialize();
 
-            Assert.That(viewModel.State, Is.EqualTo(ArtelOnboardingState.NeedsKey));
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsKey));
             Assert.That(viewModel.HasStoredKey, Is.False);
             Assert.That(viewModel.ShowPanel, Is.True);
             Assert.That(viewModel.KeyInput, Is.Empty);
@@ -274,7 +276,7 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OnboardingViewModel_KeepsPanelCollapsedWhenKeyStored()
+        public void OverlayViewModel_KeepsPanelCollapsedWhenKeyStored()
         {
             ArtelInstanceKey.Save("H4KQ2-8VTRM-9XZ0C-N5JWE");
             var viewModel = CreateViewModel();
@@ -288,7 +290,7 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OnboardingViewModel_DoesNotPersistKeyWhenRegistrationFails()
+        public void OverlayViewModel_DoesNotPersistKeyWhenRegistrationFails()
         {
             var viewModel = CreateViewModel();
             viewModel.Initialize();
@@ -297,7 +299,7 @@ namespace Artel.Tests.Transport
             var registration = viewModel.Register(new Server(), "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdk-uuid", "1.2.3", () => { });
 
             Assert.That(registration.MoveNext(), Is.False);
-            Assert.That(viewModel.State, Is.EqualTo(ArtelOnboardingState.NeedsKey));
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsKey));
             Assert.That(viewModel.ShowPanel, Is.True);
             Assert.That(viewModel.Status, Does.StartWith("설정 오류: "));
             Assert.That(viewModel.HasStoredKey, Is.False);
@@ -305,20 +307,20 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void ArtelManager_CreatesOnboardingGuiAutomatically()
+        public void ArtelManager_CreatesOverlayGuiAutomatically()
         {
-            var host = new GameObject("Artel onboarding test");
+            var host = new GameObject("Artel overlay test");
             var manager = host.AddComponent<ArtelManager>();
 
             try
             {
                 InvokeLifecycle(manager, "Awake");
-                var controller = host.GetComponent<ArtelOnboardingController>();
+                var controller = host.GetComponent<ArtelOverlayController>();
                 Assert.That(controller, Is.Not.Null);
                 Assert.That(host.GetComponent<KeyboardStatusController>(), Is.Not.Null);
                 InvokeLifecycle(controller, "Awake");
                 InvokeLifecycle(controller, "Start");
-                var canvas = GameObject.Find("Artel Onboarding Canvas");
+                var canvas = GameObject.Find("Artel Overlay Canvas");
                 Assert.That(canvas, Is.Not.Null);
                 var buttons = canvas.GetComponentsInChildren<Button>(true);
                 var smoothCursorToggle = canvas.GetComponentInChildren<Toggle>(true);
@@ -327,7 +329,8 @@ namespace Artel.Tests.Transport
                 var connectButton = Array.Find(buttons, button => button.name == "연결 Button");
 
                 Assert.That(manager.SdkId, Is.Not.Empty);
-                Assert.That(buttons, Has.Length.EqualTo(5));
+                // Artel 토글, 고급, 등록, 나중에, 연결, 키 지우기.
+                Assert.That(buttons, Has.Length.EqualTo(6));
                 Assert.That(instanceKeyField, Is.Not.Null);
                 Assert.That(instanceKeyField.textComponent, Is.Not.Null);
                 Assert.That(instanceKeyField.placeholder, Is.Not.Null);
@@ -341,7 +344,7 @@ namespace Artel.Tests.Transport
             }
             finally
             {
-                var canvas = GameObject.Find("Artel Onboarding Canvas");
+                var canvas = GameObject.Find("Artel Overlay Canvas");
                 var eventSystem = GameObject.Find("Artel EventSystem");
                 if (canvas != null)
                 {
@@ -358,28 +361,29 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OnboardingGui_HidesScanCoverUntilRegistrationRuns()
+        public void OverlayGui_CoverGeometryAndOpacity()
         {
-            var host = new GameObject("Artel scan cover test");
+            var host = new GameObject("Artel cover geometry test");
 
             // 매니저는 RequireComponent를 채우려고만 붙인다. 매니저의 Awake는
             // DontDestroyOnLoad를 부르는데 그건 플레이 모드 전용이라 여기서 돌릴 수 없다.
             host.AddComponent<ArtelManager>();
-            var controller = host.AddComponent<ArtelOnboardingController>();
+            var controller = host.AddComponent<ArtelOverlayController>();
 
             try
             {
                 InvokeLifecycle(controller, "Awake");
                 InvokeLifecycle(controller, "Start");
 
-                var canvas = GameObject.Find("Artel Onboarding Canvas");
-                var cover = canvas.transform.Find("Scan Cover");
+                var canvas = GameObject.Find("Artel Overlay Canvas");
+                var cover = canvas.transform.Find("Artel Overlay Cover");
                 Assert.That(cover, Is.Not.Null);
 
-                // 등록 중에만 켜진다. 켜진 채로 남으면 게임 화면이 통째로 가려진다.
-                Assert.That(cover.gameObject.activeSelf, Is.False);
+                // SetUp이 키를 지우므로 Start 직후가 곧 첫 실행이고, 게이트가 이 덮개로
+                // 뜬다. 켜져 있는 것이 맞다.
+                Assert.That(cover.gameObject.activeSelf, Is.True);
 
-                // 캔버스의 마지막 자식이어야 같은 캔버스의 온보딩 패널 위에 그려진다.
+                // 캔버스의 마지막 자식이어야 같은 캔버스의 패널 위에 그려진다.
                 Assert.That(cover.GetSiblingIndex(), Is.EqualTo(canvas.transform.childCount - 1));
 
                 var coverRect = cover.GetComponent<RectTransform>();
@@ -396,7 +400,7 @@ namespace Artel.Tests.Transport
             }
             finally
             {
-                var canvas = GameObject.Find("Artel Onboarding Canvas");
+                var canvas = GameObject.Find("Artel Overlay Canvas");
                 var eventSystem = GameObject.Find("Artel EventSystem");
                 if (canvas != null)
                 {
@@ -412,9 +416,238 @@ namespace Artel.Tests.Transport
             }
         }
 
-        private static ArtelOnboardingViewModel CreateViewModel()
+        [Test]
+        public void OverlayViewModel_ShowsGateOnlyWhenNoKeyStored()
         {
-            return new ArtelOnboardingViewModel(
+            var withoutKey = CreateViewModel();
+            withoutKey.Initialize();
+            Assert.That(withoutKey.ShowGate, Is.True);
+
+            ArtelInstanceKey.Save("H4KQ2-8VTRM-9XZ0C-N5JWE");
+            var withKey = CreateViewModel();
+            withKey.Initialize();
+
+            // 저장 키가 있으면 Start가 곧바로 등록에 들어가므로 게이트를 건너뛴다. State만
+            // 보면 그 한 프레임에 게이트가 번쩍인다 — ARTEL-152가 고친 깜박임.
+            Assert.That(withKey.ShowGate, Is.False);
+        }
+
+        [Test]
+        public void OverlayViewModel_ShowsGateAgainAfterFailureWithStoredKey()
+        {
+            ArtelInstanceKey.Save("H4KQ2-8VTRM-9XZ0C-N5JWE");
+            var viewModel = CreateViewModel();
+            viewModel.Initialize();
+
+            // 설정되지 않은 Server는 요청을 만드는 중에 던진다. 404가 아니므로 저장 키가
+            // 그대로 남는 실패 경로다.
+            var registration = viewModel.Register(new Server(), "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdk-uuid", "1.2.3", () => { });
+            Assert.That(registration.MoveNext(), Is.False);
+
+            Assert.That(viewModel.HasStoredKey, Is.True);
+            Assert.That(viewModel.HasError, Is.True);
+
+            // 이것이 없으면 사용자는 우상단 작은 패널을 스스로 발견해야 한다.
+            Assert.That(viewModel.ShowGate, Is.True);
+            Assert.That(viewModel.KeyInput, Is.EqualTo("H4KQ2-8VTRM-9XZ0C-N5JWE"));
+        }
+
+        [Test]
+        public void OverlayGui_ShowsGateOnFirstLaunch()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                var cover = canvas.transform.Find("Artel Overlay Cover");
+                Assert.That(cover.gameObject.activeSelf, Is.True);
+                Assert.That(cover.Find("Gate Content").gameObject.activeSelf, Is.True);
+                Assert.That(cover.Find("Progress Content").gameObject.activeSelf, Is.False);
+
+                var field = canvas.GetComponentInChildren<InputField>(true);
+                Assert.That(field.gameObject.activeInHierarchy, Is.True);
+                Assert.That(field.interactable, Is.True);
+            });
+        }
+
+        [Test]
+        public void OverlayGui_HidesCoverWhenConnected()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                SetViewModelState(controller, ArtelConnectionState.Connected);
+
+                // 이 행이 깨지면 게임 화면이 통째로 검게 남는다.
+                Assert.That(canvas.transform.Find("Artel Overlay Cover").gameObject.activeSelf, Is.False);
+            });
+        }
+
+        [Test]
+        public void OverlayGui_HidesCoverWhenGateDismissed()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                var cover = canvas.transform.Find("Artel Overlay Cover");
+                var buttons = canvas.GetComponentsInChildren<Button>(true);
+
+                // 나중에가 없으면 등록이 계속 실패할 때 게임으로 돌아갈 길이 없다.
+                Array.Find(buttons, button => button.name == "나중에 Button").onClick.Invoke();
+                Assert.That(cover.gameObject.activeSelf, Is.False);
+
+                // 반대 방향도 막혀 있다. 게이트가 내려가면 등록 버튼과 입력 필드도 함께
+                // 비활성되므로, 이 버튼이 gateDismissed를 지우지 않으면 그 세션에서 SDK를
+                // 다시 등록할 수 없다.
+                Array.Find(buttons, button => button.name == "키 지우기 Button").onClick.Invoke();
+                Assert.That(cover.gameObject.activeSelf, Is.True);
+                Assert.That(cover.Find("Gate Content").gameObject.activeSelf, Is.True);
+            });
+        }
+
+        [Test]
+        public void RegisterButton_LabelMeetsContrastRatio()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                var registerButton = Array.Find(
+                    canvas.GetComponentsInChildren<Button>(true),
+                    button => button.name == "등록 Button");
+                var label = registerButton.GetComponentInChildren<Text>(true);
+
+                // 액센트가 밝아서 흰 라벨은 대비 기준을 넘지 못한다. 색값을 색값과 비교하는
+                // 동어반복 대신 실제 불변식을 지킨다. 재색상해도 살아남는다.
+                Assert.That(
+                    ContrastRatio(registerButton.image.color, label.color),
+                    Is.GreaterThanOrEqualTo(4.5f));
+            });
+        }
+
+        [UnityTest]
+        public IEnumerator OverlayGui_ScansScenesOnceAndReusesTheReport()
+        {
+            var host = new GameObject("Artel scan cache test");
+            host.AddComponent<ArtelManager>();
+            var controller = host.AddComponent<ArtelOverlayController>();
+
+            try
+            {
+                InvokeLifecycle(controller, "Awake");
+                InvokeLifecycle(controller, "Start");
+
+                yield return RunRegistration(controller);
+                var firstReport = CachedSceneScan(controller);
+                Assert.That(firstReport, Is.Not.Null);
+
+                // 등록이 실패해 다시 시도하는 경로. 캐시가 없으면 여기서 전체 씬을 다시
+                // 걷는다 — 씬 수만큼 몇 초씩.
+                yield return RunRegistration(controller);
+                Assert.That(CachedSceneScan(controller), Is.SameAs(firstReport));
+            }
+            finally
+            {
+                var canvas = GameObject.Find("Artel Overlay Canvas");
+                var eventSystem = GameObject.Find("Artel EventSystem");
+                if (canvas != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(canvas);
+                }
+
+                if (eventSystem != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(eventSystem);
+                }
+
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        // StartCoroutine은 EditMode에서 돌지 않으므로 코루틴을 직접 꺼내 펌프한다.
+        private static IEnumerator RunRegistration(ArtelOverlayController controller)
+        {
+            var coroutine = (IEnumerator)controller.GetType()
+                .GetMethod("ScanScenesThenRegister", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(controller, null);
+
+            while (coroutine.MoveNext())
+            {
+                yield return coroutine.Current;
+            }
+        }
+
+        private static object CachedSceneScan(ArtelOverlayController controller)
+        {
+            return controller.GetType()
+                .GetField("cachedSceneScan", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(controller);
+        }
+
+        private static float ContrastRatio(Color a, Color b)
+        {
+            var lighter = Mathf.Max(RelativeLuminance(a), RelativeLuminance(b));
+            var darker = Mathf.Min(RelativeLuminance(a), RelativeLuminance(b));
+            return (lighter + 0.05f) / (darker + 0.05f);
+        }
+
+        private static float RelativeLuminance(Color color)
+        {
+            return (0.2126f * Linearize(color.r)) +
+                   (0.7152f * Linearize(color.g)) +
+                   (0.0722f * Linearize(color.b));
+        }
+
+        private static float Linearize(float channel)
+        {
+            return channel <= 0.03928f
+                ? channel / 12.92f
+                : Mathf.Pow((channel + 0.055f) / 1.055f, 2.4f);
+        }
+
+        // State는 private 세터이고 Connected로 가는 유일한 길이 실제 HTTP 등록 성공이므로,
+        // 컨트롤러의 viewModel을 꺼내 직접 넣는다. InvokeLifecycle과 같은 리플렉션 시임이다.
+        private static void SetViewModelState(object controller, ArtelConnectionState state)
+        {
+            var viewModel = controller.GetType()
+                .GetField("viewModel", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(controller);
+            viewModel.GetType()
+                .GetProperty("State", BindingFlags.Instance | BindingFlags.Public)
+                .SetValue(viewModel, state);
+            InvokeLifecycle(controller, "RefreshView");
+        }
+
+        private static void WithOverlay(Action<ArtelOverlayController, GameObject> assertions)
+        {
+            var host = new GameObject("Artel overlay gate test");
+
+            // 매니저는 RequireComponent를 채우려고만 붙인다. 매니저의 Awake는
+            // DontDestroyOnLoad를 부르는데 그건 플레이 모드 전용이라 여기서 돌릴 수 없다.
+            host.AddComponent<ArtelManager>();
+            var controller = host.AddComponent<ArtelOverlayController>();
+
+            try
+            {
+                InvokeLifecycle(controller, "Awake");
+                InvokeLifecycle(controller, "Start");
+                assertions(controller, GameObject.Find("Artel Overlay Canvas"));
+            }
+            finally
+            {
+                var canvas = GameObject.Find("Artel Overlay Canvas");
+                var eventSystem = GameObject.Find("Artel EventSystem");
+                if (canvas != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(canvas);
+                }
+
+                if (eventSystem != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(eventSystem);
+                }
+
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        private static ArtelOverlayViewModel CreateViewModel()
+        {
+            return new ArtelOverlayViewModel(
                 new ArtelSdkRegistrationClient(new Artel.Serialization.NewtonsoftJsonCodec()));
         }
 

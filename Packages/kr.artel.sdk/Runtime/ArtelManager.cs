@@ -86,9 +86,9 @@ namespace Artel
                 cursorController = gameObject.AddComponent<CursorController>();
             }
 
-            if (GetComponent<ArtelOnboardingController>() == null)
+            if (GetComponent<ArtelOverlayController>() == null)
             {
-                gameObject.AddComponent<ArtelOnboardingController>();
+                gameObject.AddComponent<ArtelOverlayController>();
             }
 
             if (GetComponent<KeyboardStatusController>() == null)

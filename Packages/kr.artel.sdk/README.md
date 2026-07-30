@@ -2,7 +2,7 @@
 
 ## Runtime connection
 
-Add `ArtelManager` and `ArtelOnboardingController` to a scene object. Configure
+Add `ArtelManager` and `ArtelOverlayController` to a scene object. Configure
 `secure`, `host`, and `port` on the manager's `Server` field. The server builds
 the matching HTTP and WebSocket base URLs (`http`/`ws` or `https`/`wss`). API
 clients own their endpoint paths.
