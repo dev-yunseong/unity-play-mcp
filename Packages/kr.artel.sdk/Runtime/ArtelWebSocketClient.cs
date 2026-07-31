@@ -14,9 +14,9 @@ namespace Artel
             new ConcurrentQueue<ArtelWebSocketMessage>();
         private WebSocket client;
 
-        public ArtelWebSocketClient(Server server, string instanceKey)
+        public ArtelWebSocketClient(Server server, string token, string instanceId)
         {
-            url = BuildEndpoint(server, instanceKey).AbsoluteUri;
+            url = BuildEndpoint(server, token, instanceId).AbsoluteUri;
         }
 
         public void Start()
@@ -37,8 +37,8 @@ namespace Artel
 
         // ConnectAsync reports nothing to the caller, so without these the socket can fail to
         // open and every layer above still reads as connected. The close code matters most:
-        // the server sends 4001 for an unknown instance key and 4002 when that instance
-        // already holds a connection.
+        // the server sends 4001 when the token or the instance is refused, and 4002 when that
+        // instance already holds a connection.
         private void OnOpen(object sender, EventArgs e)
         {
             UnityEngine.Debug.Log("[Artel] WebSocket connected.");
@@ -92,22 +92,30 @@ namespace Artel
             Stop();
         }
 
-        internal static Uri BuildEndpoint(Server server, string instanceKey)
+        // ponytail: 토큰이 쿼리에 실린다. WebSocketSharp의 커스텀 헤더로 옮기려면 서버
+        // 핸드셰이크도 같이 바꿔야 하므로, 그때 양쪽을 함께 옮긴다.
+        internal static Uri BuildEndpoint(Server server, string token, string instanceId)
         {
             if (server == null)
             {
                 throw new ArgumentNullException(nameof(server));
             }
 
-            if (string.IsNullOrWhiteSpace(instanceKey))
+            if (string.IsNullOrWhiteSpace(token))
             {
-                throw new ArgumentException("Instance key is required.", nameof(instanceKey));
+                throw new ArgumentException("SDK token is required.", nameof(token));
+            }
+
+            if (string.IsNullOrWhiteSpace(instanceId))
+            {
+                throw new ArgumentException("Instance id is required.", nameof(instanceId));
             }
 
             var endpoint = new Uri(server.WebSocketBaseUri, SdkWebSocketPath);
             return new UriBuilder(endpoint)
             {
-                Query = "instanceKey=" + Uri.EscapeDataString(instanceKey)
+                Query = "token=" + Uri.EscapeDataString(token) +
+                        "&instanceId=" + Uri.EscapeDataString(instanceId)
             }.Uri;
         }
 

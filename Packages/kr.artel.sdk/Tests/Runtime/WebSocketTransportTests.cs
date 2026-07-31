@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 using System.Text;
+using Artel.Auth;
 using Artel.Domain;
 using Artel.Protocol.Dto;
 using Newtonsoft.Json;
@@ -15,12 +16,21 @@ namespace Artel.Tests.Transport
     public sealed class WebSocketTransportTests
     {
         private const string PlayerPrefsKey = "Artel.SdkId";
-        private const string InstanceKeyPlayerPrefsKey = "Artel.InstanceKey";
         private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
+
+        // 세션은 다섯 키에 흩어져 있고 테스트가 그중 몇 개를 쓴다. 하나라도 흘리면 다음
+        // 테스트가 로그인된 채로 시작한다.
+        private static readonly string[] SessionPlayerPrefsKeys =
+        {
+            "Artel.SdkToken",
+            "Artel.SdkTokenExpiresAt",
+            "Artel.SdkDisplayName",
+            "Artel.ProjectId",
+            "Artel.InstanceId"
+        };
+
         private string originalSdkId;
         private bool hadOriginalSdkId;
-        private string originalInstanceKey;
-        private bool hadOriginalInstanceKey;
         private int originalDarkTheme;
         private bool hadOriginalDarkTheme;
 
@@ -29,11 +39,9 @@ namespace Artel.Tests.Transport
         {
             hadOriginalSdkId = PlayerPrefs.HasKey(PlayerPrefsKey);
             originalSdkId = PlayerPrefs.GetString(PlayerPrefsKey);
-            hadOriginalInstanceKey = PlayerPrefs.HasKey(InstanceKeyPlayerPrefsKey);
-            originalInstanceKey = PlayerPrefs.GetString(InstanceKeyPlayerPrefsKey);
             hadOriginalDarkTheme = PlayerPrefs.HasKey(DarkThemePlayerPrefsKey);
             originalDarkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey);
-            PlayerPrefs.DeleteKey(InstanceKeyPlayerPrefsKey);
+            ClearSession();
             PlayerPrefs.DeleteKey(DarkThemePlayerPrefsKey);
         }
 
@@ -49,15 +57,6 @@ namespace Artel.Tests.Transport
                 PlayerPrefs.DeleteKey(PlayerPrefsKey);
             }
 
-            if (hadOriginalInstanceKey)
-            {
-                PlayerPrefs.SetString(InstanceKeyPlayerPrefsKey, originalInstanceKey);
-            }
-            else
-            {
-                PlayerPrefs.DeleteKey(InstanceKeyPlayerPrefsKey);
-            }
-
             if (hadOriginalDarkTheme)
             {
                 PlayerPrefs.SetInt(DarkThemePlayerPrefsKey, originalDarkTheme);
@@ -67,7 +66,29 @@ namespace Artel.Tests.Transport
                 PlayerPrefs.DeleteKey(DarkThemePlayerPrefsKey);
             }
 
+            ClearSession();
             PlayerPrefs.Save();
+        }
+
+        private static void ClearSession()
+        {
+            foreach (var key in SessionPlayerPrefsKeys)
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
+
+            PlayerPrefs.Save();
+        }
+
+        // 만료 시각을 비워 두면 세션 저장소가 만료로 보지 않는다. 테스트가 시계에 기대지
+        // 않게 하는 가장 짧은 길이다.
+        private static void SignIn(string projectId = null)
+        {
+            ArtelSdkSession.SaveToken("sdk-token", string.Empty, "octocat");
+            if (projectId != null)
+            {
+                ArtelSdkSession.SaveProjectId(projectId);
+            }
         }
 
         [Test]
@@ -93,30 +114,6 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void InstanceKey_IsAbsentBeforeFirstSave()
-        {
-            var loaded = ArtelInstanceKey.TryLoad(out var instanceKey);
-
-            Assert.That(loaded, Is.False);
-            Assert.That(instanceKey, Is.Empty);
-        }
-
-        [Test]
-        public void InstanceKey_RoundTripsThroughPlayerPrefs()
-        {
-            ArtelInstanceKey.Save("  H4KQ2-8VTRM-9XZ0C-N5JWE  ");
-
-            var loaded = ArtelInstanceKey.TryLoad(out var instanceKey);
-
-            Assert.That(loaded, Is.True);
-            Assert.That(instanceKey, Is.EqualTo("H4KQ2-8VTRM-9XZ0C-N5JWE"));
-
-            ArtelInstanceKey.Clear();
-
-            Assert.That(ArtelInstanceKey.TryLoad(out _), Is.False);
-        }
-
-        [Test]
         public void Server_BuildsSecureProtocolBaseUris()
         {
             var server = new Server(true, "test.artel.example", 8443);
@@ -132,16 +129,17 @@ namespace Artel.Tests.Transport
         {
             var server = new Server(false, "127.0.0.1", 8080);
             var client = new ArtelSdkRegistrationClient(new Artel.Serialization.NewtonsoftJsonCodec());
-            var request = client.CreateRequest(server, "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdk-uuid", "1.2.3");
+            var request = client.CreateRequest(server, "sdk-token", "1", "sdk-uuid", "내 맥북", "1.2.3");
 
             try
             {
                 Assert.That(request.url, Is.EqualTo("http://127.0.0.1:8080/api/sdk/registrations"));
+                Assert.That(request.GetRequestHeader("Authorization"), Is.EqualTo("Bearer sdk-token"));
                 Assert.That(
                     Encoding.UTF8.GetString(request.uploadHandler.data),
                     Is.EqualTo(
-                        "{\"instanceKey\":\"H4KQ2-8VTRM-9XZ0C-N5JWE\"," +
-                        "\"sdkUuid\":\"sdk-uuid\",\"gameVersion\":\"1.2.3\"}"));
+                        "{\"projectId\":\"1\",\"sdkUuid\":\"sdk-uuid\"," +
+                        "\"instanceName\":\"내 맥북\",\"gameVersion\":\"1.2.3\"}"));
             }
             finally
             {
@@ -157,7 +155,7 @@ namespace Artel.Tests.Transport
             var sceneScan = new Artel.Protocol.Dto.SceneScanReportDto();
             sceneScan.ScenesInBuild.Add("Assets/Scenes/Main.unity");
 
-            var request = client.CreateRequest(server, "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdk-uuid", "1.2.3", sceneScan);
+            var request = client.CreateRequest(server, "sdk-token", "1", "sdk-uuid", null, "1.2.3", sceneScan);
 
             try
             {
@@ -172,15 +170,63 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void WebSocketClient_OwnsSdkWebSocketPathAndQuery()
+        public void AuthClient_SendsBearerTokenWithProjectsRequest()
+        {
+            var server = new Server(false, "127.0.0.1", 8080);
+            var client = new ArtelSdkAuthClient(new Artel.Serialization.NewtonsoftJsonCodec());
+            var request = client.CreateProjectsRequest(server, "sdk-token");
+
+            try
+            {
+                Assert.That(request.url, Is.EqualTo("http://127.0.0.1:8080/api/sdk/projects"));
+                Assert.That(request.GetRequestHeader("Authorization"), Is.EqualTo("Bearer sdk-token"));
+            }
+            finally
+            {
+                request.Dispose();
+            }
+        }
+
+        [Test]
+        public void AuthClient_SendsCodeAndVerifierToTokenEndpoint()
+        {
+            var server = new Server(false, "127.0.0.1", 8080);
+            var client = new ArtelSdkAuthClient(new Artel.Serialization.NewtonsoftJsonCodec());
+            var request = client.CreateTokenRequest(server, "login-code", "verifier");
+
+            try
+            {
+                Assert.That(request.url, Is.EqualTo("http://127.0.0.1:8080/api/auth/sdk/token"));
+                Assert.That(
+                    Encoding.UTF8.GetString(request.uploadHandler.data),
+                    Is.EqualTo("{\"code\":\"login-code\",\"codeVerifier\":\"verifier\"}"));
+            }
+            finally
+            {
+                request.Dispose();
+            }
+        }
+
+        [Test]
+        public void WebSocketClient_CarriesTokenAndInstanceId()
         {
             var server = new Server(true, "socket.artel.example", 443);
 
-            var endpoint = ArtelWebSocketClient.BuildEndpoint(server, "instance key");
+            var endpoint = ArtelWebSocketClient.BuildEndpoint(server, "sdk token", "7");
 
             Assert.That(
                 endpoint.AbsoluteUri,
-                Is.EqualTo("wss://socket.artel.example/ws/sdk?instanceKey=instance%20key"));
+                Is.EqualTo("wss://socket.artel.example/ws/sdk?token=sdk%20token&instanceId=7"));
+        }
+
+        [Test]
+        public void WebSocketClient_RefusesEndpointWithoutInstanceId()
+        {
+            var server = new Server(true, "socket.artel.example", 443);
+
+            Assert.That(
+                () => ArtelWebSocketClient.BuildEndpoint(server, "sdk-token", string.Empty),
+                Throws.ArgumentException);
         }
 
         [Test]
@@ -188,33 +234,32 @@ namespace Artel.Tests.Transport
         {
             var json = JsonConvert.SerializeObject(new SdkRegistrationRequestDto
             {
-                InstanceKey = "H4KQ2-8VTRM-9XZ0C-N5JWE",
+                ProjectId = "1",
                 SdkUuid = "sdk-uuid",
+                InstanceName = "내 맥북",
                 GameVersion = "1.2.3"
             });
 
             Assert.That(
                 json,
                 Is.EqualTo(
-                    "{\"instanceKey\":\"H4KQ2-8VTRM-9XZ0C-N5JWE\"," +
-                    "\"sdkUuid\":\"sdk-uuid\",\"gameVersion\":\"1.2.3\"}"));
+                    "{\"projectId\":\"1\",\"sdkUuid\":\"sdk-uuid\"," +
+                    "\"instanceName\":\"내 맥북\",\"gameVersion\":\"1.2.3\"}"));
         }
 
         [Test]
-        public void SdkRegistrationRequest_KeepsNullGameVersion()
+        public void SdkRegistrationRequest_OmitsInstanceNameWhenAbsent()
         {
             var json = JsonConvert.SerializeObject(new SdkRegistrationRequestDto
             {
-                InstanceKey = "H4KQ2-8VTRM-9XZ0C-N5JWE",
+                ProjectId = "1",
                 SdkUuid = "sdk-uuid",
                 GameVersion = null
             });
 
             Assert.That(
                 json,
-                Is.EqualTo(
-                    "{\"instanceKey\":\"H4KQ2-8VTRM-9XZ0C-N5JWE\"," +
-                    "\"sdkUuid\":\"sdk-uuid\",\"gameVersion\":null}"));
+                Is.EqualTo("{\"projectId\":\"1\",\"sdkUuid\":\"sdk-uuid\",\"gameVersion\":null}"));
         }
 
         [Test]
@@ -229,6 +274,30 @@ namespace Artel.Tests.Transport
             Assert.That(response.InstanceName, Is.EqualTo("메인 빌드"));
             Assert.That(response.GameBuildId, Is.EqualTo("5"));
             Assert.That(response.GameVersion, Is.EqualTo("1.2.3"));
+        }
+
+        [Test]
+        public void SdkTokenResponse_DeserializesServerContract()
+        {
+            var response = JsonConvert.DeserializeObject<SdkTokenResponseDto>(
+                "{\"token\":\"jwt\",\"expiresAt\":\"2026-08-30T02:00:00Z\"," +
+                "\"userId\":\"1\",\"displayName\":\"octocat\"}");
+
+            Assert.That(response.Token, Is.EqualTo("jwt"));
+            Assert.That(response.ExpiresAt, Is.EqualTo("2026-08-30T02:00:00Z"));
+            Assert.That(response.UserId, Is.EqualTo("1"));
+            Assert.That(response.DisplayName, Is.EqualTo("octocat"));
+        }
+
+        [Test]
+        public void SdkProjectsResponse_DeserializesServerContract()
+        {
+            var response = JsonConvert.DeserializeObject<SdkProjectsResponseDto>(
+                "{\"projects\":[{\"id\":\"1\",\"name\":\"내 게임\"}]}");
+
+            Assert.That(response.Projects, Has.Count.EqualTo(1));
+            Assert.That(response.Projects[0].Id, Is.EqualTo("1"));
+            Assert.That(response.Projects[0].Name, Is.EqualTo("내 게임"));
         }
 
         [Test]
@@ -276,49 +345,96 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OverlayViewModel_StartsInNeedsKeyWhenNoKeyStored()
+        public void OverlayViewModel_StartsInNeedsLoginWithoutSession()
         {
             var viewModel = CreateViewModel();
 
             viewModel.Initialize();
 
-            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsKey));
-            Assert.That(viewModel.HasStoredKey, Is.False);
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsLogin));
+            Assert.That(viewModel.HasToken, Is.False);
+            Assert.That(viewModel.HasStoredSession, Is.False);
             Assert.That(viewModel.ShowPanel, Is.True);
-            Assert.That(viewModel.KeyInput, Is.Empty);
-            Assert.That(viewModel.CanRegister, Is.False);
+            Assert.That(viewModel.SelectedProjectId, Is.Empty);
+            Assert.That(viewModel.CanLogIn, Is.True);
             Assert.That(viewModel.CanConnect, Is.False);
         }
 
         [Test]
-        public void OverlayViewModel_KeepsPanelCollapsedWhenKeyStored()
+        public void OverlayViewModel_AsksForProjectWhenOnlyTokenStored()
         {
-            ArtelInstanceKey.Save("H4KQ2-8VTRM-9XZ0C-N5JWE");
+            SignIn();
             var viewModel = CreateViewModel();
 
             viewModel.Initialize();
 
-            Assert.That(viewModel.HasStoredKey, Is.True);
-            Assert.That(viewModel.ShowPanel, Is.False);
-            Assert.That(viewModel.KeyInput, Is.EqualTo("H4KQ2-8VTRM-9XZ0C-N5JWE"));
-            Assert.That(viewModel.CanRegister, Is.True);
+            Assert.That(viewModel.HasToken, Is.True);
+            Assert.That(viewModel.HasStoredSession, Is.False);
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.ChoosingProject));
+            Assert.That(viewModel.DisplayName, Is.EqualTo("octocat"));
         }
 
         [Test]
-        public void OverlayViewModel_DoesNotPersistKeyWhenRegistrationFails()
+        public void OverlayViewModel_KeepsPanelCollapsedWhenSessionStored()
         {
+            SignIn("1");
+            var viewModel = CreateViewModel();
+
+            viewModel.Initialize();
+
+            Assert.That(viewModel.HasStoredSession, Is.True);
+            Assert.That(viewModel.ShowPanel, Is.False);
+            Assert.That(viewModel.SelectedProjectId, Is.EqualTo("1"));
+        }
+
+        [Test]
+        public void OverlayViewModel_KeepsSessionWhenRegistrationFails()
+        {
+            SignIn("1");
             var viewModel = CreateViewModel();
             viewModel.Initialize();
 
             // An unconfigured Server throws while the request is built, before anything is sent.
-            var registration = viewModel.Register(new Server(), "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdk-uuid", "1.2.3", () => { });
+            var registration = viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { });
 
             Assert.That(registration.MoveNext(), Is.False);
-            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsKey));
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.ChoosingProject));
             Assert.That(viewModel.ShowPanel, Is.True);
             Assert.That(viewModel.Status, Does.StartWith("설정 오류: "));
-            Assert.That(viewModel.HasStoredKey, Is.False);
-            Assert.That(PlayerPrefs.HasKey(InstanceKeyPlayerPrefsKey), Is.False);
+
+            // 401이 아닌 실패로 로그인을 버리면 사용자는 잠깐 끊긴 서버 때문에 브라우저를
+            // 다시 열어야 한다.
+            Assert.That(viewModel.HasToken, Is.True);
+            Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.True);
+        }
+
+        [Test]
+        public void OverlayViewModel_RefusesRegistrationWithoutSession()
+        {
+            var viewModel = CreateViewModel();
+            viewModel.Initialize();
+
+            var registration = viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { });
+
+            Assert.That(registration.MoveNext(), Is.False);
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsLogin));
+            Assert.That(viewModel.HasError, Is.True);
+        }
+
+        [Test]
+        public void OverlayViewModel_LogOutForgetsTokenAndProject()
+        {
+            SignIn("1");
+            var viewModel = CreateViewModel();
+            viewModel.Initialize();
+
+            viewModel.LogOut();
+
+            Assert.That(viewModel.HasToken, Is.False);
+            Assert.That(viewModel.SelectedProjectId, Is.Empty);
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsLogin));
+            Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.False);
+            Assert.That(ArtelSdkSession.TryLoadProjectId(out _), Is.False);
         }
 
         [Test]
@@ -340,19 +456,19 @@ namespace Artel.Tests.Transport
                 var buttons = canvas.GetComponentsInChildren<Button>(true);
                 var toggles = canvas.GetComponentsInChildren<Toggle>(true);
                 var smoothCursorToggle = Array.Find(toggles, toggle => toggle.name == "부드러운 커서 Toggle");
-                var instanceKeyField = canvas.GetComponentInChildren<InputField>(true);
-                var registerButton = Array.Find(buttons, button => button.name == "등록 Button");
+                var loginButton = Array.Find(buttons, button => button.name == "로그인 Button");
                 var connectButton = Array.Find(buttons, button => button.name == "연결 Button");
 
                 Assert.That(manager.SdkId, Is.Not.Empty);
-                // Artel 토글, 고급, 등록, 나중에, 연결, 키 지우기.
-                Assert.That(buttons, Has.Length.EqualTo(6));
-                Assert.That(instanceKeyField, Is.Not.Null);
-                Assert.That(instanceKeyField.textComponent, Is.Not.Null);
-                Assert.That(instanceKeyField.placeholder, Is.Not.Null);
-                Assert.That(instanceKeyField.characterLimit, Is.EqualTo(24));
-                Assert.That(registerButton, Is.Not.Null);
-                Assert.That(registerButton.interactable, Is.False);
+                Assert.That(manager.InstanceName, Is.Not.Empty);
+
+                // Artel 토글, 고급, 연결, 로그아웃, 로그인, 다시 시도, 게이트 로그아웃, 나중에.
+                Assert.That(buttons, Has.Length.EqualTo(8));
+
+                // 키 입력창은 사라졌다. 남아 있으면 로그인 흐름과 두 입구가 공존한다.
+                Assert.That(canvas.GetComponentInChildren<InputField>(true), Is.Null);
+                Assert.That(loginButton, Is.Not.Null);
+                Assert.That(loginButton.interactable, Is.True);
                 Assert.That(connectButton, Is.Not.Null);
                 Assert.That(connectButton.interactable, Is.False);
                 Assert.That(smoothCursorToggle, Is.Not.Null);
@@ -397,7 +513,7 @@ namespace Artel.Tests.Transport
                 var cover = canvas.transform.Find("Artel Overlay Cover");
                 Assert.That(cover, Is.Not.Null);
 
-                // SetUp이 키를 지우므로 Start 직후가 곧 첫 실행이고, 게이트가 이 덮개로
+                // SetUp이 세션을 지우므로 Start 직후가 곧 첫 실행이고, 게이트가 이 덮개로
                 // 뜬다. 켜져 있는 것이 맞다.
                 Assert.That(cover.gameObject.activeSelf, Is.True);
 
@@ -435,39 +551,38 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
-        public void OverlayViewModel_ShowsGateOnlyWhenNoKeyStored()
+        public void OverlayViewModel_ShowsGateOnlyWithoutStoredSession()
         {
-            var withoutKey = CreateViewModel();
-            withoutKey.Initialize();
-            Assert.That(withoutKey.ShowGate, Is.True);
+            var withoutSession = CreateViewModel();
+            withoutSession.Initialize();
+            Assert.That(withoutSession.ShowGate, Is.True);
 
-            ArtelInstanceKey.Save("H4KQ2-8VTRM-9XZ0C-N5JWE");
-            var withKey = CreateViewModel();
-            withKey.Initialize();
+            SignIn("1");
+            var withSession = CreateViewModel();
+            withSession.Initialize();
 
-            // 저장 키가 있으면 Start가 곧바로 등록에 들어가므로 게이트를 건너뛴다. State만
+            // 저장 세션이 있으면 Start가 곧바로 등록에 들어가므로 게이트를 건너뛴다. State만
             // 보면 그 한 프레임에 게이트가 번쩍인다 — ARTEL-152가 고친 깜박임.
-            Assert.That(withKey.ShowGate, Is.False);
+            Assert.That(withSession.ShowGate, Is.False);
         }
 
         [Test]
-        public void OverlayViewModel_ShowsGateAgainAfterFailureWithStoredKey()
+        public void OverlayViewModel_ShowsGateAgainAfterFailureWithStoredSession()
         {
-            ArtelInstanceKey.Save("H4KQ2-8VTRM-9XZ0C-N5JWE");
+            SignIn("1");
             var viewModel = CreateViewModel();
             viewModel.Initialize();
 
-            // 설정되지 않은 Server는 요청을 만드는 중에 던진다. 404가 아니므로 저장 키가
+            // 설정되지 않은 Server는 요청을 만드는 중에 던진다. 401이 아니므로 세션이
             // 그대로 남는 실패 경로다.
-            var registration = viewModel.Register(new Server(), "H4KQ2-8VTRM-9XZ0C-N5JWE", "sdk-uuid", "1.2.3", () => { });
+            var registration = viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { });
             Assert.That(registration.MoveNext(), Is.False);
 
-            Assert.That(viewModel.HasStoredKey, Is.True);
+            Assert.That(viewModel.HasToken, Is.True);
             Assert.That(viewModel.HasError, Is.True);
 
             // 이것이 없으면 사용자는 우상단 작은 패널을 스스로 발견해야 한다.
             Assert.That(viewModel.ShowGate, Is.True);
-            Assert.That(viewModel.KeyInput, Is.EqualTo("H4KQ2-8VTRM-9XZ0C-N5JWE"));
         }
 
         [Test]
@@ -480,9 +595,19 @@ namespace Artel.Tests.Transport
                 Assert.That(cover.Find("Gate Content").gameObject.activeSelf, Is.True);
                 Assert.That(cover.Find("Progress Content").gameObject.activeSelf, Is.False);
 
-                var field = canvas.GetComponentInChildren<InputField>(true);
-                Assert.That(field.gameObject.activeInHierarchy, Is.True);
-                Assert.That(field.interactable, Is.True);
+                var loginButton = Array.Find(
+                    canvas.GetComponentsInChildren<Button>(true),
+                    button => button.name == "로그인 Button");
+                Assert.That(loginButton.gameObject.activeInHierarchy, Is.True);
+                Assert.That(loginButton.interactable, Is.True);
+
+                // 로그인 전에는 프로젝트를 물을 수 없다. 목록과 다시 시도가 함께 뜨면
+                // 다음 단계가 무엇인지 알 수 없다.
+                Assert.That(
+                    Array.Find(
+                        canvas.GetComponentsInChildren<Button>(true),
+                        button => button.name == "다시 시도 Button").gameObject.activeInHierarchy,
+                    Is.False);
             });
         }
 
@@ -510,29 +635,28 @@ namespace Artel.Tests.Transport
                 Array.Find(buttons, button => button.name == "나중에 Button").onClick.Invoke();
                 Assert.That(cover.gameObject.activeSelf, Is.False);
 
-                // 반대 방향도 막혀 있다. 게이트가 내려가면 등록 버튼과 입력 필드도 함께
-                // 비활성되므로, 이 버튼이 gateDismissed를 지우지 않으면 그 세션에서 SDK를
-                // 다시 등록할 수 없다.
-                Array.Find(buttons, button => button.name == "키 지우기 Button").onClick.Invoke();
+                // 반대 방향도 막혀 있다. 게이트가 내려가면 게이트의 버튼도 함께 비활성되므로,
+                // 이 버튼이 gateDismissed를 지우지 않으면 그 세션에서 SDK를 다시 등록할 수 없다.
+                Array.Find(buttons, button => button.name == "로그아웃 Button").onClick.Invoke();
                 Assert.That(cover.gameObject.activeSelf, Is.True);
                 Assert.That(cover.Find("Gate Content").gameObject.activeSelf, Is.True);
             });
         }
 
         [Test]
-        public void RegisterButton_LabelMeetsContrastRatio()
+        public void LoginButton_LabelMeetsContrastRatio()
         {
             WithOverlay((controller, canvas) =>
             {
-                var registerButton = Array.Find(
+                var loginButton = Array.Find(
                     canvas.GetComponentsInChildren<Button>(true),
-                    button => button.name == "등록 Button");
-                var label = registerButton.GetComponentInChildren<Text>(true);
+                    button => button.name == "로그인 Button");
+                var label = loginButton.GetComponentInChildren<Text>(true);
 
                 // 액센트가 밝아서 흰 라벨은 대비 기준을 넘지 못한다. 색값을 색값과 비교하는
                 // 동어반복 대신 실제 불변식을 지킨다. 재색상해도 살아남는다.
                 Assert.That(
-                    ContrastRatio(registerButton.image.color, label.color),
+                    ContrastRatio(loginButton.image.color, label.color),
                     Is.GreaterThanOrEqualTo(4.5f));
             });
         }
@@ -543,16 +667,16 @@ namespace Artel.Tests.Transport
             WithOverlay((controller, canvas) =>
             {
                 var logos = canvas.GetComponentsInChildren<ArtelLogoGraphic>(true);
-                var registerButton = Array.Find(
+                var loginButton = Array.Find(
                     canvas.GetComponentsInChildren<Button>(true),
-                    button => button.name == "등록 Button");
+                    button => button.name == "로그인 Button");
                 var checkmark = canvas.transform.Find("Artel Panel/Advanced Section/부드러운 커서 Toggle/Background/Checkmark")
                     .GetComponent<Image>();
 
                 Assert.That(logos, Has.Length.EqualTo(3));
 
                 // 오버레이 기본은 다크다. accent는 밝힌 coral이어야 한다.
-                Assert.That(registerButton.image.color, Is.EqualTo((Color)ArtelLogoGraphic.CoralDark));
+                Assert.That(loginButton.image.color, Is.EqualTo((Color)ArtelLogoGraphic.CoralDark));
 
                 // 시안 action 색은 없앴다. Blueprint Paper에서 action은 브랜드 accent와
                 // 같은 색을 쓴다. 실패·성공만 자기 의미 색을 유지한다.
@@ -781,8 +905,11 @@ namespace Artel.Tests.Transport
 
         private static ArtelOverlayViewModel CreateViewModel()
         {
+            var jsonCodec = new Artel.Serialization.NewtonsoftJsonCodec();
             return new ArtelOverlayViewModel(
-                new ArtelSdkRegistrationClient(new Artel.Serialization.NewtonsoftJsonCodec()));
+                new ArtelSdkRegistrationClient(jsonCodec),
+                new ArtelSdkAuthClient(jsonCodec),
+                jsonCodec);
         }
 
         private static void InvokeLifecycle(object target, string methodName)
