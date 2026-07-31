@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Artel.Auth;
 using Artel.Capture;
 using Artel.Domain;
 using Artel.Protocol.Dto;
@@ -46,6 +47,10 @@ namespace Artel
 
         public string SdkId { get; private set; }
         public string GameVersion { get; private set; }
+
+        /// <summary>대시보드에서 이 설치를 알아볼 첫 이름. 서버가 등록 때 한 번만 쓴다.</summary>
+        public string InstanceName { get; private set; }
+
         public Server Server { get { return server; } }
         public bool SmoothCursorMovement
         {
@@ -123,10 +128,14 @@ namespace Artel
                 cursorController,
                 pointerEvents,
                 new ScreenCapturer(),
-                // The key is read at upload time, not now: onboarding may still be waiting for the
-                // player to paste one, and a capture asked for before that should say so rather
-                // than upload with a stale value.
-                new CaptureUploader(jsonCodec, () => server, ReadInstanceKey));
+                // The credentials are read at upload time, not now: onboarding may still be
+                // waiting for the player to sign in, and a capture asked for before that should
+                // say so rather than upload with a stale value.
+                new CaptureUploader(
+                    jsonCodec,
+                    () => server,
+                    ArtelSdkSession.LoadToken,
+                    ArtelSdkSession.LoadInstanceId));
             sceneStatePoller = new SceneStatePoller(
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
@@ -140,12 +149,8 @@ namespace Artel
 
             SdkId = ArtelSdkIdentity.LoadOrCreate();
             GameVersion = Application.version;
+            InstanceName = SystemInfo.deviceName;
             ownsRuntime = true;
-        }
-
-        private static string ReadInstanceKey()
-        {
-            return ArtelInstanceKey.TryLoad(out var instanceKey) ? instanceKey : string.Empty;
         }
 
         private void OnEnable()
@@ -204,13 +209,15 @@ namespace Artel
         {
             if (webSocketTransport == null)
             {
-                if (!ArtelInstanceKey.TryLoad(out var instanceKey))
+                if (!ArtelSdkSession.TryLoadToken(out var token) ||
+                    !ArtelSdkSession.TryLoadInstanceId(out var instanceId))
                 {
-                    Debug.LogWarning("[Artel] WebSocket transport needs a registered instance key.");
+                    Debug.LogWarning(
+                        "[Artel] WebSocket transport needs a signed-in session and a registered instance.");
                     return;
                 }
 
-                webSocketTransport = new ArtelWebSocketClient(server, instanceKey);
+                webSocketTransport = new ArtelWebSocketClient(server, token, instanceId);
                 ownsTransport = true;
             }
 

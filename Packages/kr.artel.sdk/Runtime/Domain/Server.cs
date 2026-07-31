@@ -10,6 +10,10 @@ namespace Artel.Domain
         [SerializeField] private string host = string.Empty;
         [SerializeField] private int port = 443;
 
+        // 로그인 중계 페이지는 오케스트레이션 서버가 아니라 웹 콘솔에 있다. 호스트도 포트도
+        // 다르므로(로컬 5173, 배포 console.artel.kr) 위 세 값에서 유도할 수 없다.
+        [SerializeField] private string frontendOrigin = "http://localhost:5173";
+
         public Server()
         {
         }
@@ -29,6 +33,19 @@ namespace Artel.Domain
         public Uri WebSocketBaseUri
         {
             get { return BuildBaseUri(secure ? "wss" : "ws"); }
+        }
+
+        public Uri FrontendBaseUri
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(frontendOrigin))
+                {
+                    throw new InvalidOperationException("Frontend origin is required.");
+                }
+
+                return new Uri(frontendOrigin.Trim(), UriKind.Absolute);
+            }
         }
 
         private Uri BuildBaseUri(string scheme)

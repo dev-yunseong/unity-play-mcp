@@ -20,8 +20,10 @@ namespace Artel
 
         public UnityWebRequest CreateRequest(
             Server server,
-            string instanceKey,
+            string token,
+            string projectId,
             string sdkUuid,
+            string instanceName,
             string gameVersion,
             SceneScanReportDto sceneScan = null)
         {
@@ -30,9 +32,14 @@ namespace Artel
                 throw new ArgumentNullException(nameof(server));
             }
 
-            if (string.IsNullOrWhiteSpace(instanceKey))
+            if (string.IsNullOrWhiteSpace(token))
             {
-                throw new ArgumentException("Instance key is required.", nameof(instanceKey));
+                throw new ArgumentException("SDK token is required.", nameof(token));
+            }
+
+            if (string.IsNullOrWhiteSpace(projectId))
+            {
+                throw new ArgumentException("Project id is required.", nameof(projectId));
             }
 
             if (string.IsNullOrWhiteSpace(sdkUuid))
@@ -43,8 +50,9 @@ namespace Artel
             var endpoint = new Uri(server.HttpBaseUri, RegistrationPath);
             var body = jsonCodec.Serialize(new SdkRegistrationRequestDto
             {
-                InstanceKey = instanceKey,
+                ProjectId = projectId,
                 SdkUuid = sdkUuid,
+                InstanceName = string.IsNullOrWhiteSpace(instanceName) ? null : instanceName.Trim(),
                 GameVersion = gameVersion,
                 SceneScan = sceneScan
             });
@@ -54,6 +62,7 @@ namespace Artel
                 downloadHandler = new DownloadHandlerBuffer()
             };
             request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", "Bearer " + token);
             return request;
         }
     }

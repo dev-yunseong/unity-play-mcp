@@ -8,8 +8,8 @@ namespace Artel.Protocol.Dto
     /// </summary>
     internal sealed class CaptureTicketRequestDto
     {
-        [JsonProperty("instanceKey")]
-        public string InstanceKey { get; set; }
+        [JsonProperty("instanceId")]
+        public string InstanceId { get; set; }
 
         [JsonProperty("contentType")]
         public string ContentType { get; set; }

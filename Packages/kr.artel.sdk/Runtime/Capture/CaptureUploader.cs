@@ -54,13 +54,16 @@ namespace Artel.Capture
 
         private readonly IJsonCodec jsonCodec;
         private readonly Func<Server> server;
-        private readonly Func<string> instanceKey;
+        private readonly Func<string> token;
+        private readonly Func<string> instanceId;
 
-        public CaptureUploader(IJsonCodec jsonCodec, Func<Server> server, Func<string> instanceKey)
+        public CaptureUploader(
+            IJsonCodec jsonCodec, Func<Server> server, Func<string> token, Func<string> instanceId)
         {
             this.jsonCodec = jsonCodec ?? throw new ArgumentNullException(nameof(jsonCodec));
             this.server = server ?? throw new ArgumentNullException(nameof(server));
-            this.instanceKey = instanceKey ?? throw new ArgumentNullException(nameof(instanceKey));
+            this.token = token ?? throw new ArgumentNullException(nameof(token));
+            this.instanceId = instanceId ?? throw new ArgumentNullException(nameof(instanceId));
         }
 
         public IEnumerator Upload(
@@ -73,17 +76,18 @@ namespace Artel.Capture
                 throw new ArgumentNullException(nameof(completed));
             }
 
-            var key = instanceKey();
-            if (string.IsNullOrWhiteSpace(key))
+            var sdkToken = token();
+            var registeredInstanceId = instanceId();
+            if (string.IsNullOrWhiteSpace(sdkToken) || string.IsNullOrWhiteSpace(registeredInstanceId))
             {
                 completed(CaptureUpload.Failed(
-                    "This game has no instance key, so a capture cannot be uploaded."));
+                    "This game is not signed in and registered, so a capture cannot be uploaded."));
                 yield break;
             }
 
             CaptureTicketResponseDto ticket = null;
             string ticketError = null;
-            using (var ticketRequest = CreateTicketRequest(key, image, request))
+            using (var ticketRequest = CreateTicketRequest(sdkToken, registeredInstanceId, image, request))
             {
                 yield return ticketRequest.SendWebRequest();
 
@@ -128,14 +132,15 @@ namespace Artel.Capture
         }
 
         private UnityWebRequest CreateTicketRequest(
-            string key,
+            string sdkToken,
+            string registeredInstanceId,
             CapturedImage image,
             CaptureRequest request)
         {
             var endpoint = new Uri(server().HttpBaseUri, TicketPath);
             var body = jsonCodec.Serialize(new CaptureTicketRequestDto
             {
-                InstanceKey = key,
+                InstanceId = registeredInstanceId,
                 ContentType = request.ContentType,
                 ContentLength = image.Bytes.LongLength,
                 TargetId = request.TargetId
@@ -146,6 +151,7 @@ namespace Artel.Capture
                 downloadHandler = new DownloadHandlerBuffer()
             };
             ticketRequest.SetRequestHeader("Content-Type", "application/json");
+            ticketRequest.SetRequestHeader("Authorization", "Bearer " + sdkToken);
             return ticketRequest;
         }
 

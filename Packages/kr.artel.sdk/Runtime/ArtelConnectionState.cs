@@ -2,7 +2,9 @@ namespace Artel
 {
     internal enum ArtelConnectionState
     {
-        NeedsKey,
+        NeedsLogin,
+        LoggingIn,
+        ChoosingProject,
         Registering,
         Connecting,
         Connected

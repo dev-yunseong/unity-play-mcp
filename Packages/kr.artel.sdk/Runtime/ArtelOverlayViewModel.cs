@@ -1,24 +1,35 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using Artel.Auth;
 using Artel.Domain;
 using Artel.Protocol.Dto;
+using Artel.Serialization;
 using UnityEngine.Networking;
 
 namespace Artel
 {
     internal sealed class ArtelOverlayViewModel
     {
+        private const long UnauthorizedStatusCode = 401;
         private const long NotFoundStatusCode = 404;
 
         private readonly ArtelSdkRegistrationClient registrationClient;
-        private string keyInput = string.Empty;
+        private readonly ArtelSdkAuthClient authClient;
+        private readonly IJsonCodec jsonCodec;
+        private readonly List<SdkProjectDto> projects = new List<SdkProjectDto>();
 
-        public ArtelOverlayViewModel(ArtelSdkRegistrationClient registrationClient)
+        public ArtelOverlayViewModel(
+            ArtelSdkRegistrationClient registrationClient,
+            ArtelSdkAuthClient authClient,
+            IJsonCodec jsonCodec)
         {
             this.registrationClient = registrationClient ?? throw new ArgumentNullException(nameof(registrationClient));
-            State = ArtelConnectionState.NeedsKey;
+            this.authClient = authClient ?? throw new ArgumentNullException(nameof(authClient));
+            this.jsonCodec = jsonCodec ?? throw new ArgumentNullException(nameof(jsonCodec));
+            State = ArtelConnectionState.NeedsLogin;
             ShowPanel = true;
-            Status = "대시보드에서 발급받은 인스턴스 키를 입력해 주세요.";
+            Status = "Artel 계정으로 로그인해 주세요.";
         }
 
         public event Action Changed;
@@ -38,124 +49,149 @@ namespace Artel
         /// </summary>
         public bool HasAttemptedRegistration { get; private set; }
 
+        public bool HasToken { get; private set; }
+        public string DisplayName { get; private set; } = string.Empty;
+        public string SelectedProjectId { get; private set; } = string.Empty;
+
+        /// <summary>고른 프로젝트까지 남아 있어 로그인 화면 없이 곧바로 등록할 수 있는 상태.</summary>
+        public bool HasStoredSession
+        {
+            get { return HasToken && SelectedProjectId.Length > 0; }
+        }
+
+        public IReadOnlyList<SdkProjectDto> Projects { get { return projects; } }
+
         /// <summary>
-        /// Whether the full-screen key gate wants to be up.
+        /// Whether the full-screen gate wants to be up.
         /// </summary>
         /// <remarks>
-        /// <c>!HasStoredKey</c> keeps the gate away on the returning-user path, where
+        /// <c>!HasStoredSession</c> keeps the gate away on the returning-user path, where
         /// <c>Start</c> fires registration immediately and the state is still
-        /// <see cref="ArtelConnectionState.NeedsKey"/> for one frame — showing the gate there
+        /// <see cref="ArtelConnectionState.NeedsLogin"/> for one frame — showing the gate there
         /// is the flicker ARTEL-152 removed. <see cref="HasAttemptedRegistration"/> then brings
-        /// the gate back after a failure that left the stored key in place (a timeout, a 500,
-        /// or a connect throw all keep <see cref="HasStoredKey"/>), so pressing 등록 on a
-        /// prefilled field is the retry. Without it those failures strand the user with only
-        /// the corner panel to find.
+        /// the gate back after a failure that left the session in place, so the project buttons
+        /// become the retry. Without it those failures strand the user with only the corner
+        /// panel to find.
         /// </remarks>
         public bool ShowGate
         {
             get
             {
-                return State == ArtelConnectionState.NeedsKey &&
-                       (!HasStoredKey || HasAttemptedRegistration);
-            }
-        }
-
-        public bool HasStoredKey { get; private set; }
-
-        public string KeyInput
-        {
-            get { return keyInput; }
-            set
-            {
-                var newValue = value ?? string.Empty;
-                if (string.Equals(keyInput, newValue, StringComparison.Ordinal))
+                // loopback을 걸 수 없는 플랫폼에서는 게이트를 아예 띄우지 않는다. 누를 것이
+                // 없는 전체 화면 덮개는 게임을 가리기만 한다.
+                if (!HasToken && !ArtelLoopbackLogin.IsSupported)
                 {
-                    return;
+                    return false;
                 }
 
-                keyInput = newValue;
-                NotifyChanged();
+                if (State == ArtelConnectionState.ChoosingProject)
+                {
+                    return true;
+                }
+
+                return State == ArtelConnectionState.NeedsLogin &&
+                       (!HasStoredSession || HasAttemptedRegistration);
             }
         }
 
-        public bool CanRegister
+        public bool CanLogIn
         {
-            get { return State != ArtelConnectionState.Registering && !string.IsNullOrWhiteSpace(keyInput); }
+            get { return State == ArtelConnectionState.NeedsLogin && ArtelLoopbackLogin.IsSupported; }
         }
 
         public bool CanConnect
         {
-            get { return State != ArtelConnectionState.Registering && HasStoredKey; }
+            get
+            {
+                return State != ArtelConnectionState.Registering &&
+                       State != ArtelConnectionState.LoggingIn &&
+                       HasToken &&
+                       ArtelSdkSession.TryLoadInstanceId(out _);
+            }
         }
 
         /// <summary>
-        /// Loads the persisted instance key. Must run no earlier than <c>Start</c>, because
+        /// Loads the persisted session. Must run no earlier than <c>Start</c>, because
         /// <see cref="ArtelManager"/> adds the overlay controller before its own identity exists.
         /// </summary>
         public void Initialize()
         {
-            if (ArtelInstanceKey.TryLoad(out var storedKey))
+            projects.Clear();
+            HasToken = ArtelSdkSession.TryLoadToken(out _);
+            DisplayName = HasToken ? ArtelSdkSession.DisplayName : string.Empty;
+            SelectedProjectId = ArtelSdkSession.TryLoadProjectId(out var projectId) && HasToken
+                ? projectId
+                : string.Empty;
+
+            if (HasStoredSession)
             {
-                HasStoredKey = true;
-                keyInput = storedKey;
+                State = ArtelConnectionState.NeedsLogin;
                 ShowPanel = false;
-                Status = "저장된 인스턴스 키로 등록하는 중...";
+                Status = "저장된 로그인으로 등록하는 중...";
+            }
+            else if (HasToken)
+            {
+                State = ArtelConnectionState.ChoosingProject;
+                ShowPanel = true;
+                Status = "연결할 프로젝트를 불러오는 중...";
             }
             else
             {
-                HasStoredKey = false;
-                keyInput = string.Empty;
+                State = ArtelConnectionState.NeedsLogin;
                 ShowPanel = true;
-                Status = "대시보드에서 발급받은 인스턴스 키를 입력해 주세요.";
+                Status = ArtelLoopbackLogin.IsSupported
+                    ? "Artel 계정으로 로그인해 주세요."
+                    : "이 플랫폼에서는 브라우저 로그인을 지원하지 않습니다.";
             }
 
-            State = ArtelConnectionState.NeedsKey;
             HasError = false;
             NotifyChanged();
         }
 
-        public IEnumerator Register(
-            Server server,
-            string instanceKey,
-            string sdkUuid,
-            string gameVersion,
-            Action connect,
-            SceneScanReportDto sceneScan = null)
+        /// <summary>
+        /// 브라우저 로그인을 걸고, 받은 code를 토큰으로 바꾼 뒤 프로젝트 목록까지 이어서 읽는다.
+        /// </summary>
+        public IEnumerator LogIn(Server server)
         {
-            if (State == ArtelConnectionState.Registering)
+            if (State == ArtelConnectionState.LoggingIn || State == ArtelConnectionState.Registering)
             {
                 yield break;
             }
 
-            var trimmedKey = (instanceKey ?? string.Empty).Trim();
-            if (trimmedKey.Length == 0)
+            Uri frontendOrigin;
+            try
             {
-                FailRegistration("인스턴스 키를 입력해 주세요.");
+                frontendOrigin = server.FrontendBaseUri;
+            }
+            catch (Exception exception)
+            {
+                Fail("설정 오류: " + exception.Message);
                 yield break;
             }
 
-            // 서버는 빈 버전을 거절한다. 여기서 걸러내지 않으면 Player Settings를 비워둔
-            // 프로젝트가 원인을 알 수 없는 400을 받는다.
-            if (string.IsNullOrWhiteSpace(gameVersion))
-            {
-                FailRegistration("Player Settings의 Version이 비어 있습니다. 값을 설정한 뒤 다시 시도해 주세요.");
-                yield break;
-            }
-
-            KeyInput = trimmedKey;
-            HasAttemptedRegistration = true;
-            State = ArtelConnectionState.Registering;
+            State = ArtelConnectionState.LoggingIn;
             HasError = false;
-            SetStatus("인스턴스 키를 등록하는 중...");
+            SetStatus("브라우저에서 로그인을 완료해 주세요.");
+
+            var login = default(ArtelLoginCode);
+            yield return ArtelLoopbackLogin.Authorize(frontendOrigin, result => login = result);
+
+            if (!login.IsSuccess)
+            {
+                Fail("로그인 실패: " + login.Error);
+                yield break;
+            }
+
+            SetStatus("로그인을 확인하는 중...");
 
             UnityWebRequest request;
             try
             {
-                request = registrationClient.CreateRequest(server, trimmedKey, sdkUuid, gameVersion, sceneScan);
+                request = authClient.CreateTokenRequest(server, login.Code, login.CodeVerifier);
             }
             catch (Exception exception)
             {
-                FailRegistration("설정 오류: " + exception.Message);
+                Fail("설정 오류: " + exception.Message);
                 yield break;
             }
 
@@ -168,27 +204,242 @@ namespace Artel
 
                 succeeded = request.result == UnityWebRequest.Result.Success;
                 responseCode = request.responseCode;
-                responseBody = request.downloadHandler == null ? string.Empty : request.downloadHandler.text;
+                responseBody = ReadBody(request);
             }
 
             if (!succeeded)
             {
-                if (responseCode == NotFoundStatusCode)
+                Fail("로그인 실패: " + DescribeFailure(responseCode, responseBody));
+                yield break;
+            }
+
+            SdkTokenResponseDto token;
+            try
+            {
+                token = jsonCodec.Deserialize<SdkTokenResponseDto>(responseBody);
+            }
+            catch (Exception exception)
+            {
+                Fail("로그인 실패: 응답을 읽지 못했습니다. " + exception.Message);
+                yield break;
+            }
+
+            if (token == null || string.IsNullOrWhiteSpace(token.Token))
+            {
+                Fail("로그인 실패: 응답에 토큰이 없습니다.");
+                yield break;
+            }
+
+            ArtelSdkSession.SaveToken(token.Token, token.ExpiresAt, token.DisplayName);
+            HasToken = true;
+            DisplayName = token.DisplayName ?? string.Empty;
+
+            yield return LoadProjects(server);
+        }
+
+        /// <summary>
+        /// 이 토큰으로 붙을 수 있는 프로젝트를 읽는다. 하나뿐이면 고르게 하지 않고 바로 쓴다.
+        /// </summary>
+        public IEnumerator LoadProjects(Server server)
+        {
+            if (!ArtelSdkSession.TryLoadToken(out var token))
+            {
+                ExpireSession("로그인이 필요합니다.");
+                yield break;
+            }
+
+            State = ArtelConnectionState.ChoosingProject;
+            HasError = false;
+            SetStatus("프로젝트 목록을 불러오는 중...");
+
+            UnityWebRequest request;
+            try
+            {
+                request = authClient.CreateProjectsRequest(server, token);
+            }
+            catch (Exception exception)
+            {
+                Fail("설정 오류: " + exception.Message);
+                yield break;
+            }
+
+            bool succeeded;
+            long responseCode;
+            string responseBody;
+            using (request)
+            {
+                yield return request.SendWebRequest();
+
+                succeeded = request.result == UnityWebRequest.Result.Success;
+                responseCode = request.responseCode;
+                responseBody = ReadBody(request);
+            }
+
+            if (!succeeded)
+            {
+                if (responseCode == UnauthorizedStatusCode)
                 {
-                    ArtelInstanceKey.Clear();
-                    HasStoredKey = false;
-                    FailRegistration("등록 실패: 알 수 없는 인스턴스 키입니다. 대시보드에서 키를 다시 확인해 주세요.");
+                    ExpireSession("로그인이 만료되었습니다. 다시 로그인해 주세요.");
                 }
                 else
                 {
-                    FailRegistration("등록 실패: " + DescribeFailure(responseCode, responseBody));
+                    Fail("프로젝트 목록을 불러오지 못했습니다: " + DescribeFailure(responseCode, responseBody));
                 }
 
                 yield break;
             }
 
-            ArtelInstanceKey.Save(trimmedKey);
-            HasStoredKey = true;
+            SdkProjectsResponseDto response;
+            try
+            {
+                response = jsonCodec.Deserialize<SdkProjectsResponseDto>(responseBody);
+            }
+            catch (Exception exception)
+            {
+                Fail("프로젝트 목록을 읽지 못했습니다: " + exception.Message);
+                yield break;
+            }
+
+            projects.Clear();
+            foreach (var project in response?.Projects ?? new List<SdkProjectDto>())
+            {
+                if (project != null && !string.IsNullOrWhiteSpace(project.Id))
+                {
+                    projects.Add(project);
+                }
+            }
+
+            if (projects.Count == 0)
+            {
+                Fail("접근할 수 있는 프로젝트가 없습니다. 대시보드에서 프로젝트를 먼저 만들어 주세요.");
+                yield break;
+            }
+
+            if (projects.Count == 1)
+            {
+                SelectProject(projects[0].Id);
+                yield break;
+            }
+
+            SetStatus("연결할 프로젝트를 선택해 주세요.");
+        }
+
+        public void SelectProject(string projectId)
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+            {
+                return;
+            }
+
+            SelectedProjectId = projectId.Trim();
+            ArtelSdkSession.SaveProjectId(SelectedProjectId);
+            HasError = false;
+            SetStatus("프로젝트를 선택했습니다. 등록하는 중...");
+        }
+
+        public IEnumerator Register(
+            Server server,
+            string sdkUuid,
+            string instanceName,
+            string gameVersion,
+            Action connect,
+            SceneScanReportDto sceneScan = null)
+        {
+            if (State == ArtelConnectionState.Registering)
+            {
+                yield break;
+            }
+
+            if (!ArtelSdkSession.TryLoadToken(out var token))
+            {
+                ExpireSession("로그인이 필요합니다.");
+                yield break;
+            }
+
+            if (SelectedProjectId.Length == 0)
+            {
+                Fail("연결할 프로젝트를 선택해 주세요.");
+                yield break;
+            }
+
+            // 서버는 빈 버전을 거절한다. 여기서 걸러내지 않으면 Player Settings를 비워둔
+            // 프로젝트가 원인을 알 수 없는 400을 받는다.
+            if (string.IsNullOrWhiteSpace(gameVersion))
+            {
+                Fail("Player Settings의 Version이 비어 있습니다. 값을 설정한 뒤 다시 시도해 주세요.");
+                yield break;
+            }
+
+            HasAttemptedRegistration = true;
+            State = ArtelConnectionState.Registering;
+            HasError = false;
+            SetStatus("인스턴스를 등록하는 중...");
+
+            UnityWebRequest request;
+            try
+            {
+                request = registrationClient.CreateRequest(
+                    server, token, SelectedProjectId, sdkUuid, instanceName, gameVersion, sceneScan);
+            }
+            catch (Exception exception)
+            {
+                Fail("설정 오류: " + exception.Message);
+                yield break;
+            }
+
+            bool succeeded;
+            long responseCode;
+            string responseBody;
+            using (request)
+            {
+                yield return request.SendWebRequest();
+
+                succeeded = request.result == UnityWebRequest.Result.Success;
+                responseCode = request.responseCode;
+                responseBody = ReadBody(request);
+            }
+
+            if (!succeeded)
+            {
+                if (responseCode == UnauthorizedStatusCode)
+                {
+                    ExpireSession("로그인이 만료되었습니다. 다시 로그인해 주세요.");
+                }
+                else if (responseCode == NotFoundStatusCode)
+                {
+                    // 그 사용자가 더 이상 붙을 수 없는 프로젝트다. 선택을 지워야 다음 화면이
+                    // 같은 404를 반복하지 않고 목록부터 다시 고르게 한다.
+                    SelectedProjectId = string.Empty;
+                    Fail("등록 실패: 접근할 수 없는 프로젝트입니다. 프로젝트를 다시 선택해 주세요.");
+                }
+                else
+                {
+                    Fail("등록 실패: " + DescribeFailure(responseCode, responseBody));
+                }
+
+                yield break;
+            }
+
+            SdkRegistrationResponseDto registration;
+            try
+            {
+                registration = jsonCodec.Deserialize<SdkRegistrationResponseDto>(responseBody);
+            }
+            catch (Exception exception)
+            {
+                Fail("등록 실패: 응답을 읽지 못했습니다. " + exception.Message);
+                yield break;
+            }
+
+            // instanceId가 없으면 WebSocket도 캡처도 붙을 곳을 모른다. 등록만 성공했다고
+            // 넘어가면 다음 실패가 연결 쪽에서 원인 없이 나타난다.
+            if (registration == null || string.IsNullOrWhiteSpace(registration.InstanceId))
+            {
+                Fail("등록 실패: 응답에 instanceId가 없습니다.");
+                yield break;
+            }
+
+            ArtelSdkSession.SaveInstanceId(registration.InstanceId);
             HasError = false;
             State = ArtelConnectionState.Connecting;
             SetStatus("등록에 성공했습니다. 실시간 서버에 연결하는 중...");
@@ -216,30 +467,52 @@ namespace Artel
             }
             catch (Exception exception)
             {
-                State = ArtelConnectionState.NeedsKey;
+                State = ArtelConnectionState.NeedsLogin;
                 ShowPanel = true;
                 HasError = true;
                 SetStatus("연결 실패: " + exception.Message);
             }
         }
 
-        public void ClearStoredKey()
+        public void LogOut()
         {
-            ArtelInstanceKey.Clear();
-            HasStoredKey = false;
-            keyInput = string.Empty;
-            State = ArtelConnectionState.NeedsKey;
-            ShowPanel = true;
+            ForgetSession();
             HasError = false;
-            SetStatus("저장된 인스턴스 키를 지웠습니다.");
+            SetStatus("로그아웃했습니다.");
         }
 
-        private void FailRegistration(string status)
+        /// <summary>어떤 요청이든 401을 받으면 저장 토큰을 버리고 로그인 화면으로 되돌린다.</summary>
+        private void ExpireSession(string status)
         {
-            State = ArtelConnectionState.NeedsKey;
+            ForgetSession();
+            HasError = true;
+            SetStatus(status);
+        }
+
+        private void ForgetSession()
+        {
+            ArtelSdkSession.Clear();
+            projects.Clear();
+            HasToken = false;
+            DisplayName = string.Empty;
+            SelectedProjectId = string.Empty;
+            State = ArtelConnectionState.NeedsLogin;
+            ShowPanel = true;
+        }
+
+        // 실패한 뒤 돌아갈 화면은 토큰이 남아 있느냐로 갈린다. 토큰이 있으면 다시 로그인시킬
+        // 이유가 없고, 사람이 손볼 수 있는 것은 프로젝트 선택뿐이다.
+        private void Fail(string status)
+        {
+            State = HasToken ? ArtelConnectionState.ChoosingProject : ArtelConnectionState.NeedsLogin;
             ShowPanel = true;
             HasError = true;
             SetStatus(status);
+        }
+
+        private static string ReadBody(UnityWebRequest request)
+        {
+            return request.downloadHandler == null ? string.Empty : request.downloadHandler.text;
         }
 
         private static string DescribeFailure(long responseCode, string responseBody)
