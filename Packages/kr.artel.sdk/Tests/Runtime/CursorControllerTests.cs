@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using Artel.Protocol.Dto;
 using NUnit.Framework;
 using TMPro;
@@ -38,6 +39,50 @@ namespace Artel.Tests
             Assert.That(cursor.gameObject.activeSelf, Is.True);
             Assert.That(cursor.position.x, Is.EqualTo(120f).Within(0.01f));
             Assert.That(cursor.position.y, Is.EqualTo(240f).Within(0.01f));
+        }
+
+        [Test]
+        public void Cursor_UsesArtelCoralWithHighContrastBorder()
+        {
+            var hadTheme = PlayerPrefs.HasKey("Artel.DarkTheme");
+            var previousTheme = PlayerPrefs.GetInt("Artel.DarkTheme");
+            try
+            {
+                PlayerPrefs.SetInt("Artel.DarkTheme", 1);
+                controllerObject = new GameObject("cursor controller");
+                var controller = controllerObject.AddComponent<CursorController>();
+                typeof(CursorController)
+                    .GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(controller, null);
+
+                var texture = controllerObject.transform
+                    .Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor")
+                    .GetComponent<Image>().sprite.texture;
+                var pixels = texture.GetPixels32();
+
+                Assert.That(pixels, Has.Some.EqualTo(ArtelLogoGraphic.CoralDark));
+                Assert.That(pixels, Has.Some.EqualTo(ArtelLogoGraphic.Ink));
+
+                PlayerPrefs.SetInt("Artel.DarkTheme", 0);
+                typeof(CursorController)
+                    .GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(controller, null);
+
+                var lightPixels = texture.GetPixels32();
+                Assert.That(lightPixels, Has.Some.EqualTo(ArtelLogoGraphic.Coral));
+                Assert.That(lightPixels, Has.Some.EqualTo(ArtelLogoGraphic.Charcoal));
+            }
+            finally
+            {
+                if (hadTheme)
+                {
+                    PlayerPrefs.SetInt("Artel.DarkTheme", previousTheme);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey("Artel.DarkTheme");
+                }
+            }
         }
 
         [Test]

@@ -16,10 +16,13 @@ namespace Artel.Tests.Transport
     {
         private const string PlayerPrefsKey = "Artel.SdkId";
         private const string InstanceKeyPlayerPrefsKey = "Artel.InstanceKey";
+        private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
         private string originalSdkId;
         private bool hadOriginalSdkId;
         private string originalInstanceKey;
         private bool hadOriginalInstanceKey;
+        private int originalDarkTheme;
+        private bool hadOriginalDarkTheme;
 
         [SetUp]
         public void SetUp()
@@ -28,7 +31,10 @@ namespace Artel.Tests.Transport
             originalSdkId = PlayerPrefs.GetString(PlayerPrefsKey);
             hadOriginalInstanceKey = PlayerPrefs.HasKey(InstanceKeyPlayerPrefsKey);
             originalInstanceKey = PlayerPrefs.GetString(InstanceKeyPlayerPrefsKey);
+            hadOriginalDarkTheme = PlayerPrefs.HasKey(DarkThemePlayerPrefsKey);
+            originalDarkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey);
             PlayerPrefs.DeleteKey(InstanceKeyPlayerPrefsKey);
+            PlayerPrefs.DeleteKey(DarkThemePlayerPrefsKey);
         }
 
         [TearDown]
@@ -50,6 +56,15 @@ namespace Artel.Tests.Transport
             else
             {
                 PlayerPrefs.DeleteKey(InstanceKeyPlayerPrefsKey);
+            }
+
+            if (hadOriginalDarkTheme)
+            {
+                PlayerPrefs.SetInt(DarkThemePlayerPrefsKey, originalDarkTheme);
+            }
+            else
+            {
+                PlayerPrefs.DeleteKey(DarkThemePlayerPrefsKey);
             }
 
             PlayerPrefs.Save();
@@ -323,7 +338,8 @@ namespace Artel.Tests.Transport
                 var canvas = GameObject.Find("Artel Overlay Canvas");
                 Assert.That(canvas, Is.Not.Null);
                 var buttons = canvas.GetComponentsInChildren<Button>(true);
-                var smoothCursorToggle = canvas.GetComponentInChildren<Toggle>(true);
+                var toggles = canvas.GetComponentsInChildren<Toggle>(true);
+                var smoothCursorToggle = Array.Find(toggles, toggle => toggle.name == "부드러운 커서 Toggle");
                 var instanceKeyField = canvas.GetComponentInChildren<InputField>(true);
                 var registerButton = Array.Find(buttons, button => button.name == "등록 Button");
                 var connectButton = Array.Find(buttons, button => button.name == "연결 Button");
@@ -341,6 +357,8 @@ namespace Artel.Tests.Transport
                 Assert.That(connectButton.interactable, Is.False);
                 Assert.That(smoothCursorToggle, Is.Not.Null);
                 Assert.That(smoothCursorToggle.isOn, Is.False);
+                Assert.That(Array.Find(toggles, toggle => toggle.name == "다크 모드 Toggle"), Is.Not.Null);
+                Assert.That(canvas.GetComponentsInChildren<ArtelLogoGraphic>(true), Has.Length.EqualTo(3));
             }
             finally
             {
@@ -517,6 +535,122 @@ namespace Artel.Tests.Transport
                     ContrastRatio(registerButton.image.color, label.color),
                     Is.GreaterThanOrEqualTo(4.5f));
             });
+        }
+
+        [Test]
+        public void OverlayGui_UsesBrandCoralOnlyForActionAccent()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                var logos = canvas.GetComponentsInChildren<ArtelLogoGraphic>(true);
+                var registerButton = Array.Find(
+                    canvas.GetComponentsInChildren<Button>(true),
+                    button => button.name == "등록 Button");
+                var checkmark = canvas.transform.Find("Artel Panel/Advanced Section/부드러운 커서 Toggle/Background/Checkmark")
+                    .GetComponent<Image>();
+
+                Assert.That(logos, Has.Length.EqualTo(3));
+
+                // 오버레이 기본은 다크다. accent는 밝힌 coral이어야 한다.
+                Assert.That(registerButton.image.color, Is.EqualTo((Color)ArtelLogoGraphic.CoralDark));
+
+                // 시안 action 색은 없앴다. Blueprint Paper에서 action은 브랜드 accent와
+                // 같은 색을 쓴다. 실패·성공만 자기 의미 색을 유지한다.
+                Assert.That(checkmark.color, Is.EqualTo((Color)ArtelLogoGraphic.CoralDark));
+
+                Assert.That(ArtelLogoGraphic.Charcoal, Is.EqualTo(new Color32(0x20, 0x23, 0x2B, 0xFF)));
+                Assert.That(ArtelLogoGraphic.Coral, Is.EqualTo(new Color32(0xF0, 0x4B, 0x3A, 0xFF)));
+                Assert.That(ArtelLogoGraphic.CoralDark, Is.EqualTo(new Color32(0xFF, 0x5C, 0x48, 0xFF)));
+                Assert.That(ArtelLogoGraphic.Ink, Is.EqualTo(new Color32(0xF2, 0xEF, 0xE9, 0xFF)));
+            });
+        }
+
+        [Test]
+        public void OverlayGui_ThemeTogglePersistsAndReversesLogoBody()
+        {
+            WithOverlay((controller, canvas) =>
+            {
+                var darkThemeToggle = Array.Find(
+                    canvas.GetComponentsInChildren<Toggle>(true),
+                    toggle => toggle.name == "다크 모드 Toggle");
+
+                Assert.That(darkThemeToggle, Is.Not.Null);
+                Assert.That(darkThemeToggle.isOn, Is.True);
+                Assert.That(
+                    Array.Find(
+                        canvas.GetComponentsInChildren<Button>(true),
+                        button => button.name == "Artel Button")
+                    .transform.Find("Artel Logo"),
+                    Is.Not.Null);
+                Assert.That(
+                    canvas.GetComponentInChildren<ArtelLogoGraphic>(true).BodyColor,
+                    Is.EqualTo(ArtelLogoGraphic.Ink));
+
+                darkThemeToggle.isOn = false;
+
+                var currentCanvas = (GameObject)typeof(ArtelOverlayController)
+                    .GetField("canvasObject", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(controller);
+                Assert.That(PlayerPrefs.GetInt(DarkThemePlayerPrefsKey), Is.Zero);
+                Assert.That(
+                    currentCanvas.GetComponentInChildren<ArtelLogoGraphic>(true).BodyColor,
+                    Is.EqualTo(ArtelLogoGraphic.Charcoal));
+            });
+        }
+
+        [Test]
+        public void ArtelLogoGraphic_DrawsFiveCharcoalSegmentsAndOneCoralSegment()
+        {
+            var logoObject = new GameObject("Artel logo mesh test", typeof(RectTransform), typeof(ArtelLogoGraphic));
+            var vertexHelper = new VertexHelper();
+
+            try
+            {
+                logoObject.GetComponent<RectTransform>().sizeDelta = new Vector2(64f, 64f);
+                typeof(ArtelLogoGraphic)
+                    .GetMethod(
+                        "OnPopulateMesh",
+                        BindingFlags.Instance | BindingFlags.NonPublic,
+                        null,
+                        new[] { typeof(VertexHelper) },
+                        null)
+                    .Invoke(logoObject.GetComponent<ArtelLogoGraphic>(), new object[] { vertexHelper });
+
+                // 본체는 선분별 quad가 아니라 공유 miter join을 가진 하나의 strip이다.
+                Assert.That(vertexHelper.currentVertCount, Is.EqualTo(16));
+                Assert.That(vertexHelper.currentIndexCount, Is.EqualTo(36));
+
+                var mesh = new Mesh();
+                vertexHelper.FillMesh(mesh);
+                Assert.That(Array.FindAll(mesh.colors32, color => color.Equals(ArtelLogoGraphic.Charcoal)), Has.Length.EqualTo(12));
+                Assert.That(Array.FindAll(mesh.colors32, color => color.Equals(ArtelLogoGraphic.Coral)), Has.Length.EqualTo(4));
+
+                var expectedControlPoints = new[]
+                {
+                    new Vector2(20f, -8f),
+                    new Vector2(20f, 14f),
+                    new Vector2(0f, 26f),
+                    new Vector2(-20f, 14f),
+                    new Vector2(-20f, -14f),
+                    new Vector2(-2f, -24f),
+                    new Vector2(4f, -24f),
+                    new Vector2(20f, -14f)
+                };
+                var vertices = mesh.vertices;
+                for (var index = 0; index < expectedControlPoints.Length; index++)
+                {
+                    var midpoint = ((Vector2)vertices[index * 2] + (Vector2)vertices[(index * 2) + 1]) * 0.5f;
+                    Assert.That(midpoint.x, Is.EqualTo(expectedControlPoints[index].x).Within(0.001f));
+                    Assert.That(midpoint.y, Is.EqualTo(expectedControlPoints[index].y).Within(0.001f));
+                }
+
+                UnityEngine.Object.DestroyImmediate(mesh);
+            }
+            finally
+            {
+                vertexHelper.Dispose();
+                UnityEngine.Object.DestroyImmediate(logoObject);
+            }
         }
 
         [UnityTest]
