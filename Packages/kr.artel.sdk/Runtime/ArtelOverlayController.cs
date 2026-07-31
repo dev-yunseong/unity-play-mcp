@@ -13,7 +13,7 @@ namespace Artel
         private const int InstanceKeyCharacterLimit = 24;
         private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
 
-        // artel-home의 src/styles/tokens.css에서 가져온 값. CSS를 C#으로 자동 동기화할
+        // artel-home의 src/styles/tokens.css(Blueprint Paper)에서 가져온 값. CSS를 C#으로 자동 동기화할
         // 수단이 없으므로, 16진 리터럴로 적어 두는 것이 원본과 대조하는 유일한 방법이다.
         // Color32를 쓰는 이유는 컴파일 타임에 걸리기 때문이다. ColorUtility로 파싱하면
         // 오타가 런타임에 조용히 잘못된 색이 된다.
@@ -25,8 +25,11 @@ namespace Artel
         private Color textMuted;
         private Color bgCanvas;
         private Color coverColor;
-        private static readonly Color BrandAccent = ArtelLogoGraphic.Coral;
-        private static readonly Color ActionPrimary = new Color32(0x24, 0xC7, 0xE8, 0xFF);
+        // 브랜드·action 색은 테마에 따라 달라지므로 static일 수 없다. 실패·성공은
+        // 의미 색이라 두 테마에서 같은 값을 유지한다.
+        private Color brandAccent;
+        private Color actionPrimary;
+        private Color textOnAccent;
         private static readonly Color StatusCritical = new Color32(0xFF, 0x63, 0x4F, 0xFF);
         private static readonly Color StatusSuccess = new Color32(0x48, 0xC7, 0x8E, 0xFF);
 
@@ -532,7 +535,7 @@ namespace Artel
 
             if (primary)
             {
-                buttonObject.GetComponent<Image>().color = BrandAccent;
+                buttonObject.GetComponent<Image>().color = brandAccent;
             }
             else
             {
@@ -550,7 +553,7 @@ namespace Artel
                 label,
                 17,
                 TextAnchor.MiddleCenter,
-                primary ? bgCanvas : textPrimary);
+                primary ? textOnAccent : textPrimary);
             text.rectTransform.anchorMin = Vector2.zero;
             text.rectTransform.anchorMax = Vector2.one;
             text.rectTransform.offsetMin = Vector2.zero;
@@ -587,7 +590,8 @@ namespace Artel
             var mark = new GameObject("Artel Logo", typeof(RectTransform), typeof(ArtelLogoGraphic));
             mark.transform.SetParent(parent, false);
             var logo = mark.GetComponent<ArtelLogoGraphic>();
-            logo.BodyColor = darkTheme ? (Color32)Color.white : ArtelLogoGraphic.Charcoal;
+            logo.BodyColor = ArtelLogoGraphic.Body(darkTheme);
+            logo.AccentColor = ArtelLogoGraphic.Accent(darkTheme);
             logo.raycastTarget = false;
             CenterRect(mark.GetComponent<RectTransform>(), position, new Vector2(size, size));
         }
@@ -612,7 +616,7 @@ namespace Artel
             checkmarkRect.offsetMin = Vector2.zero;
             checkmarkRect.offsetMax = Vector2.zero;
             var checkmark = checkmarkObject.GetComponent<Image>();
-            checkmark.color = ActionPrimary;
+            checkmark.color = actionPrimary;
 
             var text = CreateText(toggleObject.transform, label, 16, TextAnchor.MiddleLeft);
             SetRect(text.rectTransform, new Vector2(40f, 0f), new Vector2(180f, 28f));
@@ -652,24 +656,31 @@ namespace Artel
         {
             if (darkTheme)
             {
-                bgCanvas = new Color32(0x09, 0x0C, 0x10, 0xFF);
-                bgSurface = new Color32(0x10, 0x15, 0x1B, 0xFF);
-                bgRaised = new Color32(0x17, 0x1D, 0x25, 0xFF);
-                borderStrong = new Color32(0x3B, 0x48, 0x57, 0xFF);
-                textPrimary = new Color32(0xF4, 0xF7, 0xFA, 0xFF);
-                textSecondary = new Color32(0xA7, 0xB0, 0xBC, 0xFF);
-                textMuted = new Color32(0x70, 0x7B, 0x88, 0xFF);
+                bgCanvas = new Color32(0x14, 0x16, 0x1C, 0xFF);
+                bgSurface = new Color32(0x1A, 0x1D, 0x24, 0xFF);
+                bgRaised = new Color32(0x22, 0x26, 0x2F, 0xFF);
+                borderStrong = new Color32(0x61, 0x6B, 0x7A, 0xFF);
+                textPrimary = ArtelLogoGraphic.Ink;
+                textSecondary = new Color32(0x9A, 0xA1, 0xAD, 0xFF);
+                textMuted = new Color32(0x83, 0x8C, 0x9A, 0xFF);
             }
             else
             {
-                bgCanvas = new Color32(0xFA, 0xF8, 0xF3, 0xFF);
-                bgSurface = Color.white;
-                bgRaised = new Color32(0xF4, 0xF1, 0xEB, 0xFF);
-                borderStrong = new Color32(0xC9, 0xC4, 0xBB, 0xFF);
+                bgCanvas = new Color32(0xF7, 0xF4, 0xEE, 0xFF);
+                bgSurface = new Color32(0xFD, 0xFB, 0xF7, 0xFF);
+                bgRaised = new Color32(0xF1, 0xED, 0xE5, 0xFF);
+                borderStrong = new Color32(0x92, 0x8C, 0x7D, 0xFF);
                 textPrimary = ArtelLogoGraphic.Charcoal;
-                textSecondary = new Color32(0x52, 0x58, 0x66, 0xFF);
-                textMuted = new Color32(0x70, 0x76, 0x82, 0xFF);
+                textSecondary = new Color32(0x5A, 0x5F, 0x6B, 0xFF);
+                textMuted = new Color32(0x6F, 0x6C, 0x62, 0xFF);
             }
+
+            brandAccent = ArtelLogoGraphic.Accent(darkTheme);
+            actionPrimary = brandAccent;
+
+            // 채운 accent 위에는 두 테마 모두 잉크를 얹는다. 흰 글자는 #F04B3A 위에서
+            // 3.64:1이고 잉크는 4.97:1이다. 버튼 라벨에는 후자만 통과한다.
+            textOnAccent = new Color32(0x14, 0x16, 0x1C, 0xFF);
 
             // 덮개는 씬 전환을 비추지 않도록 항상 불투명하다.
             coverColor = bgCanvas;

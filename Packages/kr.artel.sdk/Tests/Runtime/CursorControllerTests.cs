@@ -60,15 +60,17 @@ namespace Artel.Tests
                     .GetComponent<Image>().sprite.texture;
                 var pixels = texture.GetPixels32();
 
-                Assert.That(pixels, Has.Some.EqualTo(ArtelLogoGraphic.Coral));
-                Assert.That(pixels, Has.Some.EqualTo(new Color32(244, 247, 250, 255)));
+                Assert.That(pixels, Has.Some.EqualTo(ArtelLogoGraphic.CoralDark));
+                Assert.That(pixels, Has.Some.EqualTo(ArtelLogoGraphic.Ink));
 
                 PlayerPrefs.SetInt("Artel.DarkTheme", 0);
                 typeof(CursorController)
                     .GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(controller, null);
 
-                Assert.That(texture.GetPixels32(), Has.Some.EqualTo(ArtelLogoGraphic.Charcoal));
+                var lightPixels = texture.GetPixels32();
+                Assert.That(lightPixels, Has.Some.EqualTo(ArtelLogoGraphic.Coral));
+                Assert.That(lightPixels, Has.Some.EqualTo(ArtelLogoGraphic.Charcoal));
             }
             finally
             {

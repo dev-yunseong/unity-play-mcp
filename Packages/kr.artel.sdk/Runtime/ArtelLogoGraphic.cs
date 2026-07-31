@@ -7,9 +7,19 @@ namespace Artel
     public sealed class ArtelLogoGraphic : Graphic
     {
         internal static readonly Color32 Charcoal = new Color32(0x20, 0x23, 0x2B, 0xFF);
+        internal static readonly Color32 Ink = new Color32(0xF2, 0xEF, 0xE9, 0xFF);
         internal static readonly Color32 Coral = new Color32(0xF0, 0x4B, 0x3A, 0xFF);
 
+        // #F04B3A는 다크 배경(#14161C) 위에서 대비 4.5:1을 넘지 못한다. 라이트에서는
+        // 원본을 그대로 쓴다. artel-home과 마케팅 사이트가 쓰는 규칙과 같다.
+        internal static readonly Color32 CoralDark = new Color32(0xFF, 0x5C, 0x48, 0xFF);
+
+        internal static Color32 Accent(bool darkTheme) => darkTheme ? CoralDark : Coral;
+
+        internal static Color32 Body(bool darkTheme) => darkTheme ? Ink : Charcoal;
+
         private Color32 bodyColor = Charcoal;
+        private Color32 accentColor = Coral;
 
         public Color32 BodyColor
         {
@@ -17,6 +27,16 @@ namespace Artel
             set
             {
                 bodyColor = value;
+                SetVerticesDirty();
+            }
+        }
+
+        public Color32 AccentColor
+        {
+            get => accentColor;
+            set
+            {
+                accentColor = value;
                 SetVerticesDirty();
             }
         }
@@ -37,7 +57,7 @@ namespace Artel
             vertexHelper.Clear();
 
             AddPolyline(vertexHelper, BodyPoints, bodyColor);
-            AddStroke(vertexHelper, new Vector2(36f, 56f), new Vector2(52f, 46f), Coral);
+            AddStroke(vertexHelper, new Vector2(36f, 56f), new Vector2(52f, 46f), accentColor);
         }
 
         private void AddPolyline(VertexHelper vertexHelper, Vector2[] points, Color32 strokeColor)

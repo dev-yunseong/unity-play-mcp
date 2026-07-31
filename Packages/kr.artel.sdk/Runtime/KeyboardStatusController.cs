@@ -10,8 +10,10 @@ namespace Artel
     {
         private const int OverlaySortingOrder = short.MaxValue - 2;
         private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
-        internal static readonly Color32 DarkPanelColor = new Color32(0x10, 0x15, 0x1B, 0xF5);
-        internal static readonly Color32 LightPanelColor = new Color32(0xFF, 0xFF, 0xFF, 0xF5);
+        // artel-home tokens.css의 bg.surface. 게임 화면 위에 뜨므로 알파를 남겨 두되
+        // 글자 대비를 지킬 만큼은 불투명해야 한다.
+        internal static readonly Color32 DarkPanelColor = new Color32(0x1A, 0x1D, 0x24, 0xF5);
+        internal static readonly Color32 LightPanelColor = new Color32(0xFD, 0xFB, 0xF7, 0xF5);
 
         private static readonly string[] MouseButtonNames = { "LEFT", "RIGHT", "MIDDLE" };
 
@@ -22,6 +24,9 @@ namespace Artel
         private Text keyStatusText;
         private Text pointerStatusText;
         private Image panelImage;
+        private Image accentImage;
+        private Text keyTitleText;
+        private Text pointerTitleText;
         private bool darkTheme;
         private string displayedKeys;
         private string displayedPointer;
@@ -183,14 +188,14 @@ namespace Artel
 
             var accent = new GameObject("Brand Accent", typeof(RectTransform), typeof(Image));
             accent.transform.SetParent(panelObject.transform, false);
-            accent.GetComponent<Image>().color = ArtelLogoGraphic.Coral;
-            accent.GetComponent<Image>().raycastTarget = false;
+            accentImage = accent.GetComponent<Image>();
+            accentImage.raycastTarget = false;
             SetStretchRect(accent.GetComponent<RectTransform>(), Vector2.zero, new Vector2(-714f, 0f));
 
-            var keyTitle = CreateText(panelObject.transform, "PRESSED KEYS", 13, ArtelLogoGraphic.Coral);
-            SetStretchRect(keyTitle.rectTransform, new Vector2(24f, 55f), new Vector2(-304f, -10f));
+            keyTitleText = CreateText(panelObject.transform, "PRESSED KEYS", 13, ArtelLogoGraphic.Accent(darkTheme));
+            SetStretchRect(keyTitleText.rectTransform, new Vector2(24f, 55f), new Vector2(-304f, -10f));
 
-            keyStatusText = CreateText(panelObject.transform, string.Empty, 23, Color.white);
+            keyStatusText = CreateText(panelObject.transform, string.Empty, 23, ArtelLogoGraphic.Ink);
             keyStatusText.fontStyle = FontStyle.Bold;
             SetStretchRect(keyStatusText.rectTransform, new Vector2(24f, 10f), new Vector2(-304f, -40f));
 
@@ -204,25 +209,29 @@ namespace Artel
             separatorRect.anchoredPosition = new Vector2(432f, 0f);
             separatorRect.sizeDelta = new Vector2(1f, 64f);
 
-            var pointerTitle = CreateText(panelObject.transform, "POINTER", 13, ArtelLogoGraphic.Coral);
-            SetStretchRect(pointerTitle.rectTransform, new Vector2(456f, 55f), new Vector2(-24f, -10f));
+            pointerTitleText = CreateText(panelObject.transform, "POINTER", 13, ArtelLogoGraphic.Accent(darkTheme));
+            SetStretchRect(pointerTitleText.rectTransform, new Vector2(456f, 55f), new Vector2(-24f, -10f));
 
-            pointerStatusText = CreateText(panelObject.transform, string.Empty, 19, Color.white);
+            pointerStatusText = CreateText(panelObject.transform, string.Empty, 19, ArtelLogoGraphic.Ink);
             pointerStatusText.fontStyle = FontStyle.Bold;
             SetStretchRect(pointerStatusText.rectTransform, new Vector2(456f, 10f), new Vector2(-24f, -40f));
         }
 
         private void ApplyTheme()
         {
-            var foreground = darkTheme ? Color.white : (Color)ArtelLogoGraphic.Charcoal;
+            var foreground = (Color)ArtelLogoGraphic.Body(darkTheme);
+            var accent = (Color)ArtelLogoGraphic.Accent(darkTheme);
             panelImage.color = darkTheme ? DarkPanelColor : LightPanelColor;
             keyStatusText.color = foreground;
             pointerStatusText.color = foreground;
+            accentImage.color = accent;
+            keyTitleText.color = accent;
+            pointerTitleText.color = accent;
 
             var separator = panelImage.transform.Find("Separator").GetComponent<Image>();
             separator.color = darkTheme
-                ? new Color32(0x3B, 0x48, 0x57, 0xFF)
-                : new Color32(0xD8, 0xD3, 0xC9, 0xFF);
+                ? new Color32(0x61, 0x6B, 0x7A, 0xFF)
+                : new Color32(0x92, 0x8C, 0x7D, 0xFF);
         }
 
         private void RefreshText()

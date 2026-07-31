@@ -550,10 +550,18 @@ namespace Artel.Tests.Transport
                     .GetComponent<Image>();
 
                 Assert.That(logos, Has.Length.EqualTo(3));
-                Assert.That(registerButton.image.color, Is.EqualTo((Color)ArtelLogoGraphic.Coral));
-                Assert.That(checkmark.color, Is.EqualTo((Color)new Color32(0x24, 0xC7, 0xE8, 0xFF)));
+
+                // 오버레이 기본은 다크다. accent는 밝힌 coral이어야 한다.
+                Assert.That(registerButton.image.color, Is.EqualTo((Color)ArtelLogoGraphic.CoralDark));
+
+                // 시안 action 색은 없앴다. Blueprint Paper에서 action은 브랜드 accent와
+                // 같은 색을 쓴다. 실패·성공만 자기 의미 색을 유지한다.
+                Assert.That(checkmark.color, Is.EqualTo((Color)ArtelLogoGraphic.CoralDark));
+
                 Assert.That(ArtelLogoGraphic.Charcoal, Is.EqualTo(new Color32(0x20, 0x23, 0x2B, 0xFF)));
                 Assert.That(ArtelLogoGraphic.Coral, Is.EqualTo(new Color32(0xF0, 0x4B, 0x3A, 0xFF)));
+                Assert.That(ArtelLogoGraphic.CoralDark, Is.EqualTo(new Color32(0xFF, 0x5C, 0x48, 0xFF)));
+                Assert.That(ArtelLogoGraphic.Ink, Is.EqualTo(new Color32(0xF2, 0xEF, 0xE9, 0xFF)));
             });
         }
 
@@ -576,7 +584,7 @@ namespace Artel.Tests.Transport
                     Is.Not.Null);
                 Assert.That(
                     canvas.GetComponentInChildren<ArtelLogoGraphic>(true).BodyColor,
-                    Is.EqualTo((Color32)Color.white));
+                    Is.EqualTo(ArtelLogoGraphic.Ink));
 
                 darkThemeToggle.isOn = false;
 

@@ -169,9 +169,8 @@ namespace Artel
         private static void PaintCursorTexture(Texture2D texture, bool darkTheme)
         {
             var pixels = new Color32[CursorWidth * CursorHeight];
-            var borderColor = darkTheme
-                ? new Color32(244, 247, 250, 255)
-                : ArtelLogoGraphic.Charcoal;
+            var borderColor = ArtelLogoGraphic.Body(darkTheme);
+            var fillColor = ArtelLogoGraphic.Accent(darkTheme);
 
             for (var distanceFromTop = 0; distanceFromTop < CursorHeight; distanceFromTop++)
             {
@@ -182,7 +181,7 @@ namespace Artel
                     {
                         pixels[(y * CursorWidth) + x] = IsCursorBorder(x, distanceFromTop)
                             ? borderColor
-                            : ArtelLogoGraphic.Coral;
+                            : fillColor;
                         continue;
                     }
 
