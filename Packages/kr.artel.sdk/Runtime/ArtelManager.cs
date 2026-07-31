@@ -59,6 +59,26 @@ namespace Artel
             }
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Editor and development builds get a manager even when no scene carries one:
+        /// a QA run has to be able to attach to a build nobody prepared for it. The
+        /// whole method is compiled out of release builds. Runs after the first scene
+        /// loads so a manager the scene does carry — with its configured server —
+        /// keeps the spot.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void SpawnInDevelopmentBuilds()
+        {
+            if (instance != null)
+            {
+                return;
+            }
+
+            new GameObject("Artel").AddComponent<ArtelManager>();
+        }
+#endif
+
         private void Awake()
         {
             // The socket has to outlive the scene it was opened in. A QA run acts
