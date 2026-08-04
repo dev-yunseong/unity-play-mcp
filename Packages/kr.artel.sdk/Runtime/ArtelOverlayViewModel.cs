@@ -250,11 +250,16 @@ namespace Artel
         public IEnumerator LoadProjects(Server server)
         {
             var token = string.Empty;
-            yield return EnsureToken(server, value => token = value);
+            var refreshRejected = false;
+            yield return EnsureToken(server, (value, rejected) =>
+            {
+                token = value;
+                refreshRejected = rejected;
+            });
 
             if (token.Length == 0)
             {
-                ExpireSession("로그인이 필요합니다.");
+                FailTokenAcquisition(refreshRejected);
                 yield break;
             }
 
@@ -361,11 +366,16 @@ namespace Artel
             }
 
             var token = string.Empty;
-            yield return EnsureToken(server, value => token = value);
+            var refreshRejected = false;
+            yield return EnsureToken(server, (value, rejected) =>
+            {
+                token = value;
+                refreshRejected = rejected;
+            });
 
             if (token.Length == 0)
             {
-                ExpireSession("로그인이 필요합니다.");
+                FailTokenAcquisition(refreshRejected);
                 yield break;
             }
 
@@ -494,25 +504,29 @@ namespace Artel
             SetStatus("로그아웃했습니다.");
         }
 
-        /// <summary>어떤 요청이든 401을 받으면 저장 토큰을 버리고 로그인 화면으로 되돌린다.</summary>
         /// <summary>
-        /// 요청에 쓸 SDK 토큰. 만료됐으면 refresh 토큰으로 한 번 다시 받아 본다. 실패하면 빈 문자열이다.
+        /// 요청에 쓸 SDK 토큰. 만료됐으면 refresh 토큰으로 한 번 다시 받아 본다. 실패하면 빈 문자열이고,
+        /// <c>rejected</c>가 세션 처분을 가른다 — true는 서버가 refresh 토큰을 거절했거나 토큰이
+        /// 아예 없어 재로그인뿐인 경우, false는 네트워크 등 일시 장애라 90일짜리 refresh 토큰을
+        /// 지우면 안 되는 경우다. (ARTEL-231: 일시 장애를 거절로 뭉뚱그리면 Clear가 멀쩡한
+        /// refresh 토큰까지 키체인에서 지워 브라우저 재로그인을 강제한다.)
         /// </summary>
         /// <remarks>
         /// 로컬 만료 시각으로만 판단한다. 만료 전에 받은 401은 서버가 토큰 자체를 거절한 것이라
         /// 재발급해도 같은 답이 온다. 그 경로는 지금처럼 재로그인으로 보낸다.
         /// </remarks>
-        private IEnumerator EnsureToken(Server server, Action<string> onToken)
+        private IEnumerator EnsureToken(Server server, Action<string, bool> onToken)
         {
             if (ArtelSdkSession.TryLoadToken(out var token))
             {
-                onToken(token);
+                onToken(token, false);
                 yield break;
             }
 
             if (!ArtelSdkSession.TryLoadRefreshToken(out var refreshToken))
             {
-                onToken(string.Empty);
+                // 재발급 수단 자체가 없다. 지울 것도 없으니 거절과 같은 길(재로그인)로 보낸다.
+                onToken(string.Empty, true);
                 yield break;
             }
 
@@ -525,23 +539,27 @@ namespace Artel
             }
             catch (Exception)
             {
-                onToken(string.Empty);
+                onToken(string.Empty, false);
                 yield break;
             }
 
             bool succeeded;
+            long responseCode;
             string responseBody;
             using (request)
             {
                 yield return request.SendWebRequest();
 
                 succeeded = request.result == UnityWebRequest.Result.Success;
+                responseCode = request.responseCode;
                 responseBody = ReadBody(request);
             }
 
             if (!succeeded)
             {
-                onToken(string.Empty);
+                // 401만 확실한 거절이다. 그 외(전송 실패·타임아웃·5xx)는 refresh 토큰의
+                // 잘못이 아니므로 남겨 두고 다시 시도하게 한다.
+                onToken(string.Empty, responseCode == UnauthorizedStatusCode);
                 yield break;
             }
 
@@ -552,20 +570,37 @@ namespace Artel
             }
             catch (Exception)
             {
-                onToken(string.Empty);
+                onToken(string.Empty, false);
                 yield break;
             }
 
             if (refreshed == null || string.IsNullOrWhiteSpace(refreshed.Token))
             {
-                onToken(string.Empty);
+                onToken(string.Empty, false);
                 yield break;
             }
 
             // 표시 이름은 재발급 응답에 없다. 로그인 때 저장한 값을 그대로 둔다.
             ArtelSdkSession.SaveToken(refreshed.Token, refreshed.ExpiresAt, ArtelSdkSession.DisplayName);
             HasToken = true;
-            onToken(refreshed.Token.Trim());
+            onToken(refreshed.Token.Trim(), false);
+        }
+
+        /// <summary>
+        /// <see cref="EnsureToken"/>이 빈 토큰을 준 뒤의 공통 처리. 거절이면 세션을 버리고
+        /// 재로그인으로, 일시 장애면 <see cref="Fail"/>로 보낸다 — refresh 토큰이 살아 있어
+        /// <see cref="HasToken"/>이 true이므로 Fail은 프로젝트 화면의 "다시 시도"를 남긴다.
+        /// </summary>
+        private void FailTokenAcquisition(bool refreshRejected)
+        {
+            if (refreshRejected)
+            {
+                ExpireSession("로그인이 필요합니다.");
+            }
+            else
+            {
+                Fail("로그인 세션을 갱신하지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.");
+            }
         }
 
         private void ExpireSession(string status)

@@ -225,6 +225,35 @@ namespace Artel.Tests.Auth
         }
 
         [Test]
+        public void Session_SurvivesTransientRefreshFailure()
+        {
+            // ARTEL-231. 만료된 access 토큰 + 살아 있는 refresh 토큰으로 등록에 들어가면
+            // EnsureToken이 재발급을 시도한다. host가 빈 Server는 요청을 만들다 던지므로
+            // 네트워크 없이 "재발급이 일시 장애로 실패한" 경로가 된다. 예전에는 이 경로가
+            // ExpireSession → Clear로 90일짜리 refresh 토큰까지 지웠다.
+            ArtelSdkSession.SaveToken("jwt-token", "2000-01-01T00:00:00Z", "octocat");
+            ArtelSdkSession.SaveRefreshToken("refresh-token", "2999-01-01T00:00:00Z");
+            ArtelSdkSession.SaveProjectId("1");
+
+            var jsonCodec = new Artel.Serialization.NewtonsoftJsonCodec();
+            var viewModel = new ArtelOverlayViewModel(
+                new ArtelSdkRegistrationClient(jsonCodec),
+                new ArtelSdkAuthClient(jsonCodec),
+                jsonCodec);
+            viewModel.Initialize();
+
+            Drive(viewModel.Register(
+                new Artel.Domain.Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { }));
+
+            // refresh 토큰이 남아 있어야 다음 시도가 브라우저 없이 재발급으로 이어진다.
+            Assert.That(ArtelSdkSession.TryLoadRefreshToken(out _), Is.True);
+            Assert.That(viewModel.HasToken, Is.True);
+            Assert.That(viewModel.HasError, Is.True);
+            // 토큰이 남았으니 재로그인 화면이 아니라 다시 시도할 수 있는 화면으로 간다.
+            Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.ChoosingProject));
+        }
+
+        [Test]
         public void PlatformSecretStore_RoundTripsAndDeletes()
         {
             // 플랫폼 구현이 실제로 도는지 보는 유일한 자리다. macOS면 키체인에, Windows면
@@ -253,6 +282,19 @@ namespace Artel.Tests.Auth
 
             // 없는 키를 다시 지우는 것은 성공으로 친다 — 로그아웃이 두 번 눌려도 오류가 아니다.
             Assert.DoesNotThrow(() => store.Delete(probeKey));
+        }
+
+        // Unity 코루틴 러너 없이 중첩 IEnumerator를 끝까지 돌린다. 네트워크 yield에 닿기 전에
+        // 끝나는 경로만 테스트하므로 재귀로 충분하다.
+        private static void Drive(System.Collections.IEnumerator routine)
+        {
+            while (routine.MoveNext())
+            {
+                if (routine.Current is System.Collections.IEnumerator nested)
+                {
+                    Drive(nested);
+                }
+            }
         }
 
         private static void ClearSession()
