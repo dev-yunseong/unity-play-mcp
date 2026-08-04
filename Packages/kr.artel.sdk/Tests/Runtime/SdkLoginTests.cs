@@ -11,6 +11,8 @@ namespace Artel.Tests.Auth
         {
             "Artel.SdkToken",
             "Artel.SdkTokenExpiresAt",
+            "Artel.SdkRefreshToken",
+            "Artel.SdkRefreshTokenExpiresAt",
             "Artel.SdkDisplayName",
             "Artel.ProjectId",
             "Artel.InstanceId"
@@ -19,6 +21,9 @@ namespace Artel.Tests.Auth
         [SetUp]
         public void SetUp()
         {
+            // 세션 테스트는 실제 키체인이나 사용자 프로필을 건드리지 않는다. 실제 플랫폼
+            // 구현은 PlatformSecretStore_RoundTripsAndDeletes 하나에서만 돈다.
+            ArtelSecretStore.Current = new PlayerPrefsSecretStore();
             ClearSession();
         }
 
@@ -26,6 +31,7 @@ namespace Artel.Tests.Auth
         public void TearDown()
         {
             ClearSession();
+            ArtelSecretStore.Current = null;
         }
 
         [Test]
@@ -179,6 +185,74 @@ namespace Artel.Tests.Auth
             ArtelSdkSession.SaveToken("jwt-token", "언젠가", "octocat");
 
             Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.True);
+        }
+
+        [Test]
+        public void Session_KeepsRefreshTokenWhenAccessTokenExpires()
+        {
+            // 재발급의 전제. 만료를 발견한 자리에서 세션을 통째로 버리면 다시 받을 수단까지 사라진다.
+            ArtelSdkSession.SaveToken("jwt-token", "2000-01-01T00:00:00Z", "octocat");
+            ArtelSdkSession.SaveRefreshToken("refresh-token", "2999-01-01T00:00:00Z");
+            ArtelSdkSession.SaveProjectId("1");
+
+            Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.False);
+            Assert.That(ArtelSdkSession.TryLoadRefreshToken(out var refreshToken), Is.True);
+            Assert.That(refreshToken, Is.EqualTo("refresh-token"));
+            Assert.That(ArtelSdkSession.TryLoadProjectId(out _), Is.True);
+        }
+
+        [Test]
+        public void Session_DropsEverythingWhenRefreshTokenExpiresToo()
+        {
+            ArtelSdkSession.SaveToken("jwt-token", "2000-01-01T00:00:00Z", "octocat");
+            ArtelSdkSession.SaveRefreshToken("refresh-token", "2000-01-01T00:00:00Z");
+            ArtelSdkSession.SaveProjectId("1");
+
+            Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.False);
+            Assert.That(ArtelSdkSession.TryLoadRefreshToken(out _), Is.False);
+            Assert.That(ArtelSdkSession.TryLoadProjectId(out _), Is.False);
+        }
+
+        [Test]
+        public void Session_ClearRemovesRefreshToken()
+        {
+            ArtelSdkSession.SaveToken("jwt-token", "2999-01-01T00:00:00Z", "octocat");
+            ArtelSdkSession.SaveRefreshToken("refresh-token", "2999-01-01T00:00:00Z");
+
+            ArtelSdkSession.Clear();
+
+            Assert.That(ArtelSdkSession.TryLoadRefreshToken(out _), Is.False);
+        }
+
+        [Test]
+        public void PlatformSecretStore_RoundTripsAndDeletes()
+        {
+            // 플랫폼 구현이 실제로 도는지 보는 유일한 자리다. macOS면 키체인에, Windows면
+            // 사용자 프로필 아래 DPAPI 파일에 진짜로 쓴다. 세션 키와 겹치지 않는 이름을 써서
+            // 이 테스트가 로그인 상태를 지우지 않도록 한다.
+            const string probeKey = "Artel.SecretStoreProbe";
+            var store = ArtelSecretStore.CreatePlatformStore();
+
+            // 실제 SDK 토큰 길이로 넣는다. 짧은 값은 macOS 키체인의 128바이트 절단을 넘어가지
+            // 못해, 저장은 되는데 서버가 401을 주는 상태를 테스트가 통과시켜 버린다.
+            var probeValue = "eyJhbGciOiJIUzI1NiJ9." + new string('x', 600) + ".signature";
+
+            try
+            {
+                store.Save(probeKey, probeValue);
+
+                Assert.That(store.TryLoad(probeKey, out var value), Is.True);
+                Assert.That(value, Is.EqualTo(probeValue));
+            }
+            finally
+            {
+                store.Delete(probeKey);
+            }
+
+            Assert.That(store.TryLoad(probeKey, out _), Is.False);
+
+            // 없는 키를 다시 지우는 것은 성공으로 친다 — 로그아웃이 두 번 눌려도 오류가 아니다.
+            Assert.DoesNotThrow(() => store.Delete(probeKey));
         }
 
         private static void ClearSession()

@@ -41,6 +41,11 @@ namespace Artel.Tests.Transport
             originalSdkId = PlayerPrefs.GetString(PlayerPrefsKey);
             hadOriginalDarkTheme = PlayerPrefs.HasKey(DarkThemePlayerPrefsKey);
             originalDarkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey);
+
+            // 토큰은 보안 저장소로 갔다. 갈아끼우지 않으면 테스트가 개발자의 실제 키체인에
+            // 쓰고, ClearSession의 PlayerPrefs 정리로는 지워지지 않아 다음 테스트가
+            // 로그인된 상태로 시작한다.
+            ArtelSecretStore.Current = new PlayerPrefsSecretStore();
             ClearSession();
             PlayerPrefs.DeleteKey(DarkThemePlayerPrefsKey);
         }
@@ -68,6 +73,7 @@ namespace Artel.Tests.Transport
 
             ClearSession();
             PlayerPrefs.Save();
+            ArtelSecretStore.Current = null;
         }
 
         private static void ClearSession()

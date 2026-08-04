@@ -8,12 +8,16 @@ namespace Artel.Auth
     /// 브라우저 로그인으로 받은 SDK 토큰과, 그 토큰으로 고른 프로젝트·인스턴스를 담아 둔다.
     /// </summary>
     /// <remarks>
-    /// ponytail: PlayerPrefs 평문. OS 키체인이 필요해지면 그때.
+    /// 두 토큰만 <see cref="ArtelSecretStore"/>로 간다. 만료 시각·표시 이름·프로젝트·인스턴스는
+    /// 그 자체로 아무것도 열지 못하므로 PlayerPrefs에 그대로 둔다 — 옮기면 값 하나마다 키체인
+    /// 왕복이 붙기만 하고 지키는 것은 없다.
     /// </remarks>
     internal static class ArtelSdkSession
     {
-        private const string TokenPlayerPrefsKey = "Artel.SdkToken";
+        private const string TokenSecretKey = "Artel.SdkToken";
         private const string ExpiresAtPlayerPrefsKey = "Artel.SdkTokenExpiresAt";
+        private const string RefreshTokenSecretKey = "Artel.SdkRefreshToken";
+        private const string RefreshExpiresAtPlayerPrefsKey = "Artel.SdkRefreshTokenExpiresAt";
         private const string DisplayNamePlayerPrefsKey = "Artel.SdkDisplayName";
         private const string ProjectIdPlayerPrefsKey = "Artel.ProjectId";
         private const string InstanceIdPlayerPrefsKey = "Artel.InstanceId";
@@ -25,24 +29,30 @@ namespace Artel.Auth
         }
 
         /// <summary>
-        /// 저장된 토큰을 읽는다. 만료 시각이 지났으면 없는 것으로 보고 세션을 지운다.
+        /// 저장된 토큰을 읽는다. 만료 시각이 지났으면 없는 것으로 본다.
         /// </summary>
         /// <remarks>
         /// 만료를 여기서 걸러야 하는 이유: 만료된 토큰으로도 요청은 나가고 401만 돌아온다.
         /// 그러면 사용자는 "등록 실패"를 한 번 본 뒤에야 로그인 화면으로 돌아온다.
+        ///
+        /// 만료됐더라도 refresh 토큰이 살아 있으면 세션을 지우지 않는다. 지우면 다시 받을
+        /// 수단까지 함께 사라져 브라우저 로그인 외에는 길이 없다.
         /// </remarks>
         public static bool TryLoadToken(out string token)
         {
-            var storedToken = PlayerPrefs.GetString(TokenPlayerPrefsKey, string.Empty);
-            if (string.IsNullOrWhiteSpace(storedToken))
+            if (!ArtelSecretStore.TryLoad(TokenSecretKey, out var storedToken))
             {
                 token = string.Empty;
                 return false;
             }
 
-            if (HasExpired())
+            if (HasExpired(ExpiresAtPlayerPrefsKey))
             {
-                Clear();
+                if (!TryLoadRefreshToken(out _))
+                {
+                    Clear();
+                }
+
                 token = string.Empty;
                 return false;
             }
@@ -64,9 +74,45 @@ namespace Artel.Auth
                 throw new ArgumentException("SDK token is required.", nameof(token));
             }
 
-            PlayerPrefs.SetString(TokenPlayerPrefsKey, token.Trim());
+            ArtelSecretStore.Save(TokenSecretKey, token.Trim());
             PlayerPrefs.SetString(ExpiresAtPlayerPrefsKey, expiresAt ?? string.Empty);
             PlayerPrefs.SetString(DisplayNamePlayerPrefsKey, displayName ?? string.Empty);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>
+        /// 재발급용 토큰. 이것도 만료되면 남은 길은 브라우저 재로그인뿐이다.
+        /// </summary>
+        public static bool TryLoadRefreshToken(out string refreshToken)
+        {
+            if (!ArtelSecretStore.TryLoad(RefreshTokenSecretKey, out refreshToken))
+            {
+                return false;
+            }
+
+            refreshToken = refreshToken.Trim();
+
+            if (HasExpired(RefreshExpiresAtPlayerPrefsKey))
+            {
+                refreshToken = string.Empty;
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 로그인 응답의 refresh 토큰. 회전하지 않으므로 이후 재발급에서 다시 저장할 일은 없다.
+        /// </summary>
+        public static void SaveRefreshToken(string refreshToken, string expiresAt)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                throw new ArgumentException("Refresh token is required.", nameof(refreshToken));
+            }
+
+            ArtelSecretStore.Save(RefreshTokenSecretKey, refreshToken.Trim());
+            PlayerPrefs.SetString(RefreshExpiresAtPlayerPrefsKey, expiresAt ?? string.Empty);
             PlayerPrefs.Save();
         }
 
@@ -116,8 +162,10 @@ namespace Artel.Auth
         /// </summary>
         public static void Clear()
         {
-            PlayerPrefs.DeleteKey(TokenPlayerPrefsKey);
+            ArtelSecretStore.Delete(TokenSecretKey);
+            ArtelSecretStore.Delete(RefreshTokenSecretKey);
             PlayerPrefs.DeleteKey(ExpiresAtPlayerPrefsKey);
+            PlayerPrefs.DeleteKey(RefreshExpiresAtPlayerPrefsKey);
             PlayerPrefs.DeleteKey(DisplayNamePlayerPrefsKey);
             PlayerPrefs.DeleteKey(ProjectIdPlayerPrefsKey);
             PlayerPrefs.DeleteKey(InstanceIdPlayerPrefsKey);
@@ -126,9 +174,9 @@ namespace Artel.Auth
 
         // 읽지 못하는 만료 시각은 만료로 치지 않는다. 서버가 형식을 바꾸면 로그인이 통째로
         // 막히는 쪽보다, 401을 한 번 받고 로그인 화면으로 돌아가는 쪽이 낫다.
-        private static bool HasExpired()
+        private static bool HasExpired(string playerPrefsKey)
         {
-            var storedExpiresAt = PlayerPrefs.GetString(ExpiresAtPlayerPrefsKey, string.Empty);
+            var storedExpiresAt = PlayerPrefs.GetString(playerPrefsKey, string.Empty);
             if (!DateTimeOffset.TryParse(
                     storedExpiresAt,
                     CultureInfo.InvariantCulture,

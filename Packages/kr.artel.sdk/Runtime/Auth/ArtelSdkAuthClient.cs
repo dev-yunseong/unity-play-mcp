@@ -13,6 +13,7 @@ namespace Artel.Auth
     internal sealed class ArtelSdkAuthClient
     {
         private const string TokenPath = "/api/auth/sdk/token";
+        private const string RefreshPath = "/api/auth/sdk/token/refresh";
         private const string ProjectsPath = "/api/sdk/projects";
 
         private readonly IJsonCodec jsonCodec;
@@ -45,6 +46,32 @@ namespace Artel.Auth
                 Code = code,
                 CodeVerifier = codeVerifier
             });
+            var request = new UnityWebRequest(endpoint.AbsoluteUri, UnityWebRequest.kHttpVerbPOST)
+            {
+                uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
+                downloadHandler = new DownloadHandlerBuffer()
+            };
+            request.SetRequestHeader("Content-Type", "application/json");
+            return request;
+        }
+
+        /// <summary>
+        /// 만료된 SDK 토큰을 다시 받는다. 자격증명은 refresh 토큰뿐이라 세션도 헤더도 필요 없다.
+        /// </summary>
+        public UnityWebRequest CreateRefreshRequest(Server server, string refreshToken)
+        {
+            if (server == null)
+            {
+                throw new ArgumentNullException(nameof(server));
+            }
+
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                throw new ArgumentException("Refresh token is required.", nameof(refreshToken));
+            }
+
+            var endpoint = new Uri(server.HttpBaseUri, RefreshPath);
+            var body = jsonCodec.Serialize(new SdkRefreshRequestDto { RefreshToken = refreshToken });
             var request = new UnityWebRequest(endpoint.AbsoluteUri, UnityWebRequest.kHttpVerbPOST)
             {
                 uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),

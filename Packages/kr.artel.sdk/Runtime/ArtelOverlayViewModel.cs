@@ -117,7 +117,9 @@ namespace Artel
         public void Initialize()
         {
             projects.Clear();
-            HasToken = ArtelSdkSession.TryLoadToken(out _);
+            // 만료된 access 토큰이라도 refresh 토큰이 살아 있으면 세션은 아직 있는 것이다.
+            // 여기서 없다고 보면 재발급으로 넘어갈 기회 없이 브라우저 로그인부터 시킨다.
+            HasToken = ArtelSdkSession.TryLoadToken(out _) || ArtelSdkSession.TryLoadRefreshToken(out _);
             DisplayName = HasToken ? ArtelSdkSession.DisplayName : string.Empty;
             SelectedProjectId = ArtelSdkSession.TryLoadProjectId(out var projectId) && HasToken
                 ? projectId
@@ -231,6 +233,11 @@ namespace Artel
             }
 
             ArtelSdkSession.SaveToken(token.Token, token.ExpiresAt, token.DisplayName);
+            if (!string.IsNullOrWhiteSpace(token.RefreshToken))
+            {
+                ArtelSdkSession.SaveRefreshToken(token.RefreshToken, token.RefreshExpiresAt);
+            }
+
             HasToken = true;
             DisplayName = token.DisplayName ?? string.Empty;
 
@@ -242,7 +249,10 @@ namespace Artel
         /// </summary>
         public IEnumerator LoadProjects(Server server)
         {
-            if (!ArtelSdkSession.TryLoadToken(out var token))
+            var token = string.Empty;
+            yield return EnsureToken(server, value => token = value);
+
+            if (token.Length == 0)
             {
                 ExpireSession("로그인이 필요합니다.");
                 yield break;
@@ -350,7 +360,10 @@ namespace Artel
                 yield break;
             }
 
-            if (!ArtelSdkSession.TryLoadToken(out var token))
+            var token = string.Empty;
+            yield return EnsureToken(server, value => token = value);
+
+            if (token.Length == 0)
             {
                 ExpireSession("로그인이 필요합니다.");
                 yield break;
@@ -482,6 +495,79 @@ namespace Artel
         }
 
         /// <summary>어떤 요청이든 401을 받으면 저장 토큰을 버리고 로그인 화면으로 되돌린다.</summary>
+        /// <summary>
+        /// 요청에 쓸 SDK 토큰. 만료됐으면 refresh 토큰으로 한 번 다시 받아 본다. 실패하면 빈 문자열이다.
+        /// </summary>
+        /// <remarks>
+        /// 로컬 만료 시각으로만 판단한다. 만료 전에 받은 401은 서버가 토큰 자체를 거절한 것이라
+        /// 재발급해도 같은 답이 온다. 그 경로는 지금처럼 재로그인으로 보낸다.
+        /// </remarks>
+        private IEnumerator EnsureToken(Server server, Action<string> onToken)
+        {
+            if (ArtelSdkSession.TryLoadToken(out var token))
+            {
+                onToken(token);
+                yield break;
+            }
+
+            if (!ArtelSdkSession.TryLoadRefreshToken(out var refreshToken))
+            {
+                onToken(string.Empty);
+                yield break;
+            }
+
+            SetStatus("로그인 세션을 갱신하는 중...");
+
+            UnityWebRequest request;
+            try
+            {
+                request = authClient.CreateRefreshRequest(server, refreshToken);
+            }
+            catch (Exception)
+            {
+                onToken(string.Empty);
+                yield break;
+            }
+
+            bool succeeded;
+            string responseBody;
+            using (request)
+            {
+                yield return request.SendWebRequest();
+
+                succeeded = request.result == UnityWebRequest.Result.Success;
+                responseBody = ReadBody(request);
+            }
+
+            if (!succeeded)
+            {
+                onToken(string.Empty);
+                yield break;
+            }
+
+            SdkTokenResponseDto refreshed;
+            try
+            {
+                refreshed = jsonCodec.Deserialize<SdkTokenResponseDto>(responseBody);
+            }
+            catch (Exception)
+            {
+                onToken(string.Empty);
+                yield break;
+            }
+
+            if (refreshed == null || string.IsNullOrWhiteSpace(refreshed.Token))
+            {
+                onToken(string.Empty);
+                yield break;
+            }
+
+            // 표시 이름은 재발급 응답에 없다. 로그인 때 저장한 값을 그대로 둔다.
+            ArtelSdkSession.SaveToken(refreshed.Token, refreshed.ExpiresAt, ArtelSdkSession.DisplayName);
+            HasToken = true;
+            onToken(refreshed.Token.Trim());
+        }
+
         private void ExpireSession(string status)
         {
             ForgetSession();
