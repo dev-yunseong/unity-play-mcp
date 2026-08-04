@@ -15,12 +15,12 @@ namespace Artel
     internal sealed class AllSceneScanner
     {
         /// <summary>
-        /// How long a freshly loaded scene is left alone before it is scanned and torn down.
+        /// How long a freshly loaded scene is left alone before it is read.
         /// Awake and Start are covered well inside this; work a scene defers further than this —
         /// a coroutine, an Invoke, a web request callback — is not, and no fixed value would
         /// cover it.
         /// </summary>
-        private const float SettleSeconds = 0.1f;
+        internal const float SettleSeconds = 0.1f;
 
         private readonly SceneScanner scanner;
 

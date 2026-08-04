@@ -5,6 +5,7 @@ using System.Globalization;
 using Artel.Capture;
 using Artel.Protocol.Dto;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Artel
 {
@@ -22,6 +23,11 @@ namespace Artel
         // speed the game was actually running at rather than assuming 1. Null means not paused.
         private float? scaleBeforePause;
 
+        // The scene the run began in, read while it is still the one on screen. reset_game reloads
+        // it, so "initial" means where this session started rather than a build index guessed later.
+        private readonly int startupSceneBuildIndex;
+        private readonly string startupScenePath;
+
         public ActionExecutor(
             SceneScanner scanner,
             CursorController cursorController,
@@ -34,6 +40,10 @@ namespace Artel
             this.pointerEvents = pointerEvents;
             this.capturer = capturer;
             this.uploader = uploader;
+
+            var startupScene = SceneManager.GetActiveScene();
+            startupSceneBuildIndex = startupScene.buildIndex;
+            startupScenePath = startupScene.path;
 
             // Moving onto a target keeps the reported pointer under the drawn cursor, but stays a
             // silent move: firing hover events out of button_click would change what an existing
@@ -92,6 +102,10 @@ namespace Artel
 
                 case "resume_time":
                     completed(ExecuteResumeTime(actionId));
+                    yield break;
+
+                case "reset_game":
+                    yield return ExecuteResetGame(actionId, completed);
                     yield break;
 
                 case "capture_screen":
@@ -298,6 +312,82 @@ namespace Artel
             {
                 Time.timeScale = scaleBeforePause.Value;
                 scaleBeforePause = null;
+            }
+        }
+
+        /// <summary>
+        /// Puts the game back where the run found it by reloading the scene it started in.
+        /// </summary>
+        /// <remarks>
+        /// A single load tears down every loaded scene and rebuilds the start one from the same
+        /// serialized data the launch used, and the game's <c>DontDestroyOnLoad</c> objects are
+        /// dropped with it — a manager holding the score, the inventory or the run's progress is
+        /// exactly what a reset has to clear, and the reloaded scene builds its own again through
+        /// the same singleton guard that let the old one live. What no reload can reach: static
+        /// fields, and anything already written to <c>PlayerPrefs</c> or disk.
+        /// ponytail: scene state only, add save-data wiping when a game needs it.
+        /// </remarks>
+        private IEnumerator ExecuteResetGame(int actionId, Action<ActionResultDto> completed)
+        {
+            if (startupSceneBuildIndex < 0)
+            {
+                // Loading by path fails the same way, so there is nothing to try: the scene has to
+                // be in Build Settings for the player to ever reach it again.
+                completed(ActionResultDto.Failure(
+                    actionId,
+                    "reset_game: the scene the game started in is not in Build Settings: " +
+                    startupScenePath));
+                yield break;
+            }
+
+            // A pause and a held button belong to the run, not to the game. Carried across the
+            // reload they would hand the fresh scene a frozen clock and a press it never saw begin.
+            RestoreTimeScale();
+            pointerEvents.ReleaseAll();
+            ArtelInput.ReleaseAllVirtualInput();
+
+            DoomPersistentObjects();
+            yield return SceneManager.LoadSceneAsync(startupSceneBuildIndex, LoadSceneMode.Single);
+            yield return new WaitForSecondsRealtime(AllSceneScanner.SettleSeconds);
+
+            // Every target id named an object of the scene that just died, so a button_click later
+            // in this batch would otherwise address a corpse.
+            scanner.Scan();
+            completed(ActionResultDto.Success(actionId));
+        }
+
+        /// <summary>
+        /// Hands the game's <c>DontDestroyOnLoad</c> objects to the scene that is about to be
+        /// unloaded, so the reload destroys them the way it destroys everything else.
+        /// </summary>
+        /// <remarks>
+        /// Moving them beats destroying them outright: <c>Destroy</c> only takes effect at the end
+        /// of the frame, which is after the new scene's <c>Awake</c> has already asked whether a
+        /// manager exists. Moved objects die with the unload, before anything in the new scene runs.
+        /// This SDK is the one root that stays — it is running the coroutine that does this, and it
+        /// owns the socket the result goes out on.
+        /// </remarks>
+        private static void DoomPersistentObjects()
+        {
+            var doomed = SceneManager.GetActiveScene();
+            var dropped = new List<string>();
+            foreach (var root in StraySpawnTracker.DontDestroyOnLoadScene().GetRootGameObjects())
+            {
+                if (root.GetComponentInChildren<ArtelManager>(true) != null)
+                {
+                    continue;
+                }
+
+                SceneManager.MoveGameObjectToScene(root, doomed);
+                dropped.Add(root.name);
+            }
+
+            if (dropped.Count > 0)
+            {
+                // Named, because a game whose bootstrap lives outside the start scene loses these
+                // for good — the one way reset_game can leave it worse off than it found it.
+                Debug.Log("[Artel] reset_game dropped persistent object(s): " +
+                          string.Join(", ", dropped));
             }
         }
 

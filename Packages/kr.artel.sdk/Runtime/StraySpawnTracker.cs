@@ -75,10 +75,14 @@ namespace Artel
                 }
             }
 
-            yield return ResolveDontDestroyOnLoadScene();
+            yield return DontDestroyOnLoadScene();
         }
 
-        private static Scene ResolveDontDestroyOnLoadScene()
+        /// <summary>
+        /// The scene Unity parks <c>DontDestroyOnLoad</c> objects in, so its roots can be walked
+        /// like any other scene's.
+        /// </summary>
+        internal static Scene DontDestroyOnLoadScene()
         {
             // Unity hands out no reference to the DontDestroyOnLoad scene, and SceneManager does
             // not count it. Moving a throwaway object into it is the only way to read the handle
