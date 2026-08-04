@@ -84,13 +84,17 @@ namespace Artel.Auth
 
         private static CommandResult Run(string[] arguments)
         {
-            var startInfo = new ProcessStartInfo(SecurityPath, Join(arguments))
+            var startInfo = new ProcessStartInfo(SecurityPath)
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
+            foreach (var argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
 
             using (var process = Process.Start(startInfo))
             {
@@ -124,19 +128,6 @@ namespace Artel.Auth
             throw new InvalidOperationException(
                 "키체인에서 값을 " + action + " 못했습니다 (exit " + result.ExitCode + "). " +
                 result.StandardError.Trim());
-        }
-
-        private static string Join(string[] arguments)
-        {
-            var quoted = new string[arguments.Length];
-            for (var index = 0; index < arguments.Length; index++)
-            {
-                quoted[index] = "\"" + arguments[index]
-                    .Replace("\\", "\\\\")
-                    .Replace("\"", "\\\"") + "\"";
-            }
-
-            return string.Join(" ", quoted);
         }
 
         private struct CommandResult
