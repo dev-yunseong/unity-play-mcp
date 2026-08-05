@@ -413,6 +413,37 @@ The scene `id` is its Unity scene handle, and each block `id` is the
 their Unity objects remain alive in the current process. Do not persist them
 across scene reloads, object recreation, or Unity restarts.
 
+## Resetting the game
+
+`reset_game` reloads the scene the run started in, which drops every scene the
+game has opened since and rebuilds the first one from the data the launch used.
+
+```json
+{ "type": "ACTION", "id": 5, "actions": [{ "id": 1, "method": "reset_game", "params": [] }] }
+```
+
+It is a batch method only — the reload spans frames. The result arrives once the
+new scene has loaded and settled, so a `scan_scene` after it in the same batch
+reads the fresh scene. Every target id from before is dead by then; a
+`button_click` queued behind a reset must come from a scan taken after it.
+
+A pause left by `pause_time` is lifted and every held key and mouse button is
+released before the load, so the new scene starts with the clock running and
+nothing pressed.
+
+The game's `DontDestroyOnLoad` objects go with it. A manager that survives scene
+loads is usually where the run's progress is kept, so leaving it would defeat the
+reset; the reloaded scene builds its own through the same singleton guard that
+let the old one live. The SDK is the one persistent object kept, since it is
+running the reset. A game whose managers are created by a bootstrap scene the run
+did not start in loses them for good — the SDK logs every object it drops, by
+name, for exactly that case.
+
+What no reload can reach: static fields, `PlayerPrefs`, and save files. A game
+that keeps its progress in one of those comes back holding it. The action fails,
+changing nothing, when the scene the game started in is not in Build Settings —
+there is no index to return to.
+
 ## State and action tracking
 
 Add attributes to a `MonoBehaviour`. State is read at scan time. Action results
