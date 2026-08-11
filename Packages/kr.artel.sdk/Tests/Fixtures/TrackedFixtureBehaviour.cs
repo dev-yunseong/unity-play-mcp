@@ -40,5 +40,25 @@ namespace Artel.Tests.Tracking
         {
             return Input.anyKeyDown;
         }
+
+        public float ReadHorizontalAxis()
+        {
+            return Input.GetAxis("Horizontal");
+        }
+
+        public float ReadHorizontalAxisRaw()
+        {
+            return Input.GetAxisRaw("Horizontal");
+        }
+
+        public bool ReadJumpButton()
+        {
+            return Input.GetButton("Jump");
+        }
+
+        public bool ReadJumpButtonDown()
+        {
+            return Input.GetButtonDown("Jump");
+        }
     }
 }

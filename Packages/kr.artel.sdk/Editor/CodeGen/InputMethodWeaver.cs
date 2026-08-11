@@ -17,7 +17,12 @@ namespace Artel.CodeGen
             "get_mousePosition",
             "GetMouseButton",
             "GetMouseButtonDown",
-            "GetMouseButtonUp"
+            "GetMouseButtonUp",
+            "GetAxis",
+            "GetAxisRaw",
+            "GetButton",
+            "GetButtonDown",
+            "GetButtonUp"
         };
 
         private readonly ModuleDefinition module;

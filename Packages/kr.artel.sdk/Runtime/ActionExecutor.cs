@@ -96,6 +96,14 @@ namespace Artel
                     completed(ExecuteKeyHold(actionId, method, parameters, false));
                     yield break;
 
+                case "set_axis":
+                    completed(ExecuteSetAxis(actionId, parameters));
+                    yield break;
+
+                case "set_button":
+                    completed(ExecuteSetButton(actionId, parameters));
+                    yield break;
+
                 case "pause_time":
                     completed(ExecutePauseTime(actionId));
                     yield break;
@@ -486,6 +494,115 @@ namespace Artel
 
             ArtelInput.ClickKey(key, durationSeconds);
             return ActionResultDto.Success(actionId);
+        }
+
+        /// <summary>
+        /// Drives an Input Manager axis by name. The legacy Input Manager exposes no runtime API
+        /// for its axis-to-key bindings, so a virtual key press cannot reach <c>GetAxis</c> — the
+        /// caller names the axis and states the value instead.
+        /// </summary>
+        private static ActionResultDto ExecuteSetAxis(int actionId, List<object> parameters)
+        {
+            if (parameters == null || parameters.Count < 2 ||
+                !TryReadAxisName(parameters[0], out var axisName) ||
+                !TryReadAxisValue(parameters[1], out var value))
+            {
+                return ActionResultDto.Failure(
+                    actionId, "set_axis requires params [axisName, valueBetweenMinusOneAndOne].");
+            }
+
+            if (!TryConfirmAxisExists(axisName, out var error))
+            {
+                return ActionResultDto.Failure(actionId, error);
+            }
+
+            ArtelInput.SetAxis(axisName, value);
+            return ActionResultDto.Success(actionId);
+        }
+
+        /// <summary>
+        /// A button is an axis in Unity, so this writes the same axis the caller would drive with
+        /// <c>set_axis</c>. Releasing hands the axis back to the real input rather than pinning it
+        /// at zero, which is what makes <c>GetButtonUp</c> report the edge.
+        /// </summary>
+        private static ActionResultDto ExecuteSetButton(int actionId, List<object> parameters)
+        {
+            if (parameters == null || parameters.Count < 2 ||
+                !TryReadAxisName(parameters[0], out var axisName) ||
+                !TryReadFlag(parameters[1], out var pressed))
+            {
+                return ActionResultDto.Failure(
+                    actionId, "set_button requires params [axisName, pressed].");
+            }
+
+            if (!TryConfirmAxisExists(axisName, out var error))
+            {
+                return ActionResultDto.Failure(actionId, error);
+            }
+
+            if (pressed)
+            {
+                ArtelInput.SetAxis(axisName, 1f);
+            }
+            else
+            {
+                ArtelInput.ReleaseAxis(axisName);
+            }
+
+            return ActionResultDto.Success(actionId);
+        }
+
+        /// <summary>
+        /// The engine throws for an axis nobody set up, and that exception is the only runtime
+        /// signal that an axis name is real — the bindings themselves are not readable. Without
+        /// this check a misspelled name would report success and move nothing, which is the exact
+        /// failure this action exists to avoid.
+        /// </summary>
+        /// <remarks>
+        /// Reads the real <see cref="UnityEngine.Input"/> rather than the proxy on purpose: the
+        /// proxy answers from a held value once one exists, so it would pass a name it never
+        /// verified.
+        /// </remarks>
+        private static bool TryConfirmAxisExists(string axisName, out string error)
+        {
+            try
+            {
+                UnityEngine.Input.GetAxis(axisName);
+                error = null;
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                error = "No input axis named '" + axisName + "' is set up in the Input Manager.";
+                return false;
+            }
+        }
+
+        private static bool TryReadAxisName(object value, out string axisName)
+        {
+            axisName = value as string ?? Convert.ToString(value, CultureInfo.InvariantCulture);
+            return !string.IsNullOrEmpty(axisName);
+        }
+
+        /// <summary>
+        /// Out-of-range values fail instead of being clamped: a caller asking for 5 has misread the
+        /// axis, and clamping would report success for a request nobody made.
+        /// </summary>
+        private static bool TryReadAxisValue(object value, out float axisValue)
+        {
+            return TryReadNumber(value, out axisValue) && axisValue >= -1f && axisValue <= 1f;
+        }
+
+        private static bool TryReadFlag(object value, out bool flag)
+        {
+            if (value is bool booleanValue)
+            {
+                flag = booleanValue;
+                return true;
+            }
+
+            flag = false;
+            return value != null && bool.TryParse(value.ToString(), out flag);
         }
 
         private static bool TryReadKeyCode(object value, out KeyCode key)
