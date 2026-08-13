@@ -129,8 +129,13 @@
   Unity -batchmode -nographics -runTests -testPlatform EditMode \
     -projectPath <throwaway-project> -testResults results.xml -logFile unity.log
   ```
-- **Expected output:** 신규 테스트 전부 통과. 기존 실패 8건은 베이스라인과 동일해야 하고 늘어나면 안 된다. 종료 코드가 아니라 `results.xml`을 판정 근거로 쓴다
-- **Unity 가용성**: `project.md`가 적어 둔 러너 경로는 macOS 것이고, 현재 작업 환경은 WSL이다. 실행 전에 Unity 설치 여부를 확인하고, **없으면 테스트를 돌렸다고 보고하지 않는다.** 이 경우 코드 리뷰와 정적 검토까지만 하고 PR 본문에 "EditMode 테스트 미실행 — 환경에 Unity 없음"을 명시한다. 리뷰어가 로컬에서 돌릴 수 있도록 명령은 그대로 남긴다
+- **실행 결과 (2026-08-13)**: 신규 Diagnostics 테스트 14/14 통과. `origin/develop` 베이스라인 대비 **신규 실패 0건**
+  - 브랜치: 총 207, 통과 196, 실패 11
+  - develop: 총 193, 통과 182, 실패 11 (동일 집합)
+  - 실패 11건은 양쪽에서 같은 이름으로 나는 환경적 실패다
+- **Unity 가용성**: WSL 안에는 Unity가 없지만 **Windows 쪽 설치가 `/mnt/c/Program Files/Unity/Hub/Editor/2022.3.34f1`에 있고 WSL interop으로 그대로 실행된다.** `project.md`의 macOS 경로만 보고 "환경에 Unity 없음"이라고 판단하면 안 된다
+- **throwaway 프로젝트**: 패키지를 `file:` UNC로 참조하지 말고 Windows 파일시스템의 `<project>/Packages/kr.artel.sdk`로 **복사해 임베디드 패키지로** 쓴다. Unity가 `\\wsl$\` 경로를 제대로 다루지 못한다
+- **`project.md` 기록이 낡았다**: 환경적 실패를 8건으로 적어 뒀지만 실제 develop 베이스라인은 11건이다 (`OverlayViewModel_*` 3건 추가). 이 작업 범위 밖이라 문서는 고치지 않았다
 - **Manual:** 이 저장소 루트는 Unity 프로젝트가 아니다. 이슈의 Validation Notes(부하 씬에서 hitch 증가, `targetFrameRate` 30 반영)는 `samples/WordVenture`에서 확인해야 하며, Windows/macOS 실기 확인은 ARTEL-346으로 전송 경로가 생긴 뒤가 실효적이다. 이번 PR에서 못 돌린 항목은 그대로 명시한다
 
 ## Risks & Rollback
