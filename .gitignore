@@ -7,6 +7,9 @@
 [Ll]ogs/
 UserSettings/
 
+# Throwaway Unity project assembled by .github/scripts/setup-unity-test-project.sh
+.unity-test-project/
+
 # Visual Studio
 .vs/
 *.sln
@@ -28,3 +31,6 @@ obj/
 # Local-only Jira credentials for the MCP server
 .jira.env
 .notion.env
+
+# Python
+__pycache__/

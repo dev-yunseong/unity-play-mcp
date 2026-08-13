@@ -1,0 +1,199 @@
+name: Unity Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+env:
+  TEST_PROJECT_PATH: .unity-test-project
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    outputs:
+      run-tests: ${{ steps.gate.outputs.run-tests }}
+    steps:
+      # Unity batch mode refuses to start without an activated licence, and the
+      # licence only reaches the job through repository secrets. Decide here,
+      # once, whether the test jobs can run at all — a green pipeline that never
+      # started an editor would advertise coverage that does not exist.
+      - name: Decide whether tests can run
+        id: gate
+        env:
+          IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          # Presence checks only. Values are never printed.
+          HAS_LICENSE: ${{ secrets.UNITY_LICENSE != '' }}
+          HAS_SERIAL: ${{ secrets.UNITY_SERIAL != '' }}
+          HAS_EMAIL: ${{ secrets.UNITY_EMAIL != '' }}
+          HAS_PASSWORD: ${{ secrets.UNITY_PASSWORD != '' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${IS_FORK_PR}" = "true" ]; then
+            # GitHub withholds secrets from fork pull requests, so activation
+            # cannot succeed. Skip loudly instead of failing the contributor's PR.
+            echo "::notice title=Unity tests skipped::Pull requests from forks do not receive repository secrets, so Unity cannot be activated. A maintainer must re-run these tests from a branch in this repository before merging."
+            {
+              echo "### Unity tests skipped"
+              echo
+              echo "This pull request comes from a fork, and GitHub does not expose repository"
+              echo "secrets to fork pull requests. Unity cannot be activated, so EditMode and"
+              echo "PlayMode were not run."
+              echo
+              echo "A maintainer must push the change to a branch in \`${GITHUB_REPOSITORY}\` and"
+              echo "let the tests run there before merging."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "run-tests=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          missing=()
+          if [ "${HAS_LICENSE}" != "true" ] && [ "${HAS_SERIAL}" != "true" ]; then
+            missing+=("UNITY_LICENSE (Personal: the full contents of the activated .ulf) or UNITY_SERIAL (Pro/Plus)")
+          fi
+          [ "${HAS_EMAIL}" = "true" ] || missing+=("UNITY_EMAIL")
+          [ "${HAS_PASSWORD}" = "true" ] || missing+=("UNITY_PASSWORD")
+
+          if [ ${#missing[@]} -ne 0 ]; then
+            for secret in "${missing[@]}"; do
+              echo "::error title=Missing Unity licence secret::${secret} is not set in this repository. Unity cannot run in batch mode without it."
+            done
+            {
+              echo "### Unity tests cannot run"
+              echo
+              echo "The following repository secrets are missing:"
+              echo
+              for secret in "${missing[@]}"; do echo "- \`${secret}\`"; done
+              echo
+              echo "See \`.agents/docs/project.md\` → *Continuous integration* for how to obtain them."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "run-tests=true" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test (${{ matrix.testMode }})
+    needs: preflight
+    if: needs.preflight.outputs.run-tests == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        testMode:
+          - editmode
+          - playmode
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # samples/WordVenture is not needed; the tests run against a throwaway
+          # project assembled from Packages/kr.artel.sdk.
+          submodules: false
+
+      # The repository root is not a Unity project, and samples/WordVenture does
+      # not declare kr.artel.sdk as a testable, so nothing in the tree is
+      # runnable by the Test Runner as checked out. This builds the project that
+      # is. (game-ci's own `packageMode` is not used: it derives the manifest
+      # from package.json, which does not list the built-in modules the runtime
+      # needs — com.unity.modules.physics among them — so the package would not
+      # compile.)
+      - name: Assemble Unity test project
+        run: .github/scripts/setup-unity-test-project.sh "${TEST_PROJECT_PATH}"
+
+      # Library/ is ~210 MB, most of it PackageCache — restoring it is what turns
+      # a cold "resolve every package and reimport everything" run into an
+      # incremental one. The key deliberately excludes the commit SHA: on an
+      # exact hit actions/cache skips the save, so a 210 MB upload does not
+      # happen on every run, and Unity reimports only what actually changed. The
+      # cache is refreshed when the dependency set changes, which is what
+      # invalidates PackageCache.
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TEST_PROJECT_PATH }}/Library
+          key: UnityLibrary-${{ matrix.testMode }}-${{ hashFiles('.github/unity-test-project/Packages/manifest.json', 'Packages/kr.artel.sdk/package.json') }}
+          restore-keys: |
+            UnityLibrary-${{ matrix.testMode }}-
+            UnityLibrary-
+
+      - name: Run ${{ matrix.testMode }} tests
+        id: tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          # "auto" reads .unity-test-project/ProjectSettings/ProjectVersion.txt,
+          # which the template pins to 2022.3.34f1. One source of truth.
+          unityVersion: auto
+          projectPath: ${{ env.TEST_PROJECT_PATH }}
+          testMode: ${{ matrix.testMode }}
+          artifactsPath: artifacts/${{ matrix.testMode }}
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: ${{ matrix.testMode }} Test Results
+
+      # Unity runs as root inside the container, so Library/ and artifacts/ come
+      # back root-owned. The cache post-step and the artifact upload both run as
+      # the runner user and would fail to read them.
+      - name: Make Unity output readable by the runner
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" artifacts "${TEST_PROJECT_PATH}" 2>/dev/null || true
+
+      # unity-test-runner already fails the job on a failing test. This turns the
+      # NUnit XML into annotations and a job summary so the failing test names and
+      # assertion messages are visible on the pull request without downloading
+      # the artifact.
+      - name: Report test results
+        if: always()
+        run: |
+          set -euo pipefail
+          results="$(find "artifacts/${{ matrix.testMode }}" -name '*.xml' -print -quit 2>/dev/null || true)"
+          python3 .github/scripts/summarize-test-results.py \
+            "${results:-artifacts/${{ matrix.testMode }}/missing-results.xml}" \
+            "${{ matrix.testMode }}"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-test-results-${{ matrix.testMode }}
+          path: artifacts/${{ matrix.testMode }}
+          if-no-files-found: warn
+
+      # 원본을 그대로 올리지 않는다. 로그를 올리는 목적이 라이선스 활성화 실패 진단인데,
+      # 하필 그 실패 경로에서 Unity가 계정 이메일과 시리얼을 로그에 남긴다. GitHub의 시크릿
+      # 마스킹은 콘솔 출력에만 걸리고 아티팩트 파일 내용은 훑지 않으므로, 저장소 읽기 권한이
+      # 있는 사람 누구나 받아 볼 수 있게 된다.
+      - name: Scrub credentials from Unity log
+        if: failure()
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/scrub-unity-log.py \
+            "${TEST_PROJECT_PATH}/Logs" \
+            "artifacts/unity-log-${{ matrix.testMode }}"
+
+      - name: Upload Unity log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-editor-log-${{ matrix.testMode }}
+          path: artifacts/unity-log-${{ matrix.testMode }}
+          if-no-files-found: ignore

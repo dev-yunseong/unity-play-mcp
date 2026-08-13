@@ -24,3 +24,22 @@ the local SDK package with:
 
 Open `samples/WordVenture` in Unity to try SDK runtime components from a real
 Unity project.
+
+## Tests and CI
+
+Neither the repository root nor `samples/WordVenture` can run the package's
+tests as checked out, so both local runs and CI assemble a throwaway Unity
+project first:
+
+```bash
+.github/scripts/setup-unity-test-project.sh /tmp/artel-unity-test
+```
+
+`.github/workflows/unity-tests.yml` runs EditMode and PlayMode against that
+project on every pull request and on every push to `develop`. It needs the Unity
+licence secrets `UNITY_LICENSE` (or `UNITY_SERIAL` for Pro/Plus), `UNITY_EMAIL`,
+and `UNITY_PASSWORD`; without them the workflow fails and names the missing one.
+
+`.agents/docs/project.md` — *Running package tests* and *Continuous integration*
+— has the full editor command line, where to obtain each secret, and how fork
+pull requests are handled.
