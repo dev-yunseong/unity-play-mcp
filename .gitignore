@@ -27,3 +27,4 @@ obj/
 
 # Local-only Jira credentials for the MCP server
 .jira.env
+.notion.env
