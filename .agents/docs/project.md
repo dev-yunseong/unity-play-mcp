@@ -53,13 +53,14 @@ dependencies from its `package.json`, every `com.unity.modules.*` the runtime to
 (`physics` is required — `VirtualMouseMessenger` uses `RaycastHit`), a `file:` reference to
 `Packages/kr.artel.sdk`, and `"testables": ["kr.artel.sdk"]`.
 
+Swap `-testPlatform EditMode` for `-testPlatform PlayMode` to run the play-mode half. The
+play-mode assembly holds what edit mode cannot drive: `Awake`, `OnEnable`, and
+`DontDestroyOnLoad` do not run outside play mode.
+
 Exit code 2 means tests ran and some failed; parse `results.xml` rather than reading the
-exit code alone. Eight EditMode tests fail in a bare throwaway project for environmental
-reasons, not regressions: three `ActionBatchTests` and
-`ArtelManager_CreatesOverlayGuiAutomatically` call `DontDestroyOnLoad`, which is play-mode
-only; two `CursorControllerTests` and `SerializedFieldReaderTests` throw; and
-`CreateReport_ListsBuildScenesAndScansThem` finds no build scenes. Take a baseline on the
-merge-base commit before attributing any failure to a change.
+exit code alone. Both platforms are expected to be green in a bare throwaway project: no
+test needs the host project to carry scenes in Build Settings, or any other configuration.
+Take a baseline on the merge-base commit before attributing any failure to a change.
 
 Notion access goes through the `ntn` CLI. Agents follow
 `.agents/skills/notion-cli/SKILL.md`, which Claude Code reaches through the

@@ -150,12 +150,26 @@ namespace Artel.Tracking
                 return LowerElements(list, depth, path);
             }
 
-            if (depth >= MaxDepth || !type.IsSerializable)
+            if (depth >= MaxDepth || !IsLowerable(type))
             {
                 return null;
             }
 
             return LowerFields(value, type, depth, path);
+        }
+
+        /// <summary>
+        /// 필드로 펼쳐도 되는 타입인지. 참조 타입은 Unity와 같은 규칙([Serializable])을 쓰고,
+        /// 값 타입은 그 표시를 보지 않는다.
+        /// </summary>
+        /// <remarks>
+        /// Vector3, Color, Quaternion 같은 Unity 내장 구조체는 네이티브에서 직렬화되므로 관리
+        /// 메타데이터에 [Serializable]이 없다 — <c>typeof(Vector3).IsSerializable</c>은 false다.
+        /// 표시만 보고 거르면 게임이 가장 많이 쓰는 좌표·색·회전 필드가 전부 null로 보고된다.
+        /// </remarks>
+        private static bool IsLowerable(Type type)
+        {
+            return type.IsValueType || type.IsSerializable;
         }
 
         private List<object> LowerElements(IList list, int depth, HashSet<object> path)

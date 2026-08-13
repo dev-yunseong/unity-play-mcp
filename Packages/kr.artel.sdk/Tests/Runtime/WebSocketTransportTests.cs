@@ -401,9 +401,9 @@ namespace Artel.Tests.Transport
             viewModel.Initialize();
 
             // An unconfigured Server throws while the request is built, before anything is sent.
-            var registration = viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { });
+            RunToCompletionWithoutWaiting(
+                viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { }));
 
-            Assert.That(registration.MoveNext(), Is.False);
             Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.ChoosingProject));
             Assert.That(viewModel.ShowPanel, Is.True);
             Assert.That(viewModel.Status, Does.StartWith("설정 오류: "));
@@ -420,9 +420,9 @@ namespace Artel.Tests.Transport
             var viewModel = CreateViewModel();
             viewModel.Initialize();
 
-            var registration = viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { });
+            RunToCompletionWithoutWaiting(
+                viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { }));
 
-            Assert.That(registration.MoveNext(), Is.False);
             Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsLogin));
             Assert.That(viewModel.HasError, Is.True);
         }
@@ -441,63 +441,6 @@ namespace Artel.Tests.Transport
             Assert.That(viewModel.State, Is.EqualTo(ArtelConnectionState.NeedsLogin));
             Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.False);
             Assert.That(ArtelSdkSession.TryLoadProjectId(out _), Is.False);
-        }
-
-        [Test]
-        public void ArtelManager_CreatesOverlayGuiAutomatically()
-        {
-            var host = new GameObject("Artel overlay test");
-            var manager = host.AddComponent<ArtelManager>();
-
-            try
-            {
-                InvokeLifecycle(manager, "Awake");
-                var controller = host.GetComponent<ArtelOverlayController>();
-                Assert.That(controller, Is.Not.Null);
-                Assert.That(host.GetComponent<KeyboardStatusController>(), Is.Not.Null);
-                InvokeLifecycle(controller, "Awake");
-                InvokeLifecycle(controller, "Start");
-                var canvas = GameObject.Find("Artel Overlay Canvas");
-                Assert.That(canvas, Is.Not.Null);
-                var buttons = canvas.GetComponentsInChildren<Button>(true);
-                var toggles = canvas.GetComponentsInChildren<Toggle>(true);
-                var smoothCursorToggle = Array.Find(toggles, toggle => toggle.name == "부드러운 커서 Toggle");
-                var loginButton = Array.Find(buttons, button => button.name == "로그인 Button");
-                var connectButton = Array.Find(buttons, button => button.name == "연결 Button");
-
-                Assert.That(manager.SdkId, Is.Not.Empty);
-                Assert.That(manager.InstanceName, Is.Not.Empty);
-
-                // Artel 토글, 고급, 연결, 로그아웃, 로그인, 다시 시도, 게이트 로그아웃, 나중에.
-                Assert.That(buttons, Has.Length.EqualTo(8));
-
-                // 키 입력창은 사라졌다. 남아 있으면 로그인 흐름과 두 입구가 공존한다.
-                Assert.That(canvas.GetComponentInChildren<InputField>(true), Is.Null);
-                Assert.That(loginButton, Is.Not.Null);
-                Assert.That(loginButton.interactable, Is.True);
-                Assert.That(connectButton, Is.Not.Null);
-                Assert.That(connectButton.interactable, Is.False);
-                Assert.That(smoothCursorToggle, Is.Not.Null);
-                Assert.That(smoothCursorToggle.isOn, Is.False);
-                Assert.That(Array.Find(toggles, toggle => toggle.name == "다크 모드 Toggle"), Is.Not.Null);
-                Assert.That(canvas.GetComponentsInChildren<ArtelLogoGraphic>(true), Has.Length.EqualTo(3));
-            }
-            finally
-            {
-                var canvas = GameObject.Find("Artel Overlay Canvas");
-                var eventSystem = GameObject.Find("Artel EventSystem");
-                if (canvas != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(canvas);
-                }
-
-                if (eventSystem != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(eventSystem);
-                }
-
-                UnityEngine.Object.DestroyImmediate(host);
-            }
         }
 
         [Test]
@@ -581,8 +524,8 @@ namespace Artel.Tests.Transport
 
             // 설정되지 않은 Server는 요청을 만드는 중에 던진다. 401이 아니므로 세션이
             // 그대로 남는 실패 경로다.
-            var registration = viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { });
-            Assert.That(registration.MoveNext(), Is.False);
+            RunToCompletionWithoutWaiting(
+                viewModel.Register(new Server(), "sdk-uuid", "내 맥북", "1.2.3", () => { }));
 
             Assert.That(viewModel.HasToken, Is.True);
             Assert.That(viewModel.HasError, Is.True);
@@ -906,6 +849,34 @@ namespace Artel.Tests.Transport
                 }
 
                 UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        /// <summary>
+        /// Unity의 코루틴 실행기처럼 중첩 IEnumerator까지 끝까지 돌린다. 요청을 보내기 전에
+        /// 끝나야 하는 경로를 보는 테스트이므로, 기다림을 뜻하는 값을 yield하면 —
+        /// <c>UnityWebRequest.SendWebRequest()</c>가 그렇다 — 그 자리에서 실패시킨다.
+        /// </summary>
+        /// <remarks>
+        /// 한 번의 <c>MoveNext</c>로 끝나는지 보던 자리를 대신한다. Register는 토큰 재발급을
+        /// 위해 <c>yield return EnsureToken(...)</c>으로 다른 코루틴을 품는데, 손으로 펌프하면
+        /// 그 중첩 자체가 한 걸음으로 세어져 네트워크에 나가지 않는 실패 경로까지 기다린 것처럼
+        /// 보였다.
+        /// </remarks>
+        private static void RunToCompletionWithoutWaiting(IEnumerator routine)
+        {
+            while (routine.MoveNext())
+            {
+                if (routine.Current is IEnumerator nested)
+                {
+                    RunToCompletionWithoutWaiting(nested);
+                    continue;
+                }
+
+                Assert.Fail(
+                    "요청을 보내기 전에 끝나야 하는 경로인데 " +
+                    (routine.Current == null ? "다음 프레임" : routine.Current.ToString()) +
+                    "을(를) 기다렸습니다.");
             }
         }
 

@@ -9,11 +9,23 @@ using UnityEngine.UI;
 
 namespace Artel.Tests
 {
+    /// <summary>
+    /// 배치 큐가 액션 사이사이의 스캔을 어떻게 끼워 넣는지 본다. 살아 있는 매니저가 필요해
+    /// 플레이 모드에서만 돌 수 있다: <c>Awake</c>가 <c>DontDestroyOnLoad</c>를 부르는데
+    /// 그건 에디터 스크립트에서 부를 수 없다.
+    /// </summary>
     public sealed class ActionBatchTests
     {
         private GameObject host;
         private GameObject buttonObject;
         private GameObject labelObject;
+        private ArtelManager displacedInstance;
+
+        [SetUp]
+        public void SetUp()
+        {
+            displacedInstance = ArtelManagerSlot.Clear();
+        }
 
         [TearDown]
         public void TearDown()
@@ -21,6 +33,10 @@ namespace Artel.Tests
             Object.DestroyImmediate(buttonObject);
             Object.DestroyImmediate(labelObject);
             Object.DestroyImmediate(host);
+
+            // 이 픽스처가 만든 매니저는 방금 사라졌다. 훅이 띄운 매니저를 슬롯에 되돌려
+            // 다음 픽스처가 플레이 모드 진입 직후와 같은 상태에서 시작하게 한다.
+            ArtelManagerSlot.Restore(displacedInstance);
         }
 
         [Test]
@@ -100,10 +116,9 @@ namespace Artel.Tests
         private ArtelManager CreateManager(RecordingTransport transport)
         {
             host = new GameObject("Artel action batch test");
+
+            // 플레이 모드에서는 AddComponent가 Awake를 바로 부른다.
             var manager = host.AddComponent<ArtelManager>();
-            typeof(ArtelManager)
-                .GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(manager, null);
             manager.SetWebSocketTransport(transport, false);
 
             labelObject = new GameObject("status label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));

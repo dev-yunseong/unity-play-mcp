@@ -10,7 +10,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEditor.Events;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -20,6 +22,9 @@ namespace Artel.Tests
 {
     public sealed class SceneScannerTests
     {
+        /// <summary>이름 없는 씬을 Build Settings에 올리려고 한 번 저장할 자리.</summary>
+        private const string TemporaryScenePath = "Assets/ArtelSceneScanReportTemp.unity";
+
         private GameObject gameObject;
         private readonly List<GameObject> spawned = new List<GameObject>();
 
@@ -131,19 +136,60 @@ namespace Artel.Tests
             Assert.That(scanner.TryGetTarget(block.Id, out _), Is.True);
         }
 
+        /// <summary>
+        /// 보고서가 Build Settings의 씬을 그대로 싣고, 그 씬을 실제로 스캔하는지 본다.
+        /// </summary>
+        /// <remarks>
+        /// 전제 조건을 테스트가 직접 만든다. 호스트 프로젝트의 Build Settings를 빌려 쓰면 씬을
+        /// 하나도 등록하지 않은 프로젝트 — 패키지 테스트를 돌리는 빈 프로젝트가 늘 그렇다 —
+        /// 에서는 빈 보고서를 받고 실패한다.
+        ///
+        /// 이미 열려 있는 씬을 등록하는 이유는 EditMode에서 <c>SceneManager.LoadSceneAsync</c>가
+        /// 돌지 않기 때문이다. 열려 있는 씬은 <see cref="AllSceneScanner"/>가 그 자리에서 스캔한다.
+        /// </remarks>
         [UnityTest]
         public IEnumerator CreateReport_ListsBuildScenesAndScansThem()
         {
-            SceneScanReportDto report = null;
+            var originalBuildScenes = EditorBuildSettings.scenes;
+            var activeScene = SceneManager.GetActiveScene();
+            var scenePath = activeScene.path;
+            var savedTemporaryScene = false;
+            try
+            {
+                // 저장된 적 없는 씬은 경로가 없어 Build Settings에 올릴 수 없다. 임시 파일로 한
+                // 번 저장해 경로를 준다 — 오브젝트는 그대로 살아 있고, 이미 경로가 있는 씬은
+                // 건드리지 않는다.
+                if (string.IsNullOrEmpty(scenePath))
+                {
+                    scenePath = TemporaryScenePath;
+                    Assert.That(
+                        EditorSceneManager.SaveScene(activeScene, scenePath),
+                        Is.True,
+                        "테스트가 쓸 임시 씬을 저장하지 못했습니다.");
+                    savedTemporaryScene = true;
+                }
 
-            yield return SceneScanReporter.CreateReport(result => report = result);
+                EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
 
-            Assert.That(report, Is.Not.Null);
-            Assert.That(report.ScannedScenes, Is.Not.Empty);
-            Assert.That(
-                report.ScannedScenes.Any(scene =>
-                    scene.Children.Any(child => child.Name == gameObject.name)),
-                Is.True);
+                SceneScanReportDto report = null;
+                yield return SceneScanReporter.CreateReport(result => report = result);
+
+                Assert.That(report, Is.Not.Null);
+                Assert.That(report.ScenesInBuild, Is.EqualTo(new[] { scenePath }));
+                Assert.That(report.ScannedScenes, Is.Not.Empty);
+                Assert.That(
+                    report.ScannedScenes.Any(scene =>
+                        scene.Children.Any(child => child.Name == gameObject.name)),
+                    Is.True);
+            }
+            finally
+            {
+                EditorBuildSettings.scenes = originalBuildScenes;
+                if (savedTemporaryScene)
+                {
+                    AssetDatabase.DeleteAsset(TemporaryScenePath);
+                }
+            }
         }
 
         [Test]

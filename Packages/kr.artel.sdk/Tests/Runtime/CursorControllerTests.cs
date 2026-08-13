@@ -23,16 +23,14 @@ namespace Artel.Tests
         [Test]
         public void MoveTo_ShowsCursorAtTargetCenter()
         {
-            controllerObject = new GameObject("cursor controller");
-            var controller = controllerObject.AddComponent<CursorController>();
+            var controller = CreateController();
             targetObject = new GameObject("target", typeof(RectTransform));
             var target = targetObject.GetComponent<RectTransform>();
             target.position = new Vector3(120f, 240f, 0f);
 
-            var movement = controller.MoveTo(target, null);
-            while (movement.MoveNext())
-            {
-            }
+            // RectTransform을 받는 MoveTo는 좌표를 계산해 다른 MoveTo에 넘긴다. Drain 없이
+            // 손으로 돌리면 그 중첩 코루틴이 실행되지 않아 커서가 제자리에 숨어 있는다.
+            Drain(controller.MoveTo(target, null));
 
             var cursor = controllerObject.transform
                 .Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor");
@@ -49,11 +47,7 @@ namespace Artel.Tests
             try
             {
                 PlayerPrefs.SetInt("Artel.DarkTheme", 1);
-                controllerObject = new GameObject("cursor controller");
-                var controller = controllerObject.AddComponent<CursorController>();
-                typeof(CursorController)
-                    .GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .Invoke(controller, null);
+                var controller = CreateController();
 
                 var texture = controllerObject.transform
                     .Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor")
@@ -88,8 +82,7 @@ namespace Artel.Tests
         [Test]
         public void ExecuteButtonClick_MovesCursorBeforeInvokingButton()
         {
-            controllerObject = new GameObject("cursor controller");
-            var controller = controllerObject.AddComponent<CursorController>();
+            var controller = CreateController();
             targetObject = NewButtonObject("button target");
             var button = targetObject.GetComponent<Button>();
             var cursorWasVisibleDuringClick = false;
@@ -118,8 +111,7 @@ namespace Artel.Tests
         [Test]
         public void ExecuteButtonClick_RefusesALockedButton()
         {
-            controllerObject = new GameObject("cursor controller");
-            var controller = controllerObject.AddComponent<CursorController>();
+            var controller = CreateController();
             targetObject = NewButtonObject("locked button");
             var button = targetObject.GetComponent<Button>();
             button.interactable = false;
@@ -144,8 +136,7 @@ namespace Artel.Tests
         [Test]
         public void ExecuteEnterText_RefusesALockedField()
         {
-            controllerObject = new GameObject("cursor controller");
-            var controller = controllerObject.AddComponent<CursorController>();
+            var controller = CreateController();
             targetObject = new GameObject(
                 "locked field",
                 typeof(RectTransform),
@@ -176,8 +167,7 @@ namespace Artel.Tests
         {
             // TMP_InputField is the field type most games actually ship, and it takes the other
             // branch of the interactability check than the legacy InputField does.
-            controllerObject = new GameObject("cursor controller");
-            var controller = controllerObject.AddComponent<CursorController>();
+            var controller = CreateController();
             targetObject = new GameObject(
                 "locked tmp field",
                 typeof(RectTransform),
@@ -200,6 +190,21 @@ namespace Artel.Tests
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.Error, Does.Contain("not interactable"));
             Assert.That(field.text, Is.Empty);
+        }
+
+        /// <summary>
+        /// EditMode에서는 AddComponent가 Awake를 부르지 않는다. 커서 오브젝트는 Awake에서
+        /// 만들어지므로 직접 부르지 않으면 MoveTo가 아무것도 하지 않고 빠져나가고, 찾으려는
+        /// 커서는 끝까지 존재하지 않는다.
+        /// </summary>
+        private CursorController CreateController()
+        {
+            controllerObject = new GameObject("cursor controller");
+            var controller = controllerObject.AddComponent<CursorController>();
+            typeof(CursorController)
+                .GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(controller, null);
+            return controller;
         }
 
         private static GameObject NewButtonObject(string name)
