@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Artel.Diagnostics;
 using Artel.Domain;
 using Artel.Tracking;
 using TMPro;
@@ -22,13 +23,16 @@ namespace Artel
 
         public SceneScanResult Scan(SceneScanOptions options)
         {
-            targetsById.Clear();
-            transformReader.BeginScan();
+            using (ArtelProfilerMarkers.SceneScanScan.Auto())
+            {
+                targetsById.Clear();
+                transformReader.BeginScan();
 
-            var actionCommits = new List<ActionBatchCommit>();
-            return new SceneScanResult(
-                ScanScene(SceneManager.GetActiveScene(), options, actionCommits),
-                actionCommits);
+                var actionCommits = new List<ActionBatchCommit>();
+                return new SceneScanResult(
+                    ScanScene(SceneManager.GetActiveScene(), options, actionCommits),
+                    actionCommits);
+            }
         }
 
         private SceneSnapshot ScanScene(

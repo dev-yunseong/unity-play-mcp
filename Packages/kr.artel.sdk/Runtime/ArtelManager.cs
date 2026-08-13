@@ -213,26 +213,42 @@ namespace Artel
 
         private void Update()
         {
-            RecordFrameTime();
-
-            ArtelInput.AdvanceFrame();
-
-            // Ahead of the transport check on purpose: the lease is a dead-man timer, so it has to
-            // keep running when the socket is the thing that died.
-            PumpStreaming();
-
-            if (webSocketTransport == null)
+            using (ArtelProfilerMarkers.ManagerUpdate.Auto())
             {
-                return;
-            }
+                RecordFrameTime();
 
-            while (webSocketTransport.TryDequeueMessage(out var message))
-            {
-                HandleMessage(message);
-            }
+                ArtelInput.AdvanceFrame();
 
-            PollSceneState();
-            SendPerformanceReport();
+                // Ahead of the transport check on purpose: the lease is a dead-man timer, so it has to
+                // keep running when the socket is the thing that died.
+                using (ArtelProfilerMarkers.ManagerPumpStreaming.Auto())
+                {
+                    PumpStreaming();
+                }
+
+                if (webSocketTransport == null)
+                {
+                    return;
+                }
+
+                using (ArtelProfilerMarkers.ManagerHandleMessage.Auto())
+                {
+                    while (webSocketTransport.TryDequeueMessage(out var message))
+                    {
+                        HandleMessage(message);
+                    }
+                }
+
+                using (ArtelProfilerMarkers.ManagerPollSceneState.Auto())
+                {
+                    PollSceneState();
+                }
+
+                using (ArtelProfilerMarkers.ManagerPerformanceReport.Auto())
+                {
+                    SendPerformanceReport();
+                }
+            }
         }
 
         public void StartTransport()

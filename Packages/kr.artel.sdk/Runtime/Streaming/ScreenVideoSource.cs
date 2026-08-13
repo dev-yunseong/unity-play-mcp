@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Artel.Diagnostics;
 using UnityEngine;
 
 namespace Artel.Streaming
@@ -139,24 +140,29 @@ namespace Artel.Streaming
 
         private void CaptureFrame()
         {
-            // CaptureScreenshotIntoRenderTexture wants a target the size of the screen, so the
-            // downscale to maxWidth happens in the blit rather than here.
-            var backBuffer = RenderTexture.GetTemporary(
-                Mathf.Max(2, Screen.width), Mathf.Max(2, Screen.height), 0, RenderTextureFormat.BGRA32);
-
-            try
+            // The end-of-frame wait sits in the caller on purpose: wrapping it would report the
+            // wait as capture cost.
+            using (ArtelProfilerMarkers.StreamCaptureFrame.Auto())
             {
-                ScreenCapture.CaptureScreenshotIntoRenderTexture(backBuffer);
+                // CaptureScreenshotIntoRenderTexture wants a target the size of the screen, so the
+                // downscale to maxWidth happens in the blit rather than here.
+                var backBuffer = RenderTexture.GetTemporary(
+                    Mathf.Max(2, Screen.width), Mathf.Max(2, Screen.height), 0, RenderTextureFormat.BGRA32);
 
-                // The screenshot is written in framebuffer orientation, which under D3D is upside
-                // down relative to what the encoder expects. The flip is not optional: getting it
-                // wrong produces a working-but-inverted stream, which reads as success in a smoke
-                // test and is only caught against on-screen text.
-                Graphics.Blit(backBuffer, frame, new Vector2(1f, -1f), new Vector2(0f, 1f));
-            }
-            finally
-            {
-                RenderTexture.ReleaseTemporary(backBuffer);
+                try
+                {
+                    ScreenCapture.CaptureScreenshotIntoRenderTexture(backBuffer);
+
+                    // The screenshot is written in framebuffer orientation, which under D3D is upside
+                    // down relative to what the encoder expects. The flip is not optional: getting it
+                    // wrong produces a working-but-inverted stream, which reads as success in a smoke
+                    // test and is only caught against on-screen text.
+                    Graphics.Blit(backBuffer, frame, new Vector2(1f, -1f), new Vector2(0f, 1f));
+                }
+                finally
+                {
+                    RenderTexture.ReleaseTemporary(backBuffer);
+                }
             }
         }
 

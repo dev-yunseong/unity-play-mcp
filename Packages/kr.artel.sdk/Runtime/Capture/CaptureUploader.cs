@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Text;
+using Artel.Diagnostics;
 using Artel.Domain;
 using Artel.Protocol.Dto;
 using Artel.Serialization;
@@ -137,45 +138,55 @@ namespace Artel.Capture
             CapturedImage image,
             CaptureRequest request)
         {
-            var endpoint = new Uri(server().HttpBaseUri, TicketPath);
-            var body = jsonCodec.Serialize(new CaptureTicketRequestDto
+            // Only the request building is measured. The waits in Upload stay outside every marker:
+            // one spanning SendWebRequest would report network latency as CPU cost.
+            using (ArtelProfilerMarkers.CaptureUpload.Auto())
             {
-                InstanceId = registeredInstanceId,
-                ContentType = request.ContentType,
-                ContentLength = image.Bytes.LongLength,
-                TargetId = request.TargetId
-            });
-            var ticketRequest = new UnityWebRequest(endpoint.AbsoluteUri, UnityWebRequest.kHttpVerbPOST)
-            {
-                uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
-                downloadHandler = new DownloadHandlerBuffer()
-            };
-            ticketRequest.SetRequestHeader("Content-Type", "application/json");
-            ticketRequest.SetRequestHeader("Authorization", "Bearer " + sdkToken);
-            return ticketRequest;
+                var endpoint = new Uri(server().HttpBaseUri, TicketPath);
+                var body = jsonCodec.Serialize(new CaptureTicketRequestDto
+                {
+                    InstanceId = registeredInstanceId,
+                    ContentType = request.ContentType,
+                    ContentLength = image.Bytes.LongLength,
+                    TargetId = request.TargetId
+                });
+                var ticketRequest = new UnityWebRequest(endpoint.AbsoluteUri, UnityWebRequest.kHttpVerbPOST)
+                {
+                    uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
+                    downloadHandler = new DownloadHandlerBuffer()
+                };
+                ticketRequest.SetRequestHeader("Content-Type", "application/json");
+                ticketRequest.SetRequestHeader("Authorization", "Bearer " + sdkToken);
+                return ticketRequest;
+            }
         }
 
         private static UnityWebRequest CreatePutRequest(
             CaptureTicketResponseDto ticket,
             CapturedImage image)
         {
-            var put = new UnityWebRequest(ticket.UploadUrl, UnityWebRequest.kHttpVerbPUT)
+            // UploadHandlerRaw copies the image, so this is where an upload's real per-frame cost
+            // is — megabytes moved on the main thread, not the transfer that follows it.
+            using (ArtelProfilerMarkers.CaptureUpload.Auto())
             {
-                uploadHandler = new UploadHandlerRaw(image.Bytes),
-                downloadHandler = new DownloadHandlerBuffer()
-            };
-
-            // The signature covers these headers. Sending a different Content-Type, or omitting
-            // one, makes storage reject the PUT rather than store the wrong thing.
-            if (ticket.RequiredHeaders != null)
-            {
-                foreach (var header in ticket.RequiredHeaders)
+                var put = new UnityWebRequest(ticket.UploadUrl, UnityWebRequest.kHttpVerbPUT)
                 {
-                    put.SetRequestHeader(header.Key, header.Value);
-                }
-            }
+                    uploadHandler = new UploadHandlerRaw(image.Bytes),
+                    downloadHandler = new DownloadHandlerBuffer()
+                };
 
-            return put;
+                // The signature covers these headers. Sending a different Content-Type, or omitting
+                // one, makes storage reject the PUT rather than store the wrong thing.
+                if (ticket.RequiredHeaders != null)
+                {
+                    foreach (var header in ticket.RequiredHeaders)
+                    {
+                        put.SetRequestHeader(header.Key, header.Value);
+                    }
+                }
+
+                return put;
+            }
         }
 
         private static string Describe(string what, UnityWebRequest request)

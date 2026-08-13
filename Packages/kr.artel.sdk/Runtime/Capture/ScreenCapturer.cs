@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Artel.Diagnostics;
 using UnityEngine;
 
 namespace Artel.Capture
@@ -75,14 +76,24 @@ namespace Artel.Capture
                     1f - source.yMin / screenHeight);
                 Graphics.Blit(screen, scaled, scale, offset);
 
-                readback = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false);
-                RenderTexture.active = scaled;
-                readback.ReadPixels(new Rect(0f, 0f, size.x, size.y), 0, 0, false);
-                readback.Apply(false);
+                // Only the synchronous work is wrapped. A marker spanning the end-of-frame wait
+                // above would report the idle time as capture cost.
+                using (ArtelProfilerMarkers.CaptureReadback.Auto())
+                {
+                    readback = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false);
+                    RenderTexture.active = scaled;
+                    readback.ReadPixels(new Rect(0f, 0f, size.x, size.y), 0, 0, false);
+                    readback.Apply(false);
+                }
 
-                var bytes = request.UsePng
-                    ? readback.EncodeToPNG()
-                    : readback.EncodeToJPG(CaptureRequestReader.JpegQuality);
+                byte[] bytes;
+                using (ArtelProfilerMarkers.CaptureEncode.Auto())
+                {
+                    bytes = request.UsePng
+                        ? readback.EncodeToPNG()
+                        : readback.EncodeToJPG(CaptureRequestReader.JpegQuality);
+                }
+
                 if (bytes == null || bytes.Length == 0)
                 {
                     completed(CapturedImage.Failed("The captured image could not be encoded."));

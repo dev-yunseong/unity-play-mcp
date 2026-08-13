@@ -1,4 +1,5 @@
 using System;
+using Artel.Diagnostics;
 using Artel.Protocol.Dto;
 using Artel.Protocol.Mapping;
 
@@ -56,9 +57,23 @@ namespace Artel.Tracking
 
             nextScanTime = currentTime + intervalSeconds;
 
+            // The scan carries its own marker. Mapping and hashing are split out because they walk
+            // the same tree again, and a single number for the three would not say which one grew.
             var scanResult = scanner.Scan();
-            var scene = SceneSnapshotMapper.ToDto(scanResult.Scene);
-            if (!hashTracker.Observe(scene))
+
+            SceneDto scene;
+            using (ArtelProfilerMarkers.SceneScanMap.Auto())
+            {
+                scene = SceneSnapshotMapper.ToDto(scanResult.Scene);
+            }
+
+            bool changed;
+            using (ArtelProfilerMarkers.SceneScanHash.Auto())
+            {
+                changed = hashTracker.Observe(scene);
+            }
+
+            if (!changed)
             {
                 return false;
             }
