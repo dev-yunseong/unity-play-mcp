@@ -6,6 +6,7 @@ namespace Artel.CodeGen
 {
     internal sealed class InputMethodWeaver
     {
+        private const string RuntimeAssemblyName = "Artel.Runtime";
         private const string UnityInputTypeName = "UnityEngine.Input";
         private static readonly HashSet<string> SupportedMethodNames = new HashSet<string>
         {
@@ -28,11 +29,22 @@ namespace Artel.CodeGen
         private readonly ModuleDefinition module;
         private readonly Dictionary<string, MethodReference> proxyMethods;
 
-        public InputMethodWeaver(ModuleDefinition module)
+        /// <summary>
+        /// 대상 어셈블리가 런타임을 실제로 참조할 때만 위버를 만든다. 참조가 없으면 null.
+        /// 이유는 <see cref="ActionMethodWeaver.TryCreate"/>와 같다 — 컴파일러 참조 목록과
+        /// IL 메타데이터 참조 목록이 다르다.
+        /// </summary>
+        public static InputMethodWeaver TryCreate(ModuleDefinition module)
+        {
+            var runtimeReference = module.AssemblyReferences
+                .FirstOrDefault(reference => reference.Name == RuntimeAssemblyName);
+
+            return runtimeReference == null ? null : new InputMethodWeaver(module, runtimeReference);
+        }
+
+        private InputMethodWeaver(ModuleDefinition module, AssemblyNameReference runtimeReference)
         {
             this.module = module;
-            var runtimeReference = module.AssemblyReferences
-                .First(reference => reference.Name == "Artel.Runtime");
             var runtimeModule = module.AssemblyResolver.Resolve(runtimeReference).MainModule;
             var proxyType = runtimeModule.GetType("Artel.ArtelInput");
 
