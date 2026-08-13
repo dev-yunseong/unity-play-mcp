@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Artel.Auth;
 using Artel.Capture;
+using Artel.Diagnostics;
 using Artel.Domain;
 using Artel.Protocol.Dto;
 using Artel.Serialization;
@@ -16,6 +17,13 @@ namespace Artel
     public sealed class ArtelManager : MonoBehaviour
     {
         private const float SceneScanIntervalSeconds = 1f;
+        private const float FrameTimeIntervalSeconds = 5f;
+
+        /// <summary>
+        /// 정적 메서드 그룹을 한 번만 델리게이트로 감싼다. Update에서 매번 넘기므로 여기에
+        /// 담아 두지 않으면 프레임마다 델리게이트가 할당된다.
+        /// </summary>
+        private static readonly Func<float> FrameBudgetResolver = ResolveFrameBudgetSeconds;
 
         /// <summary>
         /// The one manager that survives scene loads. Static rather than looked up
@@ -36,6 +44,7 @@ namespace Artel
         private PointerEventDispatcher pointerEvents;
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
+        private FrameTimeRecorder frameTimeRecorder;
         private ArtelStreamHost streamHost;
         private Coroutine webRtcPump;
         private long nextMessageId = 1;
@@ -50,6 +59,12 @@ namespace Artel
 
         /// <summary>대시보드에서 이 설치를 알아볼 첫 이름. 서버가 등록 때 한 번만 쓴다.</summary>
         public string InstanceName { get; private set; }
+
+        /// <summary>
+        /// 가장 최근에 닫힌 집계 구간의 프레임 분포. 첫 구간이 끝나기 전에는 null이다.
+        /// 전송은 별도 이슈(ARTEL-346)가 이 값을 읽어 간다.
+        /// </summary>
+        internal FrameTimeStatistics? LatestFrameTimes { get; private set; }
 
         public Server Server { get { return server; } }
         public bool SmoothCursorMovement
@@ -140,6 +155,7 @@ namespace Artel
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
+            frameTimeRecorder = new FrameTimeRecorder(FrameTimeIntervalSeconds);
 
             var streamSignals = new WebSocketStreamSignalSender(jsonCodec, () => webSocketTransport);
             streamHost = new ArtelStreamHost(
@@ -186,6 +202,8 @@ namespace Artel
 
         private void Update()
         {
+            RecordFrameTime();
+
             ArtelInput.AdvanceFrame();
 
             // Ahead of the transport check on purpose: the lease is a dead-man timer, so it has to
@@ -530,6 +548,53 @@ namespace Artel
 
             StopCoroutine(webRtcPump);
             webRtcPump = null;
+        }
+
+        /// <summary>
+        /// 전송 상태와 무관하게 매 프레임 돈다. 소켓이 끊긴 동안의 성능도 남아야 QA 런에서
+        /// 끊김 구간을 설명할 수 있다.
+        /// </summary>
+        private void RecordFrameTime()
+        {
+            // timeScale이 아니라 실제 경과 시간이 필요하다. pause_time 계열 액션이 timeScale을
+            // 임의로 바꾸므로 deltaTime은 프레임 성능 지표가 되지 못한다.
+            //
+            // isFocused는 에디터에서 에디터 애플리케이션의 포커스를 뜻한다. Game view가 아니라
+            // 창 기준이라 작업 중에는 대체로 true이고, 다른 앱으로 넘어간 동안만 빠진다.
+            frameTimeRecorder.Record(Time.unscaledDeltaTime, Application.isFocused);
+
+            if (frameTimeRecorder.TryAggregate(Time.unscaledTime, FrameBudgetResolver, out var frameTimes))
+            {
+                LatestFrameTimes = frameTimes;
+            }
+        }
+
+        /// <summary>
+        /// 프레임 예산. 같은 33ms라도 30fps 캡이 걸린 빌드에서는 정상이고 144Hz에서는 hitch다.
+        ///
+        /// vsync를 먼저 본다. Unity는 vSyncCount가 0보다 크면 targetFrameRate를 무시하므로,
+        /// 반대 순서로 보면 실제로 적용되지 않는 캡을 예산으로 삼게 된다.
+        /// </summary>
+        private static float ResolveFrameBudgetSeconds()
+        {
+            var vSyncCount = QualitySettings.vSyncCount;
+            if (vSyncCount > 0)
+            {
+                // refreshRate(int)는 2022.2에서 폐기됐다. 비율 형태가 60/1.001 같은 실제 주사율을 잃지 않는다.
+                var refreshRate = Screen.currentResolution.refreshRateRatio.value;
+                if (refreshRate > 0d)
+                {
+                    return (float)(vSyncCount / refreshRate);
+                }
+            }
+
+            var targetFrameRate = Application.targetFrameRate;
+            if (targetFrameRate > 0)
+            {
+                return 1f / targetFrameRate;
+            }
+
+            return 1f / 60f;
         }
 
         private void PollSceneState()
