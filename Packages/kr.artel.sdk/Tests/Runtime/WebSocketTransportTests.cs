@@ -120,6 +120,19 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
+        public void ResetAndCreate_ReplacesStoredUuid()
+        {
+            var previous = Guid.NewGuid().ToString("D");
+            PlayerPrefs.SetString(PlayerPrefsKey, previous);
+
+            var replacement = ArtelSdkIdentity.ResetAndCreate();
+
+            Assert.That(replacement, Is.Not.EqualTo(previous));
+            Assert.That(Guid.TryParse(replacement, out _), Is.True);
+            Assert.That(PlayerPrefs.GetString(PlayerPrefsKey), Is.EqualTo(replacement));
+        }
+
+        [Test]
         public void Server_BuildsSecureProtocolBaseUris()
         {
             var server = new Server(true, "test.artel.example", 8443);
@@ -412,6 +425,18 @@ namespace Artel.Tests.Transport
             // 다시 열어야 한다.
             Assert.That(viewModel.HasToken, Is.True);
             Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.True);
+        }
+
+        [TestCase(409, "{\"code\":\"SDK_INSTANCE_RETIRED\"}", true)]
+        [TestCase(409, "{\"code\":\"conflict\"}", false)]
+        [TestCase(500, "{\"code\":\"SDK_INSTANCE_RETIRED\"}", false)]
+        [TestCase(409, "not-json", false)]
+        public void OverlayViewModel_RecognizesOnlyRetiredInstanceConflict(
+            long responseCode,
+            string responseBody,
+            bool expected)
+        {
+            Assert.That(CreateViewModel().IsRetiredInstance(responseCode, responseBody), Is.EqualTo(expected));
         }
 
         [Test]

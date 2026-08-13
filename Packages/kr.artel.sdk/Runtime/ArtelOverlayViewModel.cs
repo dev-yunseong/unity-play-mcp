@@ -12,7 +12,9 @@ namespace Artel
     internal sealed class ArtelOverlayViewModel
     {
         private const long UnauthorizedStatusCode = 401;
+        private const long ConflictStatusCode = 409;
         private const long NotFoundStatusCode = 404;
+        private const string RetiredInstanceCode = "SDK_INSTANCE_RETIRED";
 
         private readonly ArtelSdkRegistrationClient registrationClient;
         private readonly ArtelSdkAuthClient authClient;
@@ -398,28 +400,39 @@ namespace Artel
             HasError = false;
             SetStatus("인스턴스를 등록하는 중...");
 
-            UnityWebRequest request;
-            try
-            {
-                request = registrationClient.CreateRequest(
-                    server, token, SelectedProjectId, sdkUuid, instanceName, gameVersion, sceneScan);
-            }
-            catch (Exception exception)
-            {
-                Fail("설정 오류: " + exception.Message);
-                yield break;
-            }
-
             bool succeeded;
             long responseCode;
             string responseBody;
-            using (request)
+            for (var attempt = 0; ; attempt++)
             {
-                yield return request.SendWebRequest();
+                UnityWebRequest request;
+                try
+                {
+                    request = registrationClient.CreateRequest(
+                        server, token, SelectedProjectId, sdkUuid, instanceName, gameVersion, sceneScan);
+                }
+                catch (Exception exception)
+                {
+                    Fail("설정 오류: " + exception.Message);
+                    yield break;
+                }
 
-                succeeded = request.result == UnityWebRequest.Result.Success;
-                responseCode = request.responseCode;
-                responseBody = ReadBody(request);
+                using (request)
+                {
+                    yield return request.SendWebRequest();
+
+                    succeeded = request.result == UnityWebRequest.Result.Success;
+                    responseCode = request.responseCode;
+                    responseBody = ReadBody(request);
+                }
+
+                if (!succeeded && attempt == 0 && IsRetiredInstance(responseCode, responseBody))
+                {
+                    sdkUuid = ArtelSdkIdentity.ResetAndCreate();
+                    continue;
+                }
+
+                break;
             }
 
             if (!succeeded)
@@ -644,6 +657,23 @@ namespace Artel
             }
 
             return responseBody;
+        }
+
+        internal bool IsRetiredInstance(long responseCode, string responseBody)
+        {
+            if (responseCode != ConflictStatusCode || string.IsNullOrWhiteSpace(responseBody))
+            {
+                return false;
+            }
+
+            try
+            {
+                return jsonCodec.Deserialize<ApiErrorDto>(responseBody)?.Code == RetiredInstanceCode;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void SetStatus(string status)

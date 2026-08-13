@@ -20,5 +20,11 @@ namespace Artel
             PlayerPrefs.Save();
             return sdkId;
         }
+
+        public static string ResetAndCreate()
+        {
+            PlayerPrefs.DeleteKey(PlayerPrefsKey);
+            return LoadOrCreate();
+        }
     }
 }
