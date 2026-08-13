@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 namespace Artel.Protocol.Dto
 {
     /// <summary>
-    /// 주기적으로 올리는 런타임 성능 보고. 지금은 프레임 지표만 싣는다.
+    /// 주기적으로 올리는 런타임 성능 보고.
     /// </summary>
     /// <remarks>
     /// 지표군마다 최상위에 펼치지 않고 한 단계 아래로 묶는다. 종류가 늘어도 최상위가 평평하게
@@ -37,6 +37,16 @@ namespace Artel.Protocol.Dto
         /// </summary>
         [JsonProperty("process", NullValueHandling = NullValueHandling.Ignore)]
         public ProcessResourcesDto Process { get; set; }
+
+        /// <summary>
+        /// 에디터 Game view의 렌더 통계. 에디터가 아니면 <c>null</c>이라 필드 자체가 빠진다.
+        /// 가용성은 별도 플래그가 아니라 이 부재로만 알린다.
+        ///
+        /// 다른 지표군과 달리 이 창의 집계가 아닌 순간값이고, Scene view 렌더가 섞여 있어
+        /// Standalone 수치와 나란히 놓을 수 없다. <see cref="EditorRenderStatsDto"/> 참고.
+        /// </summary>
+        [JsonProperty("editorRender", NullValueHandling = NullValueHandling.Ignore)]
+        public EditorRenderStatsDto EditorRender { get; set; }
 
         /// <summary>
         /// 이 구간의 실행 상태. 포커스와 배터리는 세션 중에 바뀌므로 보고마다 싣는다.

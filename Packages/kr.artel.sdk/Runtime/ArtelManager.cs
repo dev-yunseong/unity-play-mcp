@@ -646,6 +646,13 @@ namespace Artel
                 WarnFrameTimingUnavailableOnce();
             }
 
+            // 게이트가 열린 뒤에만 읽는다. 순간값이라 누적 상태가 없어 건너뛴 프레임이 다음 값을
+            // 왜곡하지 않으므로, 매 프레임 읽을 이유가 없다. 에디터 밖에서는 항상 false다.
+            if (EditorRenderStatsReader.TryRead(out var editorRenderStats))
+            {
+                report.EditorRender = EditorRenderStatsMapper.ToDto(editorRenderStats);
+            }
+
             webSocketTransport.Send(jsonCodec.Serialize(report));
         }
 
