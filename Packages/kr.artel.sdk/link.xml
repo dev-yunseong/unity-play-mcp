@@ -1,0 +1,18 @@
+<!--
+  Everything the affordance side puts in a player is only ever reached by reflection or by the
+  engine, so the managed stripper sees types nobody calls and removes them. Measured at High: the
+  attribute, the assembly that declares it, and the scan itself were all gone from the build, while
+  the evidence resource stayed. A build that still compiles and still runs then reports a game with
+  nothing in it, which is the hardest kind of loss to notice.
+
+  Whether this file is honoured has not been confirmed — the linker command line for a High-stripped
+  build named only Unity's own generated preserve files. The check in ManagedStrippingWarning is
+  what makes the failure say so either way; that check arrives with ARTEL-395.
+
+  Artel.Affordances.Scan is preserved too once it exists. It is left out here rather than written
+  ahead of time because what the linker does with a name that resolves to no assembly has not been
+  checked, and this file is not the place to find out. Added by ARTEL-394.
+-->
+<linker>
+  <assembly fullname="Artel.Affordances.Runtime" preserve="all"/>
+</linker>
