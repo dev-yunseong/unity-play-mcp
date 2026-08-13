@@ -6,8 +6,8 @@ namespace Artel.Protocol.Dto
     /// 주기적으로 올리는 런타임 성능 보고. 지금은 프레임 지표만 싣는다.
     /// </summary>
     /// <remarks>
-    /// CPU·메모리(ARTEL-344)와 디바이스 컨텍스트(ARTEL-345)가 같은 메시지에 필드로 붙는다.
-    /// 그래서 프레임 지표를 최상위에 펼치지 않고 <c>frameTimes</c> 아래에 묶어 둔다.
+    /// 지표군마다 최상위에 펼치지 않고 한 단계 아래로 묶는다. 종류가 늘어도 최상위가 평평하게
+    /// 커지지 않고, 서버가 군 단위로 골라 읽을 수 있다.
     /// </remarks>
     public sealed class PerformanceMessageDto
     {
@@ -19,5 +19,21 @@ namespace Artel.Protocol.Dto
 
         [JsonProperty("frameTimes")]
         public FrameTimesDto FrameTimes { get; set; }
+
+        /// <summary>
+        /// 프로세스 CPU·메모리. 읽을 수 없는 플랫폼이거나 아직 비교할 이전 판독이 없으면
+        /// <c>null</c>이라 필드 자체가 빠진다. 0을 채워 보내면 "안 재는 환경"과 "정말 놀고 있는
+        /// 프로세스"가 구분되지 않는다.
+        /// </summary>
+        [JsonProperty("process", NullValueHandling = NullValueHandling.Ignore)]
+        public ProcessResourcesDto Process { get; set; }
+
+        /// <summary>
+        /// 이 구간의 실행 상태. 포커스와 배터리는 세션 중에 바뀌므로 보고마다 싣는다.
+        /// 배터리가 방전 중이면 노트북 스로틀링이 걸렸을 수 있어, 이 값 없이는 느려진 원인을
+        /// 코드에서 찾게 된다.
+        /// </summary>
+        [JsonProperty("status")]
+        public RuntimeStatusDto Status { get; set; }
     }
 }

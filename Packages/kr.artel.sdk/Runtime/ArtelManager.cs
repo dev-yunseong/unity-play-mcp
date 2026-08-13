@@ -40,7 +40,10 @@ namespace Artel
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
         private FrameTimeRecorder frameTimeRecorder;
+        private ProcessResourceSampler processResourceSampler;
         private float nextPerformanceReportTime;
+        private float lastPerformanceSampleTime;
+        private bool reportedDeviceContext;
         private ArtelStreamHost streamHost;
         private Coroutine webRtcPump;
         private long nextMessageId = 1;
@@ -146,6 +149,9 @@ namespace Artel
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
             frameTimeRecorder = new FrameTimeRecorder();
+
+            // 읽을 수 없는 플랫폼이면 null이 온다. 그 경우 보고에서 process 항목을 통째로 뺀다.
+            processResourceSampler = ProcessResourceSampler.CreateForCurrentPlatform();
 
             var streamSignals = new WebSocketStreamSignalSender(jsonCodec, () => webSocketTransport);
             streamHost = new ArtelStreamHost(
@@ -563,7 +569,21 @@ namespace Artel
         {
             if (!webSocketTransport.IsConnected)
             {
+                // 재연결한 서버 인스턴스는 이 세션의 컨텍스트를 모른다. 끊긴 것을 본 시점에
+                // 표시를 내려 두어 다음 연결에서 다시 보내게 한다.
+                reportedDeviceContext = false;
                 return;
+            }
+
+            if (!reportedDeviceContext)
+            {
+                webSocketTransport.Send(jsonCodec.Serialize(new DeviceContextMessageDto
+                {
+                    Type = "DEVICE_CONTEXT",
+                    Id = nextMessageId++,
+                    Device = RuntimeEnvironment.ReadDeviceContext()
+                }));
+                reportedDeviceContext = true;
             }
 
             var now = Time.unscaledTime;
@@ -574,18 +594,38 @@ namespace Artel
 
             nextPerformanceReportTime = now + PerformanceReportIntervalSeconds;
 
+            // CPU 비율의 분모. 보고를 걸렀는지와 무관하게 샘플러를 부를 때마다 갱신해야
+            // 누적 CPU 시간과 구간 길이가 같은 창을 가리킨다.
+            var elapsedSeconds = now - lastPerformanceSampleTime;
+            lastPerformanceSampleTime = now;
+
+            // 프레임이 없어 보고를 건너뛰더라도 여기서 먼저 소비한다. 뒤로 미루면 다음 구간의
+            // 분모만 짧아지고 CPU 시간은 두 구간 치가 실려 사용률이 부풀려진다.
+            var processUsage = default(ProcessResourceUsage);
+            var hasProcessUsage =
+                processResourceSampler != null &&
+                processResourceSampler.TrySample(elapsedSeconds, SystemInfo.processorCount, out processUsage);
+
             // 예산 해석은 Screen과 QualitySettings를 읽는다. 보내는 순간에만 부른다.
             if (!frameTimeRecorder.TrySummarize(ResolveFrameBudgetSeconds(), out var frameTimes))
             {
                 return;
             }
 
-            webSocketTransport.Send(jsonCodec.Serialize(new PerformanceMessageDto
+            var report = new PerformanceMessageDto
             {
                 Type = "PERFORMANCE",
                 Id = nextMessageId++,
-                FrameTimes = FrameTimesMapper.ToDto(frameTimes)
-            }));
+                FrameTimes = FrameTimesMapper.ToDto(frameTimes),
+                Status = RuntimeEnvironment.ReadStatus()
+            };
+
+            if (hasProcessUsage)
+            {
+                report.Process = ProcessResourcesMapper.ToDto(processUsage);
+            }
+
+            webSocketTransport.Send(jsonCodec.Serialize(report));
         }
 
         /// <summary>
