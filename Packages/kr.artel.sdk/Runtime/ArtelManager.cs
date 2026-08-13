@@ -40,9 +40,13 @@ namespace Artel
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
         private FrameTimeRecorder frameTimeRecorder;
+        private FrameTimingSampler frameTimingSampler;
         private ProcessResourceSampler processResourceSampler;
         private float nextPerformanceReportTime;
         private float lastPerformanceSampleTime;
+
+        /// <summary>Frame Timing Stats 경고를 한 번만 내기 위한 표시. 매 보고마다 찍으면 로그가 덮인다.</summary>
+        private bool warnedFrameTimingUnavailable;
         private bool reportedDeviceContext;
         private ArtelStreamHost streamHost;
         private Coroutine webRtcPump;
@@ -149,6 +153,7 @@ namespace Artel
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
             frameTimeRecorder = new FrameTimeRecorder();
+            frameTimingSampler = new FrameTimingSampler();
 
             // 읽을 수 없는 플랫폼이면 null이 온다. 그 경우 보고에서 process 항목을 통째로 뺀다.
             processResourceSampler = ProcessResourceSampler.CreateForCurrentPlatform();
@@ -559,6 +564,13 @@ namespace Artel
             // isFocused는 에디터에서 에디터 애플리케이션의 포커스를 뜻한다. Game view가 아니라
             // 창 기준이라 작업 중에는 대체로 true이고, 다른 앱으로 넘어간 동안만 빠진다.
             frameTimeRecorder.Record(Time.unscaledDeltaTime, Application.isFocused);
+
+            // 캡처만 시키고 값은 읽지 않는다. Unity의 프레임 타이밍 이력은 매 프레임 캡처해야
+            // 채워지고, 읽기와 평균은 전송 게이트가 열릴 때 한 번만 돈다.
+            //
+            // 포커스 여부로 거르지 않는다. 프레임을 건너뛰면 이력에 구멍이 생기는 것이 아니라
+            // 그만큼 오래된 프레임이 남아, 어느 구간을 잰 값인지가 흐려진다.
+            frameTimingSampler.Record();
         }
 
         /// <summary>
@@ -625,7 +637,33 @@ namespace Artel
                 report.Process = ProcessResourcesMapper.ToDto(processUsage);
             }
 
+            if (frameTimingSampler.TrySummarize(out var frameTiming))
+            {
+                report.FrameTiming = FrameTimingMapper.ToDto(frameTiming);
+            }
+            else
+            {
+                WarnFrameTimingUnavailableOnce();
+            }
+
             webSocketTransport.Send(jsonCodec.Serialize(report));
+        }
+
+        /// <summary>
+        /// Frame Timing Stats는 프로젝트 설정이라 SDK가 켤 수 없다. 꺼진 프로젝트에서는 매 초
+        /// 미수집이 되므로, 고칠 방법을 한 번만 알리고 이후로는 조용히 보고에서 뺀다.
+        /// </summary>
+        private void WarnFrameTimingUnavailableOnce()
+        {
+            if (warnedFrameTimingUnavailable)
+            {
+                return;
+            }
+
+            warnedFrameTimingUnavailable = true;
+            Debug.LogWarning(
+                "[Artel] Frame timing data is unavailable, so CPU/GPU breakdown is left out of the " +
+                "performance report. Enable Project Settings > Player > Frame Timing Stats to collect it.");
         }
 
         /// <summary>

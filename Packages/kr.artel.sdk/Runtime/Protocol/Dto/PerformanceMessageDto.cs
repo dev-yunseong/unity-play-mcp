@@ -21,6 +21,16 @@ namespace Artel.Protocol.Dto
         public FrameTimesDto FrameTimes { get; set; }
 
         /// <summary>
+        /// 프레임타임의 CPU·GPU 분해. Frame Timing Stats가 꺼져 있거나 플랫폼이 타이밍을 주지
+        /// 않으면 <c>null</c>이라 필드 자체가 빠진다.
+        ///
+        /// <c>frameTimes</c>를 쪼갠 값이 아니다. 창이 서로 달라서(자세한 이유는
+        /// <see cref="FrameTimingDto"/>) 두 그룹을 하나의 분포처럼 합치면 안 된다.
+        /// </summary>
+        [JsonProperty("frameTiming", NullValueHandling = NullValueHandling.Ignore)]
+        public FrameTimingDto FrameTiming { get; set; }
+
+        /// <summary>
         /// 프로세스 CPU·메모리. 읽을 수 없는 플랫폼이거나 아직 비교할 이전 판독이 없으면
         /// <c>null</c>이라 필드 자체가 빠진다. 0을 채워 보내면 "안 재는 환경"과 "정말 놀고 있는
         /// 프로세스"가 구분되지 않는다.
