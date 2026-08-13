@@ -2,18 +2,25 @@
 
 - Date: 2026-08-13
 - Jira: ARTEL-343
-- Status: Reviewed (fast/medium/heavy 자기 리뷰, 서브에이전트 미사용)
+- Status: Reviewed (fast/medium/heavy 자기 리뷰, 서브에이전트 미사용) → 사용자 피드백 반영 개정
+- Jira(흡수): ARTEL-346 전송 경로
 
 ## Goal
 
-`Time.unscaledDeltaTime`을 매 프레임 누적해 집계 주기마다 프레임타임 분포를 산출한다. 평균 FPS 하나로는 설명되지 않는 체감 끊김을 수치로 남기는 것이 목적이다.
+`Time.unscaledDeltaTime`을 매 프레임 누적하고, 1초마다 WebSocket으로 프레임타임 분포를 서버에 보낸다. 평균 FPS 하나로는 설명되지 않는 체감 끊김을 수치로 남기는 것이 목적이다.
 
-산출 항목: 평균/최소/최대 프레임타임, p95, p99, 1% low FPS, 0.1% low FPS, hitch 카운트, 집계 구간 프레임 수.
+산출 항목: 평균/최소/최대 프레임타임, p95, p99, 1% low FPS, 0.1% low FPS, hitch 카운트, 구간 프레임 수, 실제 측정 시간.
+
+## 개정 이력
+
+초안은 레코더가 5초 집계 주기를 소유하고, 결과를 `ArtelManager.LatestFrameTimes`에 얹어 두기만 했다. 전송은 ARTEL-346으로 미뤘다. 리뷰에서 두 가지가 뒤집혔다.
+
+1. **레코더가 주기를 소유하면 안 된다.** 전송 주기와 두 벌이 되어 어긋난다. 전송이 1초인데 집계가 5초면 같은 스냅샷을 다섯 번 보내거나 구간을 통째로 버린다. 창 길이는 부르는 쪽이 정한다
+2. **전송을 빼면 이 작업이 앞뒤가 안 맞는다.** 주기를 걷어내면 `LatestFrameTimes`가 사라지고, 그러면 `Summarize`를 부르는 프로덕션 코드가 하나도 없다. 테스트만 부르는 죽은 경로가 되므로 ARTEL-346의 전송 경로를 이 작업이 흡수한다
 
 ## Non-goals
 
 - CPU/GPU 프레임타임 분해 — ARTEL-347
-- 서버 전송·스키마 확정 — ARTEL-346. 이 작업은 집계 결과를 만들어 매니저에 노출하는 데까지다
 - 프로세스 CPU·메모리 — ARTEL-344
 - 디바이스 컨텍스트 수집 — ARTEL-345
 - 성능 데이터 시각화·저장
@@ -57,60 +64,61 @@
 - [ ] **Step 2: `FrameTimeRecorder` 순수 누적기**
   - 파일: `Runtime/Diagnostics/FrameTimeRecorder.cs` (+ `.cs.meta`)
   - `internal sealed class`, 네임스페이스 `Artel.Diagnostics`
-  - 생성자: `FrameTimeRecorder(float intervalSeconds, int capacity = 600)`
-    - `intervalSeconds <= 0` → `ArgumentOutOfRangeException` (`SceneStatePoller`와 같은 규약)
+  - 생성자: `FrameTimeRecorder(int capacity = 600)`
     - `capacity <= 0` → `ArgumentOutOfRangeException`
     - `samples = new float[capacity]`, `scratch = new float[capacity]` 를 여기서 한 번만 잡는다
-  - **`Reset(currentTime)`을 두지 않는다.** 리뷰에서 걷어냈다. 소켓 수명과 무관하므로 호출자가 없고, 남기면 쓰이지 않는 API가 된다. 대신 첫 `TryAggregate` 호출이 마감 시각을 세운다 (`nextAggregateTime`이 미설정이면 `currentTime + intervalSeconds`로 잡고 false 반환)
+  - **시간을 전혀 다루지 않는다.** 주기도, 마감 시각도, `Reset`도 없다. 창은 `TrySummarize`를 부르는 쪽이 정한다
+  - capacity를 넘기면 오래된 샘플이 밀려난다. 소비자가 오래 안 물어보면 최근 600프레임만 남고, 그게 맞는 동작이다. 실제로 얼마를 덮었는지는 `SampledSeconds`가 알려 준다
   - `void Record(float deltaSeconds, bool counted)`
     - `counted`가 false거나 `deltaSeconds <= 0`이면 버린다
     - **첫 기록 한 건은 무조건 버린다.** `Awake` 직후의 첫 `unscaledDeltaTime`은 씬 로드 시간을 포함해 렌더 프레임 비용이 아니다. 이걸 남기면 모든 세션이 hitch 1로 시작한다
     - 링버퍼에 쓰고 `writeIndex` 전진, `count`는 `capacity`에서 포화
     - **버려진 프레임도 시간은 흐른다.** 집계 경계 판단은 `Record`가 아니라 `TryAggregate`가 시각으로 한다
-  - `bool TryAggregate(float currentTime, Func<float> resolveBudgetSeconds, out FrameTimeStatistics statistics)`
-    - `currentTime < nextAggregateTime` → false
-    - 경계는 넘겼는데 샘플이 하나도 없으면(전 구간 비포커스) `nextAggregateTime`만 밀고 false. 빈 통계를 만들어 내보내지 않는다
-    - `nextAggregateTime = currentTime + intervalSeconds`
-    - **예산은 여기서만 해석한다.** 리뷰에서 `float budgetSeconds` 인자를 델리게이트로 바꿨다. 값으로 받으면 집계하지 않는 프레임에서도 `Application.targetFrameRate`·`Screen.currentResolution`을 매 프레임 읽게 된다. 호출자는 정적 메서드 그룹을 `static readonly Func<float>`에 담아 넘기므로 델리게이트 할당도 1회뿐이다
+  - `bool TrySummarize(float budgetSeconds, out FrameTimeStatistics statistics)`
+    - 샘플이 없으면(창 내내 비포커스) false. 빈 통계를 내보내면 소비자가 0fps로 읽는다
+    - `budgetSeconds <= 0`이면 1/60으로 대체한다. 0을 그대로 쓰면 문턱이 0이 되어 전 프레임이 hitch가 된다
     - 샘플을 `scratch`에 복사 → `Array.Sort(scratch, 0, count)` → 백분위·low FPS·min·max 산출
     - 평균·합·hitch 카운트는 정렬 전 원본 순회로 계산 (정렬과 무관)
-    - 산출 후 `count = 0`, `writeIndex = 0` — 구간은 겹치지 않는다
+    - 산출 후 `count = 0`, `writeIndex = 0` — 연속 호출한 창끼리 겹치지 않는다
+    - 예산은 값으로 받는다. 부르는 쪽이 보낼 때만 부르므로 매 프레임 `Screen`을 읽는 문제가 애초에 없다 (초안의 `Func<float>`는 매 프레임 호출되던 구조 때문이었고, 이제 불필요하다)
   - 백분위: 정렬된 배열에서 `index = clamp((int)ceil(p * count) - 1, 0, count - 1)`. 보간 없는 nearest-rank. 결정적이고 샘플 수가 적어도 무너지지 않는다
 
-- [ ] **Step 3: `ArtelManager` 연결**
+- [ ] **Step 3: 전송 DTO와 매퍼**
+  - `Runtime/Protocol/Dto/FrameTimesDto.cs` — 분포 페이로드. **시간 단위는 밀리초.** 초 단위 float은 `0.016666668`이 되어 JSON에서 읽기 어렵고, ms가 관례다
+  - `Runtime/Protocol/Dto/PerformanceMessageDto.cs` — `{ type: "PERFORMANCE", id, frameTimes }`. 기존 `GameStateMessageDto`와 같은 형태
+    - 프레임 지표를 최상위에 펼치지 않고 `frameTimes` 아래에 묶는다. CPU·메모리(ARTEL-344)와 디바이스 컨텍스트(ARTEL-345)가 같은 메시지에 형제 필드로 붙을 자리다
+  - `Runtime/Protocol/Mapping/FrameTimesMapper.cs` — 초→ms 변환이 한 곳에만 있도록 분리
+
+- [ ] **Step 4: `ArtelManager` 연결**
   - 파일: `Runtime/ArtelManager.cs`
-  - 상수 `FrameTimeIntervalSeconds = 5f` — `SceneScanIntervalSeconds` 옆
-  - `Awake` 경로에서 `frameTimeRecorder = new FrameTimeRecorder(FrameTimeIntervalSeconds)`
-  - `private static readonly Func<float> FrameBudgetResolver = ResolveFrameBudgetSeconds;` — 델리게이트 할당 1회
-  - `Update()` 최상단 — `ArtelInput.AdvanceFrame()` 앞. 전송 상태와 무관하게 프레임은 계속 흘러야 하므로 `webSocketTransport == null` early return보다 위여야 한다
-    ```csharp
-    frameTimeRecorder.Record(Time.unscaledDeltaTime, Application.isFocused);
-    if (frameTimeRecorder.TryAggregate(Time.unscaledTime, FrameBudgetResolver, out var frameTimes))
-    {
-        LatestFrameTimes = frameTimes;
-    }
-    ```
-  - `internal FrameTimeStatistics? LatestFrameTimes { get; private set; }` — ARTEL-346이 읽어 갈 지점. 이번 작업의 소비자는 여기까지다
+  - 상수 `PerformanceReportIntervalSeconds = 1f` — `SceneScanIntervalSeconds` 옆
+  - `Awake` 경로에서 `frameTimeRecorder = new FrameTimeRecorder()`
+  - `RecordFrameTime()` — `Update()` 최상단, `ArtelInput.AdvanceFrame()` 앞. 전송 상태와 무관하게 프레임은 계속 흘러야 하므로 `webSocketTransport == null` early return보다 위여야 한다. 하는 일은 `Record` 한 줄뿐이다
+  - `SendPerformanceReport()` — `PollSceneState()` 옆. 전송 경로이므로 트랜스포트 검사 뒤여야 한다
+    - `webSocketTransport.IsConnected` 확인 (`PollSceneState`와 같은 규약)
+    - `nextPerformanceReportTime` 타이머로 1초 게이트
+    - 게이트를 통과할 때만 `ResolveFrameBudgetSeconds()`를 부른다. `Screen`·`QualitySettings`를 읽으므로 매 프레임 돌 이유가 없다
+    - `TrySummarize` → `FrameTimesMapper.ToDto` → `webSocketTransport.Send`
   - `private static float ResolveFrameBudgetSeconds()` — 위 Context의 우선순위 규칙
+  - **소켓이 끊긴 동안**: 기록은 계속되고 링버퍼가 밀린다. 재연결 후 첫 보고는 최근 ≤600프레임을 덮으며, 그 창이 1초보다 길다는 사실은 `sampledMs`로 드러난다. 창을 버리지 않는 쪽을 택한 이유는 끊긴 구간의 성능이야말로 QA에서 궁금한 부분이기 때문이다
   - **에디터에서의 `Application.isFocused`**: 에디터 애플리케이션이 포커스를 가졌는지를 뜻한다. Game view가 아니라 에디터 창 기준이므로, 에디터에서 작업 중이면 대체로 true다. 다른 앱으로 넘어간 동안만 빠진다. 의도한 동작이고 주석으로 남긴다
 
-- [ ] **Step 4: 테스트**
+- [ ] **Step 5: 테스트**
   - 파일: `Tests/Runtime/Diagnostics/FrameTimeRecorderTests.cs` (+ `.cs.meta`)
   - 순수 클래스라 Unity 런타임 없이 도는 EditMode 테스트. `[Test]`만 쓰고 `[UnityTest]`는 불필요
   - 케이스
-    - 균일한 16.67ms 프레임 → 평균/min/max가 같고 hitch 0
-    - 경계 전에는 `TryAggregate`가 false
+    - 균일한 16.67ms 프레임 → 평균/min/max가 같고 hitch 0, `SampledSeconds`가 합과 일치
+    - 샘플이 없으면 `TrySummarize`가 false
     - 한 프레임만 예산 2배 초과 → `HitchCount == 1`, `MaxSeconds`가 그 값
+    - 예산 0을 넘기면 1/60으로 대체되어 hitch가 0
     - `counted: false` 프레임은 `FrameCount`에 들어가지 않는다
     - `deltaSeconds <= 0`은 버려진다
     - 첫 기록은 버려진다 — 큰 값 하나를 먼저 넣어도 `HitchCount == 0`
-    - `SampledSeconds`가 집계된 프레임타임의 합과 같다
-    - 집계하지 않는 프레임에서는 예산 델리게이트가 호출되지 않는다 (호출 횟수를 세는 델리게이트로 검증)
-    - 전 구간 비포커스면 경계를 넘겨도 false이고, 다음 구간 경계는 밀려 있다
-    - 백분위: 100 샘플 중 99개가 10ms, 1개가 100ms → `Percentile99Seconds`가 큰 값 쪽, `Percentile95Seconds`는 10ms
+    - 백분위: 100 샘플 중 98개가 16.67ms, 2개가 100ms → `Percentile99Seconds`가 큰 값 쪽, `Percentile95Seconds`는 작은 값. **nearest-rank라 나쁜 프레임이 하나뿐이면 p99가 아니라 max만 움직인다.** 초안 테스트가 이걸 틀렸었다
     - 1% low / 0.1% low가 최악 프레임 기준으로 계산된다
-    - 집계 후 구간이 리셋되어 다음 집계에 이전 샘플이 섞이지 않는다
+    - 요약 후 창이 비워져 다음 요약에 이전 샘플이 섞이지 않고, 새 프레임 없이 다시 부르면 false
     - capacity를 넘겨 밀어 넣으면 `FrameCount == capacity`이고 오래된 값이 밀려난다
+  - 파일: `Tests/Runtime/Diagnostics/FrameTimesMapperTests.cs` — 초→ms 변환과, FPS 필드는 변환 대상이 아니라는 것
 
 ## Validation
 
@@ -129,9 +137,10 @@
 
 - **Risks:**
   - `ArtelManager.Update` 최상단에 코드가 추가된다. 매 프레임 도는 자리라 비용이 곧 SDK 오버헤드다. 링버퍼 쓰기 한 번 + 시각 비교 한 번으로 제한한다
-  - 5초 창(약 300 샘플)에서 0.1% low는 최대 프레임타임과 사실상 같다. 통계가 아니라 정의의 한계이므로 주석과 필드명으로 오해를 막는다
+  - 1초 창(약 60 샘플)에서 0.1% low는 최대 프레임타임과 같아진다. 통계가 아니라 정의의 한계이므로 주석과 필드명으로 오해를 막는다
   - `ResolveFrameBudgetSeconds`가 플랫폼별로 다른 값을 낼 수 있다. 예산 자체를 결과에 실어 사후 해석이 가능하게 한다
-  - `LatestFrameTimes`는 ARTEL-346이 붙기 전까지 소비자가 없다. 죽은 코드로 방치되지 않도록 ARTEL-346이 이 이슈에 blocked by로 걸려 있다
+  - **1초마다 메시지가 하나 더 늘어난다.** 기존 `GAME_STATE`는 씬 해시가 바뀔 때만 나가지만 `PERFORMANCE`는 무조건 나간다. 페이로드는 숫자 12개라 작지만, 트래픽 증가가 부담이면 주기를 늘리는 것으로 조정한다
+  - 서버가 `PERFORMANCE` 타입을 모르면 무시하거나 오류를 낼 수 있다. 서버 수신 구현과 배포 순서를 맞춰야 한다
 - **Rollback steps:** 신규 파일 삭제 + `ArtelManager` 변경 `git revert`. 기존 동작에 얹는 구조라 부작용 없이 되돌아간다
 
 ## Rejected feedback
@@ -142,5 +151,6 @@
 
 ## Open Questions
 
-- 집계 주기 5초가 적절한가. ARTEL-346이 "1~5초, 설정 가능"으로 잡혀 있어 거기서 확정될 값이다. 이번에는 상수로 두고 설정 노출은 넘긴다
-- capacity 600(10초 @60fps)이면 5초 창에서는 넉넉하다. 고주사율(240Hz)에서는 5초에 1200 샘플이라 링버퍼가 밀린다. 밀려도 최근 600 프레임 기준으로는 정확하므로 이번 범위에서는 수용하고, 필요하면 ARTEL-346에서 주기와 함께 조정한다
+- 전송 주기 1초는 사용자가 정했다. 설정 노출은 아직 없다 — 필요해지면 `Server`처럼 `[SerializeField]`로 뺀다
+- capacity 600은 60fps 기준 10초다. 1초 주기면 아주 넉넉하고, 240Hz에서도 1초에 240 샘플이라 여유가 있다. 소켓이 끊겨 오래 못 보낸 경우에만 밀린다
+- 서버 측 `PERFORMANCE` 수신·저장은 orchestration-server 별도 이슈다. 이 PR은 SDK가 보내는 쪽만 만든다

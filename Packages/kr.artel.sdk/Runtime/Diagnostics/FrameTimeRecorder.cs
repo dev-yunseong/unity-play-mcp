@@ -3,17 +3,25 @@ using System;
 namespace Artel.Diagnostics
 {
     /// <summary>
-    /// 프레임타임을 링버퍼에 모아 집계 주기마다 분포로 접는다.
+    /// 프레임타임을 링버퍼에 모으고, 요청받은 시점에 분포로 접는다.
     ///
-    /// <c>SceneStatePoller</c>와 같은 모양이다. Unity API를 직접 읽지 않고 값으로 받아
-    /// 에디터 없이 테스트할 수 있게 두고, 구동은 호출자(<c>ArtelManager.Update</c>)가 맡는다.
+    /// **집계 주기를 소유하지 않는다.** 창의 길이는 <see cref="TrySummarize"/>를 부르는 쪽이
+    /// 정한다. 여기에 타이머를 두면 전송 주기와 두 벌이 되어 서로 어긋나고, 같은 스냅샷을
+    /// 여러 번 보내거나 구간을 통째로 버리게 된다.
+    ///
+    /// Unity API를 직접 읽지 않고 값으로 받아 에디터 없이 테스트할 수 있게 두고, 구동은
+    /// 호출자(<c>ArtelManager.Update</c>)가 맡는다. <c>SceneStatePoller</c>와 같은 모양이다.
     ///
     /// 매 프레임 도는 자리라 <see cref="Record"/>는 힙 할당을 하지 않는다. 샘플 버퍼와 정렬용
     /// 스크래치를 생성자에서 한 번만 잡고 계속 재사용한다.
     /// </summary>
     internal sealed class FrameTimeRecorder
     {
-        /// <summary>60fps 기준 10초. 5초 주기에서는 넉넉하다.</summary>
+        /// <summary>
+        /// 60fps 기준 10초. 소비자가 그보다 오래 물어보지 않으면 오래된 샘플부터 밀려난다.
+        /// 최근 구간이 정확하면 되므로 의도한 동작이고, 실제로 얼마를 덮었는지는
+        /// <see cref="FrameTimeStatistics.SampledSeconds"/>가 알려 준다.
+        /// </summary>
         private const int DefaultCapacity = 600;
 
         /// <summary>예산의 몇 배부터 hitch로 셀지.</summary>
@@ -22,31 +30,21 @@ namespace Artel.Diagnostics
         /// <summary>예산 해석이 실패했을 때 쓰는 값. 0이 들어오면 모든 프레임이 hitch가 된다.</summary>
         private const float FallbackBudgetSeconds = 1f / 60f;
 
-        private readonly float intervalSeconds;
         private readonly float[] samples;
         private readonly float[] scratch;
 
         private int writeIndex;
         private int count;
         private bool discardedFirstFrame;
-        private bool hasDeadline;
-        private float nextAggregateTime;
 
-        public FrameTimeRecorder(float intervalSeconds, int capacity = DefaultCapacity)
+        public FrameTimeRecorder(int capacity = DefaultCapacity)
         {
-            if (intervalSeconds <= 0f)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(intervalSeconds), "Aggregate interval must be greater than zero.");
-            }
-
             if (capacity <= 0)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(capacity), "Sample capacity must be greater than zero.");
             }
 
-            this.intervalSeconds = intervalSeconds;
             samples = new float[capacity];
             scratch = new float[capacity];
         }
@@ -78,47 +76,26 @@ namespace Artel.Diagnostics
             }
         }
 
-        /// <param name="resolveBudgetSeconds">
-        /// 프레임 예산을 초 단위로 돌려주는 델리게이트. 값이 아니라 델리게이트인 이유는 예산 해석이
-        /// <c>Application.targetFrameRate</c>·<c>Screen.currentResolution</c>을 읽기 때문이다.
-        /// 값으로 받으면 집계하지 않는 프레임에서도 매번 읽게 된다.
-        /// </param>
-        public bool TryAggregate(
-            float currentTime,
-            Func<float> resolveBudgetSeconds,
-            out FrameTimeStatistics statistics)
+        /// <summary>
+        /// 지금까지 모은 샘플을 분포로 접고 창을 비운다. 다음 창은 이 호출 직후부터 시작하므로
+        /// 연속 호출한 구간끼리 겹치지 않는다.
+        /// </summary>
+        /// <returns>
+        /// 샘플이 하나도 없으면 false. 창 내내 포커스가 없었던 경우이고, 빈 통계를 내보내면
+        /// 소비자가 0fps로 읽는다.
+        /// </returns>
+        public bool TrySummarize(float budgetSeconds, out FrameTimeStatistics statistics)
         {
-            if (resolveBudgetSeconds == null)
-            {
-                throw new ArgumentNullException(nameof(resolveBudgetSeconds));
-            }
-
             statistics = default;
 
-            // 첫 호출이 기준 시각을 세운다. 호출자가 별도로 초기화하지 않아도 되게 하려는 것.
-            if (!hasDeadline)
-            {
-                hasDeadline = true;
-                nextAggregateTime = currentTime + intervalSeconds;
-                return false;
-            }
-
-            if (currentTime < nextAggregateTime)
-            {
-                return false;
-            }
-
-            nextAggregateTime = currentTime + intervalSeconds;
-
-            // 구간 내내 포커스가 없었던 경우. 빈 통계를 내보내면 소비자가 0fps로 읽는다.
             if (count == 0)
             {
                 return false;
             }
 
-            statistics = Summarize(resolveBudgetSeconds());
+            statistics = Summarize(budgetSeconds);
 
-            // 구간은 겹치지 않는다. writeIndex까지 되돌려 다음 구간을 배열 앞부터 채운다.
+            // writeIndex까지 되돌려 다음 창을 배열 앞부터 채운다.
             count = 0;
             writeIndex = 0;
             return true;

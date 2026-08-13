@@ -6,6 +6,7 @@ using Artel.Capture;
 using Artel.Diagnostics;
 using Artel.Domain;
 using Artel.Protocol.Dto;
+using Artel.Protocol.Mapping;
 using Artel.Serialization;
 using Artel.Streaming;
 using Artel.Tracking;
@@ -17,13 +18,7 @@ namespace Artel
     public sealed class ArtelManager : MonoBehaviour
     {
         private const float SceneScanIntervalSeconds = 1f;
-        private const float FrameTimeIntervalSeconds = 5f;
-
-        /// <summary>
-        /// 정적 메서드 그룹을 한 번만 델리게이트로 감싼다. Update에서 매번 넘기므로 여기에
-        /// 담아 두지 않으면 프레임마다 델리게이트가 할당된다.
-        /// </summary>
-        private static readonly Func<float> FrameBudgetResolver = ResolveFrameBudgetSeconds;
+        private const float PerformanceReportIntervalSeconds = 1f;
 
         /// <summary>
         /// The one manager that survives scene loads. Static rather than looked up
@@ -45,6 +40,7 @@ namespace Artel
         private IJsonCodec jsonCodec;
         private SceneStatePoller sceneStatePoller;
         private FrameTimeRecorder frameTimeRecorder;
+        private float nextPerformanceReportTime;
         private ArtelStreamHost streamHost;
         private Coroutine webRtcPump;
         private long nextMessageId = 1;
@@ -59,12 +55,6 @@ namespace Artel
 
         /// <summary>대시보드에서 이 설치를 알아볼 첫 이름. 서버가 등록 때 한 번만 쓴다.</summary>
         public string InstanceName { get; private set; }
-
-        /// <summary>
-        /// 가장 최근에 닫힌 집계 구간의 프레임 분포. 첫 구간이 끝나기 전에는 null이다.
-        /// 전송은 별도 이슈(ARTEL-346)가 이 값을 읽어 간다.
-        /// </summary>
-        internal FrameTimeStatistics? LatestFrameTimes { get; private set; }
 
         public Server Server { get { return server; } }
         public bool SmoothCursorMovement
@@ -155,7 +145,7 @@ namespace Artel
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
                 SceneScanIntervalSeconds);
-            frameTimeRecorder = new FrameTimeRecorder(FrameTimeIntervalSeconds);
+            frameTimeRecorder = new FrameTimeRecorder();
 
             var streamSignals = new WebSocketStreamSignalSender(jsonCodec, () => webSocketTransport);
             streamHost = new ArtelStreamHost(
@@ -221,6 +211,7 @@ namespace Artel
             }
 
             PollSceneState();
+            SendPerformanceReport();
         }
 
         public void StartTransport()
@@ -562,11 +553,39 @@ namespace Artel
             // isFocused는 에디터에서 에디터 애플리케이션의 포커스를 뜻한다. Game view가 아니라
             // 창 기준이라 작업 중에는 대체로 true이고, 다른 앱으로 넘어간 동안만 빠진다.
             frameTimeRecorder.Record(Time.unscaledDeltaTime, Application.isFocused);
+        }
 
-            if (frameTimeRecorder.TryAggregate(Time.unscaledTime, FrameBudgetResolver, out var frameTimes))
+        /// <summary>
+        /// 전송 주기가 곧 집계 창이다. 레코더에 따로 타이머를 두면 두 주기가 어긋나 같은 구간을
+        /// 두 번 보내거나 통째로 버리게 되므로, 보낼 때 그 자리에서 접는다.
+        /// </summary>
+        private void SendPerformanceReport()
+        {
+            if (!webSocketTransport.IsConnected)
             {
-                LatestFrameTimes = frameTimes;
+                return;
             }
+
+            var now = Time.unscaledTime;
+            if (now < nextPerformanceReportTime)
+            {
+                return;
+            }
+
+            nextPerformanceReportTime = now + PerformanceReportIntervalSeconds;
+
+            // 예산 해석은 Screen과 QualitySettings를 읽는다. 보내는 순간에만 부른다.
+            if (!frameTimeRecorder.TrySummarize(ResolveFrameBudgetSeconds(), out var frameTimes))
+            {
+                return;
+            }
+
+            webSocketTransport.Send(jsonCodec.Serialize(new PerformanceMessageDto
+            {
+                Type = "PERFORMANCE",
+                Id = nextMessageId++,
+                FrameTimes = FrameTimesMapper.ToDto(frameTimes)
+            }));
         }
 
         /// <summary>
