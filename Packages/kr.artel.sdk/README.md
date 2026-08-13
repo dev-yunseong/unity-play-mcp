@@ -485,6 +485,35 @@ Current limits:
 - HTTP URL: `http://127.0.0.1:17310/`
 - WebSocket URL: `ws://127.0.0.1:17311/ws`
 
+## Running while the window is not focused
+
+**The SDK changes one of the host game's global settings.** From the moment it
+opens its own connection to the orchestration server until that connection is
+stopped, it sets `Application.runInBackground` to `true`, then puts the previous
+value back. That covers the time the socket is down or retrying, not only the
+time it is up. A build that never connects to Artel is left with whatever its
+own Player Settings say.
+
+It is needed because everything a run depends on lives in `Update()`: the WebRTC
+encode pump, the screen capture loop, and the draining of the incoming message
+queue. With the Player Settings default, losing window focus stops all three —
+so switching from the game to a browser to watch the stream would be the very
+thing that froze it, and no later message could restart it either.
+
+Performance reports also continue while the window is not focused. Their frame
+statistics include the background frames, which may reflect platform
+throttling; `status.isFocused` remains available so consumers can identify
+those reports.
+
+The setting is a desktop one. On mobile the OS suspends the app regardless, so
+the stream stops there while the game is in the background. What the SDK
+guarantees on the way back is that the session survives the resume: the stream
+lease is spent frame by frame and refuses to charge a single frame more than a
+second, so a stretch in which the process was not running is not mistaken for a
+viewer who went away. A viewer who really did go away still stops the stream —
+once the app is running again, the lease runs out normally and the session is
+torn down.
+
 ## Included dependencies
 
 The SDK vendors `websocket-sharp` under `Runtime/Plugins`. It uses Unity's

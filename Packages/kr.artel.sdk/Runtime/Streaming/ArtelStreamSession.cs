@@ -20,6 +20,11 @@ namespace Artel.Streaming
 
         void Start(float currentTime);
         void Renew(float currentTime);
+
+        /// <summary>
+        /// Belongs to the frame tick and nowhere else: it spends the lease by the time elapsed
+        /// since the last call, so asking a second time in one frame charges the session twice.
+        /// </summary>
         bool HasExpired(float currentTime);
         void AcceptAnswer(string sdp);
         void AcceptIceCandidate(WebRtcIceCandidateDto candidate);

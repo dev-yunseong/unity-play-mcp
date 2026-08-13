@@ -17,6 +17,10 @@ namespace Artel.Tests.Streaming
         private const string SecondStreamId = "stream-2";
         private const long LeaseSeconds = 15;
 
+        /// <summary>A plausible frame. The lease is spent frame by frame, so time has to be
+        /// advanced the way the frame loop advances it.</summary>
+        private const float FrameSeconds = 0.25f;
+
         private RecordingSignalSender signals;
         private FakeStreamSessionFactory sessions;
         private ArtelStreamHost host;
@@ -42,12 +46,12 @@ namespace Artel.Tests.Streaming
         {
             host.TryHandleMessage(StreamMessageType.StreamStart, StreamStartJson(FirstStreamId), 0f);
 
-            host.Tick(LeaseSeconds - 1f);
+            TickFrames(0f, LeaseSeconds - 1f);
 
             Assert.That(host.HasLiveSession, Is.True);
             Assert.That(sessions.Created[0].IsStopped, Is.False);
 
-            host.Tick(LeaseSeconds);
+            TickFrames(LeaseSeconds - 1f, LeaseSeconds + 1f);
 
             Assert.That(host.HasLiveSession, Is.False);
             Assert.That(sessions.Created[0].IsStopped, Is.True);
@@ -58,15 +62,96 @@ namespace Artel.Tests.Streaming
         public void Renew_PushesTheLeaseDeadlineOut()
         {
             host.TryHandleMessage(StreamMessageType.StreamStart, StreamStartJson(FirstStreamId), 0f);
-            host.TryHandleMessage(StreamMessageType.StreamRenew, StreamRenewJson(FirstStreamId), 10f);
 
-            host.Tick(LeaseSeconds);
+            TickFrames(0f, 10f);
+            host.TryHandleMessage(StreamMessageType.StreamRenew, StreamRenewJson(FirstStreamId), 10f);
+            TickFrames(10f, LeaseSeconds);
 
             Assert.That(host.HasLiveSession, Is.True);
 
-            host.Tick(10f + LeaseSeconds);
+            TickFrames(LeaseSeconds, 10f + LeaseSeconds + 1f);
 
             Assert.That(host.HasLiveSession, Is.False);
+        }
+
+        /// <summary>
+        /// The frame that resumes a suspended app carries the whole away period in its delta. That
+        /// is not the viewer having gone quiet — nothing could have been read while the process was
+        /// frozen — so it must not cost the session.
+        /// </summary>
+        [Test]
+        public void Tick_SurvivesTheFrameThatResumesFromASuspendedApp()
+        {
+            host.TryHandleMessage(StreamMessageType.StreamStart, StreamStartJson(FirstStreamId), 0f);
+
+            TickFrames(0f, 0.5f);
+            host.Tick(600.5f);
+
+            Assert.That(host.HasLiveSession, Is.True);
+            Assert.That(sessions.Created[0].IsStopped, Is.False);
+        }
+
+        /// <summary>
+        /// The other half of the same rule, and the one that keeps this a dead-man timer: coming
+        /// back does not buy a session that nobody renews.
+        /// </summary>
+        [Test]
+        public void Tick_StillExpiresAfterAResumeWhenNoRenewalFollows()
+        {
+            host.TryHandleMessage(StreamMessageType.StreamStart, StreamStartJson(FirstStreamId), 0f);
+
+            TickFrames(0f, 0.5f);
+            host.Tick(600.5f);
+            TickFrames(600.5f, 600.5f + LeaseSeconds);
+
+            Assert.That(host.HasLiveSession, Is.False);
+            Assert.That(sessions.Created[0].IsStopped, Is.True);
+            Assert.That(signals.LastState(), Is.EqualTo(StreamState.Stopped));
+        }
+
+        /// <summary>
+        /// A frame over the cap is charged the cap, not excused. Without that, a game throttled
+        /// below one frame per second would hold a lease forever and go on encoding for a viewer
+        /// who left.
+        /// </summary>
+        [Test]
+        public void Tick_ChargesAnOverlongFrameTheCapRatherThanExcusingIt()
+        {
+            const float SlowFrameSeconds = 5f;
+
+            host.TryHandleMessage(StreamMessageType.StreamStart, StreamStartJson(FirstStreamId), 0f);
+
+            // Ten frames spanning fifty seconds of wall clock: far past the lease in real time,
+            // but only ten seconds of it are chargeable, so the session is still owed five.
+            for (var time = SlowFrameSeconds; time <= 10f * SlowFrameSeconds; time += SlowFrameSeconds)
+            {
+                host.Tick(time);
+            }
+
+            Assert.That(host.HasLiveSession, Is.True);
+
+            for (var time = 11f * SlowFrameSeconds;
+                 time <= (LeaseSeconds + 1f) * SlowFrameSeconds;
+                 time += SlowFrameSeconds)
+            {
+                host.Tick(time);
+            }
+
+            Assert.That(host.HasLiveSession, Is.False);
+            Assert.That(signals.LastState(), Is.EqualTo(StreamState.Stopped));
+        }
+
+        [Test]
+        public void Renew_AfterAResumeKeepsTheSessionAlive()
+        {
+            host.TryHandleMessage(StreamMessageType.StreamStart, StreamStartJson(FirstStreamId), 0f);
+
+            TickFrames(0f, 0.5f);
+            host.Tick(600.5f);
+            host.TryHandleMessage(StreamMessageType.StreamRenew, StreamRenewJson(FirstStreamId), 600.5f);
+            TickFrames(600.5f, 600.5f + LeaseSeconds - 1f);
+
+            Assert.That(host.HasLiveSession, Is.True);
         }
 
         [Test]
@@ -149,6 +234,19 @@ namespace Artel.Tests.Streaming
             Assert.That(start.Video.MaxWidth, Is.EqualTo(1280));
             Assert.That(start.Video.MaxFramerate, Is.EqualTo(30));
             Assert.That(start.LeaseSeconds, Is.EqualTo(LeaseSeconds));
+        }
+
+        /// <summary>
+        /// Ticks the host the way the frame loop does — one call per frame, carrying the absolute
+        /// time of that frame — from just after <paramref name="fromSeconds"/> through
+        /// <paramref name="toSeconds"/>.
+        /// </summary>
+        private void TickFrames(float fromSeconds, float toSeconds)
+        {
+            for (var time = fromSeconds + FrameSeconds; time <= toSeconds; time += FrameSeconds)
+            {
+                host.Tick(time);
+            }
         }
 
         private static string StreamStartJson(string streamId)

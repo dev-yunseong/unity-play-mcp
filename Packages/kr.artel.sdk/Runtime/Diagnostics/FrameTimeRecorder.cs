@@ -49,13 +49,9 @@ namespace Artel.Diagnostics
             scratch = new float[capacity];
         }
 
-        /// <param name="counted">
-        /// 이 프레임을 분포에 넣을지. 호출자는 <c>Application.isFocused</c>를 넘긴다. Unity가
-        /// 포커스를 잃은 창의 프레임 페이싱을 스로틀링하므로, 섞으면 hitch가 폭증하고 평균이 무너진다.
-        /// </param>
-        public void Record(float deltaSeconds, bool counted)
+        public void Record(float deltaSeconds)
         {
-            if (!counted || deltaSeconds <= 0f)
+            if (deltaSeconds <= 0f)
             {
                 return;
             }
@@ -81,8 +77,7 @@ namespace Artel.Diagnostics
         /// 연속 호출한 구간끼리 겹치지 않는다.
         /// </summary>
         /// <returns>
-        /// 샘플이 하나도 없으면 false. 창 내내 포커스가 없었던 경우이고, 빈 통계를 내보내면
-        /// 소비자가 0fps로 읽는다.
+        /// 샘플이 하나도 없으면 false. 빈 통계를 내보내면 소비자가 0fps로 읽는다.
         /// </returns>
         public bool TrySummarize(float budgetSeconds, out FrameTimeStatistics statistics)
         {

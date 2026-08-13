@@ -13,8 +13,26 @@ namespace Artel.Streaming
     /// </summary>
     internal sealed class StreamLease
     {
+        /// <summary>
+        /// The most elapsed time one frame may charge against the lease.
+        ///
+        /// A gap wider than this was not the game waiting for a renewal that never came — the
+        /// process was not running. A backgrounded mobile app is frozen outright by the OS, and a
+        /// window the platform stops stepping is no different; either way no renewal could be read
+        /// no matter how present the viewer was. Charging that wall-clock gap expires the lease on
+        /// the very frame the app comes back, which is the one moment the viewer is certainly
+        /// still there.
+        ///
+        /// Capping the frame rather than forgiving the gap outright is what keeps the timer alive
+        /// on a game that is merely running slowly. A forgiven gap would never expire below one
+        /// frame per second; a capped one keeps charging, so the lease still runs out — later than
+        /// the wall clock says once frames are longer than the cap, but it runs out.
+        /// </summary>
+        private const float MaxCountedFrameSeconds = 1f;
+
         private readonly float durationSeconds;
-        private float deadline;
+        private float remainingSeconds;
+        private float lastSampleTime;
 
         public StreamLease(float durationSeconds)
         {
@@ -29,12 +47,24 @@ namespace Artel.Streaming
 
         public void Renew(float currentTime)
         {
-            deadline = currentTime + durationSeconds;
+            remainingSeconds = durationSeconds;
+            lastSampleTime = currentTime;
         }
 
+        /// <summary>
+        /// Sampled once per frame from <see cref="ArtelStreamHost.Tick"/>, and consumes the time
+        /// since the previous sample. It is the frame loop that spends the lease, so nothing else
+        /// may call this — a second caller in the same frame would spend it twice.
+        /// </summary>
         public bool HasExpired(float currentTime)
         {
-            return currentTime >= deadline;
+            var elapsed = Math.Min(
+                Math.Max(currentTime - lastSampleTime, 0f), MaxCountedFrameSeconds);
+
+            lastSampleTime = currentTime;
+            remainingSeconds -= elapsed;
+
+            return remainingSeconds <= 0f;
         }
     }
 }

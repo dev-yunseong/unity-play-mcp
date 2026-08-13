@@ -50,6 +50,16 @@ namespace Artel
         private bool reportedDeviceContext;
         private ArtelStreamHost streamHost;
         private Coroutine webRtcPump;
+
+        /// <summary>
+        /// What the host game had <c>Application.runInBackground</c> set to before this manager
+        /// opened its own connection. See <see cref="StartTransport"/>. It is written only where
+        /// the manager builds its own transport, so a transport handed in with
+        /// <see cref="SetWebSocketTransport"/> and ownership must never reach the restore in
+        /// <see cref="StopTransport"/> — that would put this default back over a host game that
+        /// had the setting on.
+        /// </summary>
+        private bool hostRunInBackground;
         private long nextMessageId = 1;
         private readonly Queue<ArtelRequestDto> actionRequests = new Queue<ArtelRequestDto>();
         private bool processingActions;
@@ -239,6 +249,27 @@ namespace Artel
 
                 webSocketTransport = new ArtelWebSocketClient(server, token, instanceId);
                 ownsTransport = true;
+
+                // This is the host game's own Player Setting, and the SDK ships inside customer
+                // builds — so it is held for exactly as long as this connection, and put back in
+                // StopTransport. A build that never connects to Artel keeps whatever its Player
+                // Settings say.
+                //
+                // Without it, losing window focus stops Update, and with it the WebRTC encode
+                // pump, the screen capture loop, and the drain of the incoming message queue. The
+                // QA run switching to a browser to watch the stream is precisely what would kill
+                // it — and nothing would come back, because the messages that drive the run are
+                // read in Update too.
+                //
+                // Saved here rather than beside the Start call below because this block is the
+                // only part of StartTransport that a second call cannot re-enter: the overlay's
+                // 연결 button reaches StartTransport while already connected, and reading the
+                // value there would remember the true we ourselves just wrote.
+                //
+                // It does nothing on mobile, where the OS suspends the app outright. What covers
+                // that is StreamLease refusing to charge a suspended stretch against the lease.
+                hostRunInBackground = Application.runInBackground;
+                Application.runInBackground = true;
             }
 
             if (!ownsTransport)
@@ -290,6 +321,10 @@ namespace Artel
             webSocketTransport.Stop();
             webSocketTransport.Dispose();
             webSocketTransport = null;
+
+            // The connection this was taken for is gone, so the host game gets its setting back.
+            Application.runInBackground = hostRunInBackground;
+
             sceneStatePoller.Reset(Time.unscaledTime);
             Debug.Log("[Artel] WebSocket transport stopped.");
         }
@@ -561,9 +596,9 @@ namespace Artel
             // timeScale이 아니라 실제 경과 시간이 필요하다. pause_time 계열 액션이 timeScale을
             // 임의로 바꾸므로 deltaTime은 프레임 성능 지표가 되지 못한다.
             //
-            // isFocused는 에디터에서 에디터 애플리케이션의 포커스를 뜻한다. Game view가 아니라
-            // 창 기준이라 작업 중에는 대체로 true이고, 다른 앱으로 넘어간 동안만 빠진다.
-            frameTimeRecorder.Record(Time.unscaledDeltaTime, Application.isFocused);
+            // 백그라운드 throttling도 사용자가 실제로 겪는 실행 상태다. 포커스 여부는 보고의
+            // status.isFocused로 함께 보내므로 소비자가 필요에 따라 구분할 수 있다.
+            frameTimeRecorder.Record(Time.unscaledDeltaTime);
 
             // 캡처만 시키고 값은 읽지 않는다. Unity의 프레임 타이밍 이력은 매 프레임 캡처해야
             // 채워지고, 읽기와 평균은 전송 게이트가 열릴 때 한 번만 돈다.

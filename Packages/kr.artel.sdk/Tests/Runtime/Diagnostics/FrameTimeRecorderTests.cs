@@ -21,7 +21,7 @@ namespace Artel.Tests.Diagnostics
         private static FrameTimeRecorder Started(int capacity = 600)
         {
             var recorder = new FrameTimeRecorder(capacity);
-            recorder.Record(SmoothFrameSeconds, counted: true);
+            recorder.Record(SmoothFrameSeconds);
             return recorder;
         }
 
@@ -29,7 +29,7 @@ namespace Artel.Tests.Diagnostics
         {
             for (var i = 0; i < frameCount; i++)
             {
-                recorder.Record(deltaSeconds, counted: true);
+                recorder.Record(deltaSeconds);
             }
         }
 
@@ -70,7 +70,7 @@ namespace Artel.Tests.Diagnostics
         {
             var recorder = Started();
             RecordFrames(recorder, 59, SmoothFrameSeconds);
-            recorder.Record(HitchFrameSeconds, counted: true);
+            recorder.Record(HitchFrameSeconds);
 
             Assert.IsTrue(recorder.TrySummarize(BudgetSeconds, out var statistics));
 
@@ -97,7 +97,7 @@ namespace Artel.Tests.Diagnostics
             var recorder = new FrameTimeRecorder();
 
             // 씬 로드 시간이 실린 첫 프레임.
-            recorder.Record(HitchFrameSeconds, counted: true);
+            recorder.Record(HitchFrameSeconds);
             RecordFrames(recorder, 10, SmoothFrameSeconds);
 
             Assert.IsTrue(recorder.TrySummarize(BudgetSeconds, out var statistics));
@@ -107,24 +107,24 @@ namespace Artel.Tests.Diagnostics
         }
 
         [Test]
-        public void Record_IgnoresUnfocusedFrames()
+        public void Record_IncludesEveryFrame()
         {
             var recorder = Started();
             RecordFrames(recorder, 10, SmoothFrameSeconds);
-            recorder.Record(HitchFrameSeconds, counted: false);
+            recorder.Record(HitchFrameSeconds);
 
             Assert.IsTrue(recorder.TrySummarize(BudgetSeconds, out var statistics));
 
-            Assert.AreEqual(10, statistics.FrameCount);
-            Assert.AreEqual(0, statistics.HitchCount);
+            Assert.AreEqual(11, statistics.FrameCount);
+            Assert.AreEqual(1, statistics.HitchCount);
         }
 
         [Test]
         public void Record_IgnoresNonPositiveDeltas()
         {
             var recorder = Started();
-            recorder.Record(0f, counted: true);
-            recorder.Record(-1f, counted: true);
+            recorder.Record(0f);
+            recorder.Record(-1f);
             RecordFrames(recorder, 5, SmoothFrameSeconds);
 
             Assert.IsTrue(recorder.TrySummarize(BudgetSeconds, out var statistics));
@@ -153,7 +153,7 @@ namespace Artel.Tests.Diagnostics
         {
             var recorder = Started();
             RecordFrames(recorder, 99, SmoothFrameSeconds);
-            recorder.Record(HitchFrameSeconds, counted: true);
+            recorder.Record(HitchFrameSeconds);
 
             Assert.IsTrue(recorder.TrySummarize(BudgetSeconds, out var statistics));
 
