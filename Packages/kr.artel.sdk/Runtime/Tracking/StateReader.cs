@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Artel.Diagnostics;
 using Artel.Domain;
 using UnityEngine;
 
@@ -31,16 +32,22 @@ namespace Artel.Tracking
             var states = new List<TrackedState>();
             var taggedNames = new HashSet<string>(StringComparer.Ordinal);
 
-            foreach (var accessor in GetAccessors(component.GetType()))
+            // One marker per component rather than per member: a scene scan reads thousands of
+            // members, and sampling each one would make the Profiler's own bookkeeping the biggest
+            // thing in the capture.
+            using (ArtelProfilerMarkers.StateReadTagged.Auto())
             {
-                taggedNames.Add(accessor.Name);
-                try
+                foreach (var accessor in GetAccessors(component.GetType()))
                 {
-                    states.Add(new TrackedState(accessor.Tag, accessor.Name, accessor.TypeName, accessor.Read(component)));
-                }
-                catch (Exception exception)
-                {
-                    Debug.LogWarning("[Artel] Failed to read state " + accessor.Name + ": " + exception.Message);
+                    taggedNames.Add(accessor.Name);
+                    try
+                    {
+                        states.Add(new TrackedState(accessor.Tag, accessor.Name, accessor.TypeName, accessor.Read(component)));
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogWarning("[Artel] Failed to read state " + accessor.Name + ": " + exception.Message);
+                    }
                 }
             }
 
@@ -49,24 +56,27 @@ namespace Artel.Tracking
                 return states;
             }
 
-            foreach (var field in serializedFieldReader.GetSerializedFields(component.GetType()))
+            using (ArtelProfilerMarkers.StateReadSerializedFields.Auto())
             {
-                if (taggedNames.Contains(field.Name))
+                foreach (var field in serializedFieldReader.GetSerializedFields(component.GetType()))
                 {
-                    continue;
-                }
+                    if (taggedNames.Contains(field.Name))
+                    {
+                        continue;
+                    }
 
-                try
-                {
-                    states.Add(new TrackedState(
-                        string.Empty,
-                        field.Name,
-                        NormalizeType(field.FieldType),
-                        serializedFieldReader.ReadValue(field, component)));
-                }
-                catch (Exception exception)
-                {
-                    Debug.LogWarning("[Artel] Failed to read field " + field.Name + ": " + exception.Message);
+                    try
+                    {
+                        states.Add(new TrackedState(
+                            string.Empty,
+                            field.Name,
+                            NormalizeType(field.FieldType),
+                            serializedFieldReader.ReadValue(field, component)));
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogWarning("[Artel] Failed to read field " + field.Name + ": " + exception.Message);
+                    }
                 }
             }
 
