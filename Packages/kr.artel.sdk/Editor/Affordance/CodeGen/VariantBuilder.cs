@@ -19,6 +19,19 @@ namespace Artel.Affordances.CodeGen
     {
         private const string InputType = "UnityEngine.Input";
 
+        /// <summary>이 패키지가 다시 쓴 뒤에 엔진의 입력 클래스가 불리는 이름.</summary>
+        /// <remarks>
+        /// SDK 자신의 위버가 바로 그 호출들을 갈아 끼워, 사람의 입력 옆에서 에이전트의 입력도 읽힐 수 있게
+        /// 한다. 그리고 그것은 이 분석과 같은 패키지로 나간다. 둘 중 무엇이 먼저 도는지는 Unity 가 말해 주지
+        /// 않고 순서를 요구할 지원되는 방법도 없으므로 — 하나에 기대는 대신 두 이름 모두에 답한다.
+        ///
+        /// 그 고쳐 쓰기를 지나서도 멤버는 제 이름을 지키므로, 이 아래의 무엇도 둘 중 어느 쪽을 보고 있는지
+        /// 알 필요가 없다. 엔진의 이름만 읽었다면 다른 위버가 마침 먼저 도는 프로젝트에서 모든 제스처를
+        /// 잃었을 것이고, 조용히 잃었을 것이다: 분석은 여전히 끝나고, 여전히 리포트를 쓰고, 그저 키를 한
+        /// 번도 언급하지 않는다.
+        /// </remarks>
+        private const string ProxiedInputType = "Artel.ArtelInput";
+
         private const byte Unvisited = 0;
         private const byte Computing = 1;
         private const byte Settled = 2;
@@ -739,11 +752,12 @@ namespace Artel.Affordances.CodeGen
             if (instruction == null ||
                 !(instruction.Operand is MethodReference called) ||
                 instruction.OpCode.FlowControl != FlowControl.Call ||
-                called.DeclaringType?.FullName != InputType)
+                !ReadsInput(called.DeclaringType?.FullName))
             {
                 return null;
             }
 
+            // 호출이 지금 둘 중 무엇의 이름을 대든 멤버는 같은 것이고, 아래에서 같은 방식으로 물어본다.
             switch (called.Name)
             {
                 case "GetKeyDown": return Key(instruction, called, "down");
@@ -757,6 +771,10 @@ namespace Artel.Affordances.CodeGen
                 default: return null;
             }
         }
+
+        /// <summary>호출이 플레이어 입력을 읽는지. 그것이 나를 수 있는 두 이름 어느 쪽으로든.</summary>
+        private static bool ReadsInput(string declaringType) =>
+            declaringType == InputType || declaringType == ProxiedInputType;
 
         private static InputRead Key(Instruction instruction, MethodReference called, string phase)
         {

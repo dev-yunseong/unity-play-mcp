@@ -78,20 +78,8 @@ namespace Artel.Affordances.CodeGen
         /// </remarks>
         public override bool WillProcess(ICompiledAssembly compiledAssembly)
         {
-            return Unlocked && IsEnabledFor(compiledAssembly) && !IsSkipped(compiledAssembly.Name);
+            return IsEnabledFor(compiledAssembly) && !IsSkipped(compiledAssembly.Name);
         }
-
-        /// <summary>이 분석기가 SDK 로 옮겨지는 동안 닫아 둔다. ARTEL-393 이 지운다.</summary>
-        /// <remarks>
-        /// 9,500 줄이 한 번에 여기 도착했고, 그것이 온전히 도착했는지는 그것이 돌아도 되는지와 다른 물음이다 — 다른
-        /// 근거, 다른 방식의 틀림. 그래서 이동은 분석기가 아무것도 건드리지 못하는 상태로 착지하고, 그것을 돌게 하는
-        /// 이슈는 돌게 하는 변경만 나른다.
-        ///
-        /// const 가 아니라 필드인 것은, 컴파일러가 접어 없애는 리터럴이 아니라 사람이 넘기는 스위치로 읽히게 하려는
-        /// 것이다. 진짜 조건들을 대체하지 않고 그 앞에 둔 것은: 독자가 무엇이 물어졌을지를 여전히 볼 수 있게 하려는
-        /// 것이고, 해제는 항 하나를 지우는 일이다.
-        /// </remarks>
-        private static readonly bool Unlocked = false;
 
         public override ILPostProcessResult Process(ICompiledAssembly compiledAssembly)
         {
