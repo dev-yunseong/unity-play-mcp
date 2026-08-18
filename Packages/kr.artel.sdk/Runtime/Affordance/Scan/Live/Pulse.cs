@@ -82,6 +82,14 @@ namespace Artel.Affordances.Live
         /// <summary>아직 아무 데도 가지 않은 좌표들과, 그것들이 마지막으로 한 말.</summary>
         private readonly Restless _restless = new Restless();
 
+        /// <summary>같은 것인데, 화면 사각형에 대한 것. 여기서는 경계가 추측이 아니라 사실일 수 있다.</summary>
+        /// <remarks>
+        /// 1 픽셀. 그 아래로는 아무것도 다르게 그려지지 않고 옛 숫자로 보낸 포인터도 같은 것에 떨어지는데, 그것이 이 채널이
+        /// 사각형에 대해 약속하는 것의 전부다. 월드 데드밴드는 재사용할 수 없다: 월드 단위의 천분의 일은 딱히 무엇도 아닌 것의
+        /// 천분의 일이고, 화면을 가로질러서는 아무것도 걸러 내지 않는다.
+        /// </remarks>
+        private readonly Restless _pixels = new Restless(1f);
+
         /// <summary>직전 판독이 한 말. 이번 판독이 그 차이를 말할 수 있도록.</summary>
         private readonly System.Collections.Generic.Dictionary<string, string> _since =
             new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
@@ -156,7 +164,7 @@ namespace Artel.Affordances.Live
                 // 바로 그 씬이다. 스스로 설치되는 패키지가 그 씬에 대해 가진 유일한 손잡이이고, 스캔 자신의 순회도 같은 방식으로
                 // 그것을 잡는다.
                 document = LiveState.Compose(
-                    ++_reading, gameObject.scene, _restless, _since, _lost, out settled);
+                    ++_reading, gameObject.scene, _restless, _pixels, _since, _lost, out settled);
             }
             catch (Exception exception)
             {

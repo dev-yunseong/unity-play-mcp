@@ -24,20 +24,33 @@ namespace Artel.Affordances.Live
     internal sealed class Restless
     {
         /// <summary>
-        /// 좌표가 말할 값이 있으려면 얼마나 가야 하는지.
+        /// 값이 말할 값이 있으려면 얼마나 가야 하는지. 그것이 재어지는 단위로.
         /// </summary>
         /// <remarks>
-        /// 추측이고, 추측이라고 말한다. 그것은 게임 자신의 월드 단위인데 어느 패키지도 그 축척을 알 수 없다 — 한 프로젝트의
-        /// 1 밀리미터가 다른 프로젝트에서는 화면 너비다. 명세가 비교하는 무엇도 그 아래 숨지 못할 만큼 작게 골랐다. 근거가
-        /// 위치로 하는 일은 한 객체가 다른 객체가 있는 자리에 도착했는지를 묻는 것이고, 서로에게서 대입된 두 객체는 거의가
+        /// 기본값은 추측이고, 추측이라고 말한다. 그것은 게임 자신의 월드 단위인데 어느 패키지도 그 축척을 알 수 없다 — 한
+        /// 프로젝트의 1 밀리미터가 다른 프로젝트에서는 화면 너비다. 명세가 비교하는 무엇도 그 아래 숨지 못할 만큼 작게 골랐다.
+        /// 근거가 위치로 하는 일은 한 객체가 다른 객체가 있는 자리에 도착했는지를 묻는 것이고, 서로에게서 대입된 두 객체는 거의가
         /// 아니라 정확히 같기 때문이다.
         ///
         /// 그것이 맞는지는 논쟁이 아니라 측정의 문제다: 판독이 거의 다 나가는 실행은 어떤 조건도 언급하지 않는 이유로 움직이는
         /// 값을 가진 것이고, 판독이 그것이 무엇이었는지 말해 준다.
+        ///
+        /// 화면 픽셀은 그 추측을 사실로 갈아 끼울 수 있는 유일한 공간이고, 이것이 고정이 아니라 건네받는 값인 이유가 그것이다.
+        /// 픽셀은 어느 프로젝트에서나 픽셀이므로 경계 1 은 제 뜻을 정확히 말한다: 이 아래로는 화면의 무엇도 다르게 그려지지 않고
+        /// 그것을 겨눈 무엇도 다른 데 떨어지지 않는다.
         /// </remarks>
-        private const float Bound = 0.001f;
+        private readonly float _bound;
 
         private readonly Dictionary<string, float> _standing = new Dictionary<string, float>();
+
+        internal Restless() : this(0.001f)
+        {
+        }
+
+        internal Restless(float bound)
+        {
+            _bound = bound;
+        }
 
         /// <summary>
         /// 쓸 숫자: 아무 일도 없었으면 이미 보낸 것, 아니면 새 것.
@@ -46,7 +59,7 @@ namespace Artel.Affordances.Live
         {
             if (_standing.TryGetValue(key, out var standing))
             {
-                if (now >= standing - Bound && now <= standing + Bound)
+                if (now >= standing - _bound && now <= standing + _bound)
                 {
                     return standing;
                 }

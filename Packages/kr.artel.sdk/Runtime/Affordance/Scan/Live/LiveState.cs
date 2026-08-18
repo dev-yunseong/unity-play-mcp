@@ -41,8 +41,8 @@ namespace Artel.Affordances.Live
         /// 게임은 그러지 않으면 폴링마다 계층을 백 번 걷게 되고, 걷기가 비싼 절반이다.
         /// </remarks>
         internal static string Compose(
-            long reading, Scene persistent, Restless restless, Dictionary<string, string> since,
-            bool repair, out bool settled)
+            long reading, Scene persistent, Restless restless, Restless pixels,
+            Dictionary<string, string> since, bool repair, out bool settled)
         {
             var watched = WatchList.All();
             var now = new Dictionary<string, string>(since.Count, StringComparer.Ordinal);
@@ -94,7 +94,8 @@ namespace Artel.Affordances.Live
 
             var ledger = new Ledger
             {
-                Restless = restless, Since = since, Now = now, Moved = moved, Everything = everything
+                Restless = restless, Pixels = pixels, Since = since, Now = now, Moved = moved,
+                Everything = everything
             };
 
             // 테스터가 있는 화면은 판독이 주장하는 것의 일부이므로, 화면이 바뀌는 것은 그 위의 모든 값이 마침 같게 읽히더라도
@@ -107,7 +108,13 @@ namespace Artel.Affordances.Live
 
             var showing = new Bin();
             var hidden = new Bin();
+
+            // Camera.main 은 태그로 하는 씬 전체 조회다. 객체마다 한 번이면 순회를 잡아먹으므로 판독 전체에 대해 한 번 푼다.
+            ScreenArea.Begin();
+
             var truncated = Objects(persistent, byOwner, ledger, showing, hidden);
+
+            ScreenArea.Forget();
 
             showing.WriteTo(text, "active");
             hidden.WriteTo(text, "deactive");
@@ -202,6 +209,15 @@ namespace Artel.Affordances.Live
         private sealed class Ledger
         {
             internal Restless Restless;
+
+            /// <summary>화면 좌표에 대한 같은 데드밴드. 그 경계가 픽셀이다.</summary>
+            /// <remarks>
+            /// 월드 쪽과 갈라 둔다. 둘은 같은 측정이 아니기 때문이다. 월드 단위에서 안전할 만큼 작은 경계는 — 여기의 무엇도 그 축척을
+            /// 알 수 없는 게임에서 천분의 일 — 천 픽셀 너비 화면을 가로질러서는 필터가 전혀 아니고, 사각형은 감시 대상 몇 개가 아니라
+            /// 모든 객체에 붙는다. 하나를 공유하면 둘 중 어느 쪽에 대해 틀릴지를 골라야 한다.
+            /// </remarks>
+            internal Restless Pixels;
+
             internal Dictionary<string, string> Since;
             internal Dictionary<string, string> Now;
             internal List<string> Moved;
@@ -793,8 +809,15 @@ namespace Artel.Affordances.Live
         /// 마지막 소수 자리가 달라지고, 감시 대상 몇 개가 아니라 모든 객체에 위치가 붙으면 그것이 곧 판독 전체가 매 박자마다
         /// 게이트를 여는 일이 된다.
         ///
-        /// 화면 위가 아니고 사각형도 아니다. 무언가가 어디에 그려지는지는 카메라와 그것이 매달린 캔버스와 그것을 자르는 무엇이
-        /// 필요하고, 그것을 원하는 독자는 이미 화면 캡처를 보고 있다.
+        /// 화면 위의 자리도 함께 싣는데, 이것은 예전에 그것을 거절했다. 반대 논거는 그려진 사각형을 원하는 독자가 이미 화면 캡처를
+        /// 보고 있다는 것이었다 — 독자에 대해서는 참이고, 그것을 겨눠야 하는 쪽에 대해서는 거짓이다. 월드 단위는 게임 자신의
+        /// 것이고 포인터는 픽셀로 가므로, 이것이 없으면 모든 액션이 엔진 밖의 누구도 할 수 없는 변환을 지고 간다.
+        ///
+        /// 한 번 말하고 둘 수 없다. 사각형은 무엇이든 움직이는 순간 낡고, 전량 상태는 화면이 바뀔 때만 나간다 — 그래서 두 화면
+        /// 사이에서 독자는 화면이 나타났을 때 사물들이 있던 자리를 겨누게 된다.
+        ///
+        /// 제 데드밴드를 거치고, 그것은 픽셀로 잰다. 월드 쪽은 어느 패키지도 축척을 알 수 없는 단위에 대한 추측이지만, 픽셀은
+        /// 어디서나 픽셀이고 그 하나 아래로는 아무것도 다르게 그려지지 않는다.
         /// </remarks>
         private static bool Where(
             StringBuilder text, Transform transform, Ledger ledger, string identity)
@@ -808,6 +831,18 @@ namespace Artel.Affordances.Live
             Coordinate(said, ledger.Restless.Settle(identity + "|wy", world.y));
             said.Append(",\"z\":");
             Coordinate(said, ledger.Restless.Settle(identity + "|wz", world.z));
+            said.Append('}');
+
+            var area = ScreenArea.Of(transform);
+
+            said.Append(",\"rect\":{\"x\":");
+            Coordinate(said, ledger.Pixels.Settle(identity + "|sx", area.x));
+            said.Append(",\"y\":");
+            Coordinate(said, ledger.Pixels.Settle(identity + "|sy", area.y));
+            said.Append(",\"w\":");
+            Coordinate(said, ledger.Pixels.Settle(identity + "|sw", area.width));
+            said.Append(",\"h\":");
+            Coordinate(said, ledger.Pixels.Settle(identity + "|sh", area.height));
             said.Append('}');
 
             var rendered = said.ToString();
