@@ -15,8 +15,8 @@ namespace Artel.Affordances.Scan
     /// 로드되는 모든 씬이 읽혀 리포트에 더해지므로, 그저 게임을 하는 것만으로 다녀온 모든 곳에 대한 진술이 쌓인다. 아무도
     /// 걸어가지 않은 화면에 닿는 일이 <see cref="WalkAllScenes"/> 의 몫이다.
     ///
-    /// 언제나 컴파일되고, 아무것도 하지 않는 일은 컴파일러가 아니라 출시 빌드의 몫이다: 아래의 구독만이 이 전부를 돌게 만드는
-    /// 것이고, 그것은 <c>UNITY_EDITOR</c> 나 <c>DEVELOPMENT_BUILD</c> 가 참인 자리에서만 쥐어진다.
+    /// 부팅하는 것과 도는 것은 같지 않다. <see cref="Follow"/> 가 불리기 전까지 여기의 무엇도 아무것도 읽지 않고, 그것을
+    /// 부르는 일이 곧 인스턴스를 연결하는 일이다 — 패키지를 설치하는 것은 이것을 있는 채로 놀게 둘 뿐이다.
     /// </remarks>
     public static class AffordanceBootstrap
     {
@@ -25,21 +25,68 @@ namespace Artel.Affordances.Scan
         /// <summary>리포트가 쓰이는 자리.</summary>
         public static string ReportPath => Path.Combine(Application.persistentDataPath, FileName);
 
+        private static bool _following;
+
+        /// <summary>씬 로드가 지금 읽히고 있는지.</summary>
+        public static bool Following => _following;
+
+        /// <summary>
+        /// 게임이 씬을 로드하는 대로 읽기 시작하고, 시작됐는지를 말한다.
+        /// </summary>
         /// <remarks>
-        /// 출시된 게임에서는 아무것도 구독하지 않는다. 런타임 검사가 아니라 <c>#if</c> 로 묻는 것은, 출시된 플레이어가 구독도,
-        /// 콜백도, 이것을 로드했을 이유도 쥐지 않도록 하기 위해서다.
+        /// 인스턴스가 연결될 때 불린다. 사람이 이것을 청한 순간이 그때이기 때문이다. 게임은 다른 이유로도 SDK 를 나른다 —
+        /// 스트리밍, 원격 입력, 프레임 타이밍 — 그리고 QA 런을 한 번도 열지 않는 사람이 씬 로드마다 스캔 값을 치르거나, 청한 적
+        /// 없는 리포트를 제 디스크에서 발견해서는 안 된다.
         ///
-        /// 같은 심볼 쌍을 반대쪽 <c>AffordanceILPostProcessor.IsDiscoveryBuild</c> 에서 읽고, 그쪽이 이것이 읽는 근거가 애초에
-        /// 구워졌는지를 결정한다. 하나를 바꾸면 다른 하나도 바꿔라: 이쪽은 그것과 상수를 공유할 수 없다. 전처리기 검사는 제
-        /// 어셈블리가 컴파일되는 자리에서 평가되고 어디서도 값을 읽을 수 없기 때문이다.
+        /// 이것은 예전에 <c>RuntimeInitializeOnLoadMethod</c> 에서 구독했으므로, 그저 게임을 시작하는 것만으로 돌기에 충분했다 —
+        /// 패키지를 설치한 모든 프로젝트가, 읽을 사람이 있든 없든 스캔과 디스크 위의 리포트를 받았다.
+        ///
+        /// 멱등이다. 재연결도 연결이고 전송은 한 세션에 여러 번 열려도 되기 때문이다.
+        ///
+        /// 출시된 게임은 시작하는 대신 거절하고, <c>#if</c> 로 물어 출시된 플레이어가 구독도 콜백도 쥐지 않게 한다. 같은 심볼 쌍을
+        /// 반대쪽 <c>AffordanceILPostProcessor.IsDiscoveryBuild</c> 에서 읽고, 그쪽이 이것이 읽는 근거가 애초에 구워졌는지를
+        /// 결정한다. 하나를 바꾸면 다른 하나도 바꿔라: 이쪽은 그것과 상수를 공유할 수 없다. 전처리기 검사는 제 어셈블리가
+        /// 컴파일되는 자리에서 평가되고 어디서도 값을 읽을 수 없기 때문이다.
         /// </remarks>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void Install()
+        public static bool Follow()
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            SceneManager.sceneLoaded += (scene, mode) => Capture(scene);
-            Debug.Log("[Artel] Discovery is on. The report is written to " + ReportPath);
+            if (_following)
+            {
+                return true;
+            }
+
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            _following = true;
+
+            // 이미 올라와 있는 것은 아무도 듣기 전에 로드된 것이고, 다음에 로드되는 것만 받은 독자는 게임이 실제로 있는 화면을
+            // 놓치게 된다.
+            CaptureNow();
+
+            Debug.Log("[Artel] Discovery is following scene loads. The report is written to " + ReportPath);
+            return true;
+#else
+            // 출시된 빌드는 씬을 읽을 이유가 없고, 그렇다고 말하는 편이 호출자가 왜 아무것도 오지 않는지 궁금해하는 것보다 낫다.
+            Debug.Log("[Artel] Discovery does not run in a release build.");
+            return false;
 #endif
+        }
+
+        /// <summary>씬 읽기를 멈춘다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
+        public static void StopFollowing()
+        {
+            if (!_following)
+            {
+                return;
+            }
+
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            _following = false;
+        }
+
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            Capture(scene);
         }
 
         private static void Capture(Scene scene)

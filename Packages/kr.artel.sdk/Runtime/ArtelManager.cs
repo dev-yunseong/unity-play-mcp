@@ -297,12 +297,46 @@ namespace Artel
                     "[Artel] WebSocket transport is owned by another component, " +
                     "so this game will not connect to the orchestration server. " +
                     "Remove ArtelTestPageManager from the scene to connect.");
+
+                // discovery 는 이미 따라가고 있다: 그 전송을 설치한 쪽은 SetWebSocketTransport 를 거쳤고 그것이 시작시킨다. 여기서
+                // 다시 시작하면 같은 연결에 대한 두 번째 주장이 되고, 둘 중 하나가 움직이는 순간 어긋난다.
                 return;
             }
 
             webSocketTransport.Start();
             sceneStatePoller.Reset(Time.unscaledTime);
+            BeginDiscovery();
             Debug.Log("[Artel] WebSocket transport started.");
+        }
+
+        /// <summary>
+        /// 이제 지켜볼 누군가가 연결됐으므로 게임을 읽기 시작한다.
+        /// </summary>
+        /// <remarks>
+        /// 인스턴스를 연결하는 것이 동의다. 게임은 여러 이유로 이 SDK 를 나르고 그중 하나만이 QA 다 — 화면을 스트리밍하거나 프레임
+        /// 시간을 재는 프로젝트는 씬 로드마다 스캔되기를 청한 적도, 플레이어의 디스크에 리포트가 나타나기를 청한 적도 없다. 그저
+        /// 게임을 시작하는 것만으로 그 둘이 다 일어나곤 했다.
+        ///
+        /// 전송이 존재하게 되는 자리마다 불리고, 그것은 두 곳이다: <see cref="StartTransport"/> 가 제 것을 만들 때와,
+        /// <see cref="SetWebSocketTransport"/> 가 하나를 건네받을 때. 두 번째가 로컬 테스트 페이지가 연결하는 방식이고 그쪽은
+        /// StartTransport 에 아예 닿지 않는다 — 그래서 앞쪽에만 둔 시작은 테스트 페이지 경로 전체를 아무도 연결되지 않은 것으로
+        /// 읽는다.
+        ///
+        /// 완료된 핸드셰이크가 아니라 전송을 가지는 것이 방아쇠다. 소켓은 비동기로 열리고 테스트 페이지의 서버는 어떤 브라우저가
+        /// 붙기 전부터 듣고 있으므로, 반대쪽 끝을 기다리면 첫 스캔이 예측할 수 없는 순간에 도착하거나 아무도 열지 않는 페이지에
+        /// 대해서는 영영 오지 않는다. 연결을 청하는 것이 동의이고, 핸드셰이크는 배관이다.
+        /// </remarks>
+        private void BeginDiscovery()
+        {
+            Affordances.Scan.AffordanceBootstrap.Follow();
+            Affordances.Scan.AffordanceBootstrap.WatchLiveState();
+        }
+
+        /// <summary>연결이 사라지면 게임 읽기를 멈춘다.</summary>
+        private void EndDiscovery()
+        {
+            Affordances.Scan.AffordanceBootstrap.StopFollowing();
+            Affordances.Scan.AffordanceBootstrap.StopWatching();
         }
 
         public void StopTransport()
@@ -323,6 +357,10 @@ namespace Artel
             // Ahead of the ownership checks: whoever owns the socket, a run that ends mid-drag must
             // not leave the game holding a button nobody will ever send the release for.
             ReleaseAgentInput();
+
+            // 게임 읽기가 그것을 청한 연결보다 오래 사는 것이 이 짝짓기가 피하려고 존재하는 값이다 — 아무도 없는데 씬 로드마다
+            // 스캔하고 파일이 자라는 것.
+            EndDiscovery();
 
             if (webSocketTransport == null)
             {
@@ -371,6 +409,10 @@ namespace Artel
             ReleaseAgentInput();
             webSocketTransport = null;
             ownsTransport = true;
+
+            // 읽기를 청한 연결이 사라졌으므로 읽기도 함께 간다 — 이 매니저가 스스로 만든 전송에 대해 StopTransport 가 지키는 것과
+            // 같은 짝짓기다.
+            EndDiscovery();
         }
 
         internal void SetWebSocketTransport(IArtelWebSocketTransport transport, bool takeOwnership)
@@ -383,6 +425,10 @@ namespace Artel
             webSocketTransport = transport ?? throw new ArgumentNullException(nameof(transport));
             ownsTransport = takeOwnership;
             sceneStatePoller.Reset(Time.unscaledTime);
+
+            // 주입된 전송도 다른 것과 마찬가지로 하나의 연결이다. 로컬 테스트 페이지는 여기로만 도착하고 — StartTransport 를 결코
+            // 부르지 않는다 — 그래서 그 실행이 게임을 읽겠다고 청하는 누군가로 인식될 수 있는 유일한 자리가 여기다.
+            BeginDiscovery();
         }
 
         public void SetServer(Server configuredServer)
