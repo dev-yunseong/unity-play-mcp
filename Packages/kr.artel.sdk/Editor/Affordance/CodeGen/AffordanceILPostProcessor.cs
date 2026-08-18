@@ -14,24 +14,26 @@ namespace Artel.Affordances.CodeGen
     /// </summary>
     /// <remarks>
     /// Unity 컴파일 파이프라인 안에서 돈다. 곧 게임 팀에게 패키지 설치 말고는 아무것도 요구하지 않는다는 뜻이다 —
-    /// attribute 도, 수정도, 그들 자신의 빌드 단계도 없다. IL2CPP 가 무엇을 변환하기 전에 돌기도 하므로 최종
-    /// 빌드 형식이 무엇이든 결과는 거기 있다.
+    /// attribute 도, 수정도, 그들 자신의 빌드 단계도 없다. IL2CPP 가 무엇을 변환하기 전에 돌기도 하므로 최종 빌드 형식이
+    /// 무엇이든 결과는 거기 있다.
     ///
-    /// <see cref="EnableDefine"/> 가 설정되지 않으면 여기서는 아무것도 돌지 않는다. 이 분석은 세 번에 걸쳐
-    /// 에디터를 먹통으로 만들었고, 그때마다 왜 그런지 알아보려고 그것을 열 수조차 없었으며, 빠져나오는 길은
-    /// Unity 를 죽이고 매니페스트를 손으로 고치는 것이었다. 제거하지 않고 통째로 끄는 스위치는 그것이 찾아낼 수
-    /// 있는 무엇보다 값지다.
+    /// 이것은 예전에 프로젝트가 설정해야 하는 스크립팅 define 뒤에 앉아 있었다. 이 분석이 쓰이는 동안 세 번에 걸쳐 그것이
+    /// 에디터를 먹통으로 만들었고 그때마다 왜 그런지 알아보려고 그것을 열 수조차 없었다 — 그리고 제거하지 않고 끄는 스위치는
+    /// 그것이 찾아낼 수 있는 무엇보다 값졌다.
+    ///
+    /// 그 스위치를 대신한 것은 그때는 없던 세 겹이다: 여기의 모든 루프가 유계이고, 어셈블리 하나에 10초가 주어진 뒤에는 닿은
+    /// 만큼을 보고하고 나머지를 남기며, 어떤 throw 든 <see cref="Process"/> 에 떨어져 컴파일러 자신의 어셈블리를 되돌려준다.
+    /// 마지막 것은 실패를 주입하고 빌드가 그것을 견디는 것을 지켜봐 확인했다.
+    ///
+    /// define 은 그 값을 하기를 그만두었다. 도구가 존재하려면 프로젝트가 옵트인돼 있어야 하므로 무언가가 그들을 대신해 옵트인해
+    /// 주어야 했고, 그러면 그것이 막아 주던 상태 — 설치됐는데 꺼짐 — 는 손으로만 도달하는 곳이 됐다. 그러는 동안 아래쪽
+    /// 전부가 무언가에 기대기 전에 분석이 존재하기는 하는지를 먼저 물어야 했다.
+    ///
+    /// 게임 어셈블리에 쓰이는 것은 attribute 하나와 압축된 리소스 둘이다. 메서드 본문은 건드리지 않고, 아무것도 이름을 바꾸지
+    /// 않으며, 게임은 전과 똑같이 돈다.
     /// </remarks>
     public sealed class AffordanceILPostProcessor : ILPostProcessor
     {
-        /// <summary>프로젝트가 분석을 받아들이겠다고 말하는 스크립팅 define 심볼.</summary>
-        /// <remarks>
-        /// 일부러 두 겹으로 지킨다. assembly definition 이 스스로를 이 심볼로 제한하므로, 그것이 없으면 이 코드는
-        /// 컴파일되지도 않고 프로젝트에 아무 값도 치르게 하지 않는다 — 출시 빌드까지 패키지를 설치해 둔 채로 두어도
-        /// 안전하게 만드는 것이 그것이다. 아래의 검사는 어셈블리가 어떤 다른 경로로 빌드되더라도 게임 어셈블리를
-        /// 건드리지 않음을 보장하는 것이고, 스스로를 보고할 수 있는 것은 그쪽뿐이다.
-        /// </remarks>
-        internal const string EnableDefine = "ARTEL_AFFORDANCE";
 
         /// <summary>
         /// 나머지를 남겨 둔 채 끊기까지 한 어셈블리를 얼마나 오래 분석할 수 있는지.
@@ -70,15 +72,14 @@ namespace Artel.Affordances.CodeGen
         public override ILPostProcessor GetInstance() => this;
 
         /// <remarks>
-        /// 이 빌드가 어떤 종류인지는 어셈블리를 건드리지 않을 이유이고 그런 것들이 사는 자리가 여기인데도,
-        /// 여기가 아니라 <see cref="Process"/> 에서 묻는다. 여기서 아니오라고 답하면 <see cref="Process"/> 가
-        /// 한 번도 불리지 않는데, 진단을 쥐고 있는 것이 <see cref="Process"/> 다 — 그래서 여기서 결정된 거절은
-        /// 아무에게도 알려지지 않는 거절이다. 여기서 답하는 둘은 사람이 이미 답을 아는 것들이다: 그들이 define 을
-        /// 설정했고, 자기 어셈블리를 무엇이라 이름 지었는지 안다.
+        /// 이 빌드가 어떤 종류인지는 어셈블리를 건드리지 않을 이유이고 그런 것들이 사는 자리가 여기인데도, 여기가 아니라
+        /// <see cref="Process"/> 에서 묻는다. 여기서 아니오라고 답하면 <see cref="Process"/> 가 한 번도 불리지 않는데, 진단을
+        /// 쥐고 있는 것이 <see cref="Process"/> 다 — 그래서 여기서 결정된 거절은 아무에게도 알려지지 않는 거절이다. 여기서
+        /// 답하는 하나는 사람이 이미 답을 아는 것이다: 그들은 자기 어셈블리를 무엇이라 이름 지었는지 안다.
         /// </remarks>
         public override bool WillProcess(ICompiledAssembly compiledAssembly)
         {
-            return IsEnabledFor(compiledAssembly) && !IsSkipped(compiledAssembly.Name);
+            return !IsSkipped(compiledAssembly.Name);
         }
 
         public override ILPostProcessResult Process(ICompiledAssembly compiledAssembly)
@@ -719,26 +720,6 @@ namespace Artel.Affordances.CodeGen
                 (related.Count > 0 ? string.Join(", ", related) : "none") + ".");
 
             return null;
-        }
-
-        /// <summary><see cref="EnableDefine"/> 를 정의해 프로젝트가 분석을 청했을 때 참.</summary>
-        private static bool IsEnabledFor(ICompiledAssembly compiledAssembly)
-        {
-            var defines = compiledAssembly.Defines;
-            if (defines == null)
-            {
-                return false;
-            }
-
-            foreach (var define in defines)
-            {
-                if (string.Equals(define, EnableDefine, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         /// <summary>

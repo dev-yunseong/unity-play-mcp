@@ -12,10 +12,11 @@ namespace Artel.Affordances.Scan
     /// 스스로 부팅하는 것이 패키지 설치가 통합의 전부라는 약속을 지키는 방법이다. 게임 팀에게 매니저 객체를 모든 씬에
     /// 떨어뜨리라고 청하는 일은 그들의 씬을 바꾸는 일이고, 그것이 이것이 요구해서는 안 되는 그것이다.
     ///
-    /// 로드되는 모든 씬이 읽혀 리포트에 더해지므로, 그저 게임을 하는 것만으로 다녀온 모든 곳에 대한 진술이 쌓인다.
-    /// 아무도 걸어가지 않은 화면에 닿는 일이 <see cref="WalkAllScenes"/> 의 몫이다.
+    /// 로드되는 모든 씬이 읽혀 리포트에 더해지므로, 그저 게임을 하는 것만으로 다녀온 모든 곳에 대한 진술이 쌓인다. 아무도
+    /// 걸어가지 않은 화면에 닿는 일이 <see cref="WalkAllScenes"/> 의 몫이다.
     ///
-    /// discovery define 아래에서만 컴파일되므로 출시 빌드에는 이것이 하나도 들어 있지 않다.
+    /// 언제나 컴파일되고, 아무것도 하지 않는 일은 컴파일러가 아니라 출시 빌드의 몫이다: 아래의 구독만이 이 전부를 돌게 만드는
+    /// 것이고, 그것은 <c>UNITY_EDITOR</c> 나 <c>DEVELOPMENT_BUILD</c> 가 참인 자리에서만 쥐어진다.
     /// </remarks>
     public static class AffordanceBootstrap
     {
@@ -25,14 +26,12 @@ namespace Artel.Affordances.Scan
         public static string ReportPath => Path.Combine(Application.persistentDataPath, FileName);
 
         /// <remarks>
-        /// 출시된 게임에서는 아무것도 구독하지 않는다. 이 어셈블리가 그 뒤에서 컴파일되는 define 은 도구가 존재해도 된다고
-        /// 말하고, 이것은 실제로 무언가를 해야 한다고 말하는데, 둘은 다른 물음이다 — 앞의 것은 프로젝트의 결정이고 그들이
-        /// 게임을 만드는 동안 계속 설정돼 있으며, 뒤의 것은 누군가 개발하고 있는 동안에만 참이다.
+        /// 출시된 게임에서는 아무것도 구독하지 않는다. 런타임 검사가 아니라 <c>#if</c> 로 묻는 것은, 출시된 플레이어가 구독도,
+        /// 콜백도, 이것을 로드했을 이유도 쥐지 않도록 하기 위해서다.
         ///
-        /// 런타임 검사가 아니라 <c>#if</c> 로 묻는 것은, 출시된 플레이어가 구독도, 콜백도, 이것을 로드했을 이유도 쥐지
-        /// 않도록 하기 위해서다. 같은 심볼 쌍을 반대쪽 <c>AffordanceILPostProcessor.IsDiscoveryBuild</c> 에서 읽고,
-        /// 그쪽이 이것이 읽는 근거가 애초에 구워졌는지를 결정한다. 하나를 바꾸면 다른 하나도 바꿔라: 이쪽은 그것과 상수를
-        /// 공유할 수 없다. 전처리기 검사는 제 어셈블리가 컴파일되는 자리에서 평가되고 어디서도 값을 읽을 수 없기 때문이다.
+        /// 같은 심볼 쌍을 반대쪽 <c>AffordanceILPostProcessor.IsDiscoveryBuild</c> 에서 읽고, 그쪽이 이것이 읽는 근거가 애초에
+        /// 구워졌는지를 결정한다. 하나를 바꾸면 다른 하나도 바꿔라: 이쪽은 그것과 상수를 공유할 수 없다. 전처리기 검사는 제
+        /// 어셈블리가 컴파일되는 자리에서 평가되고 어디서도 값을 읽을 수 없기 때문이다.
         /// </remarks>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Install()

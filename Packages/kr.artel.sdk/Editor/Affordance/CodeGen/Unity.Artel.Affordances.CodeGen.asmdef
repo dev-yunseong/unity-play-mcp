@@ -15,9 +15,7 @@
     "Unity.CompilationPipeline.Common.dll"
   ],
   "autoReferenced": false,
-  "defineConstraints": [
-    "ARTEL_AFFORDANCE"
-  ],
+  "defineConstraints": [],
   "versionDefines": [],
   "noEngineReferences": true
 }
