@@ -435,10 +435,19 @@ namespace Artel.Affordances.Live
             // 대해 할 말이 없는 객체이고, 그렇다고 말하기 위해 그것이 쥔 전부를 치르는 것은 틀린 값이다.
             var text = new StringBuilder(256);
 
-            // 어디 있는지는 언제나 쓴다. selector 의 경로를 한 번도 듣지 못한 독자는 그것에 대한 델타로 아무것도 할 수 없고, 이 셋은
+            // 어디 있는지는 언제나 쓴다. selector 의 경로를 한 번도 듣지 못한 독자는 그것에 대한 델타로 아무것도 할 수 없고, 이것들은
             // 멤버들 옆에서 아무 값도 들지 않는다.
+            //
+            // id 가 여기 있는 것은 독자가 자기가 읽은 것에 대해 행동할 수 있게 하기 위해서다. 모든 액션이 대상을 instance id 로
+            // 지목하는데 지금까지 그 숫자는 씬 보고에만 실려 왔다 — 그래서 판독을 쥔 독자는 무엇이 바뀌었는지 알면서 그것을 건드릴
+            // 방법이 없었다. 바뀔 때만이 아니라 매 기록에 쓰는 것은 경로와 같은 이유다: 그것은 결코 바뀌지 않고, id 를 한 번도 받은
+            // 적 없는 객체에 대한 델타는 아무도 행동할 수 없는 차이다.
+            //
+            // instance id 는 프로세스를 넘어 살아남지 못하고, selector 도 여기 있는 이유가 그것이다. 새로 생긴 약점은 아니지만 —
+            // 씬 보고도 같은 숫자로 주소지정한다 — 결국 selector 가 액션이 지목할 것이 되어야 하는 이유다.
             text.Append('{');
             Json.Property(text, "scene", scene.name);
+            text.Append(",\"id\":").Append(transform.gameObject.GetInstanceID());
             text.Append(',');
             Json.Property(text, "path", ScenePath.Of(transform));
             text.Append(',');

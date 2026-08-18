@@ -15,6 +15,15 @@ namespace Artel
         private readonly CursorController cursorController;
         private readonly PointerEventDispatcher pointerEvents;
         private readonly IScreenCapturer capturer;
+
+        /// <summary>
+        /// 세션이 그렇게 말할 때 라이브 판독을 켜고 끄는 것.
+        /// </summary>
+        /// <remarks>
+        /// 매니저가 아니라 이음매로 쥔다. 이 클래스가 하는 다른 모든 일은 게임에 대고 하는 것이고 이것은 SDK 에 대고 하는 유일한
+        /// 것이기 때문이다. 이것 없이 executor 를 만드는 테스트에서는 null 이고, 아래의 모든 사용이 먼저 묻는 이유가 그것이다.
+        /// </remarks>
+        private readonly IReadingChannel readings;
         private readonly ICaptureUploader uploader;
         private readonly Action<Vector2> cursorMoved;
         private readonly Action<Vector2> pointerMoved;
@@ -33,8 +42,10 @@ namespace Artel
             CursorController cursorController,
             PointerEventDispatcher pointerEvents,
             IScreenCapturer capturer = null,
-            ICaptureUploader uploader = null)
+            ICaptureUploader uploader = null,
+            IReadingChannel readings = null)
         {
+            this.readings = readings;
             this.scanner = scanner;
             this.cursorController = cursorController;
             this.pointerEvents = pointerEvents;
@@ -114,6 +125,14 @@ namespace Artel
 
                 case "reset_game":
                     yield return ExecuteResetGame(actionId, completed);
+                    yield break;
+
+                case "start_readings":
+                    completed(ExecuteStartReadings(actionId));
+                    yield break;
+
+                case "stop_readings":
+                    completed(ExecuteStopReadings(actionId));
                     yield break;
 
                 case "capture_screen":
@@ -362,6 +381,38 @@ namespace Artel
             // in this batch would otherwise address a corpse.
             scanner.Scan();
             completed(ActionResultDto.Success(actionId));
+        }
+
+        /// <summary>
+        /// 청한 그 실행을 위해 라이브 판독을 켠다.
+        /// </summary>
+        /// <remarks>
+        /// 실행은 그것이 언제 시작하는지를 말하지만 연결은 그러지 않는다. 연결은 모든 씬을 도는 순회도 함께 시작시키는데, 그 순회
+        /// 동안 찍은 판독은 플레이어가 한 번도 걸어가지 않은 화면을 서술한다 — 그래서 둘을 갈랐고, 이쪽이 세션이 다스리는 절반이다.
+        /// </remarks>
+        private ActionResultDto ExecuteStartReadings(int actionId)
+        {
+            if (readings == null)
+            {
+                return ActionResultDto.Failure(actionId, "This build cannot take live readings.");
+            }
+
+            return readings.StartReadings()
+                ? ActionResultDto.Success(actionId)
+                : ActionResultDto.Failure(
+                    actionId, "Live readings could not start. A release build does not take them.");
+        }
+
+        /// <summary>다시 끈다. 돌고 있었든 아니든 성공한다.</summary>
+        private ActionResultDto ExecuteStopReadings(int actionId)
+        {
+            if (readings == null)
+            {
+                return ActionResultDto.Failure(actionId, "This build cannot take live readings.");
+            }
+
+            readings.StopReadings();
+            return ActionResultDto.Success(actionId);
         }
 
         /// <summary>

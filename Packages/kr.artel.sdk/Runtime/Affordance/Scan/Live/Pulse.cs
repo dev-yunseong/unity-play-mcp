@@ -61,10 +61,26 @@ namespace Artel.Affordances.Live
         /// </remarks>
         private const float DefaultInterval = 0.1f;
 
+        /// <summary>전달 사이의 초.</summary>
+        /// <remarks>
+        /// 읽기와 전달이 두 속도인 것은 일부러다. 변화는 일어나는 그 순간에 잡지 않으면 틀린 값으로 잡힌다 — 1초 안에 올라갔다
+        /// 내려온 카운터는 초당 한 번 재는 독자에게 애초에 없던 것이다. 그 속도로 전달하는 것은 다른 물음이고, 답은 게임당 초당
+        /// 작은 메시지 열 개를 나르는 소켓이 열 판독을 하나에 담아 나르는 소켓보다 비싸다는 것이다.
+        ///
+        /// 나가는 길에 아무것도 병합하지 않는다. 열 판독은 열 판독으로 도착하고 각자 몇 번째인지와 어느 프레임에 찍혔는지를 그대로
+        /// 말한다. 독자가 그 수열로 1초를 복원하기 때문이다. 배치는 그것들이 *언제 떠나는가* 이지 *무엇인가* 가 아니다.
+        /// </remarks>
+        private const float DefaultDelivery = 1f;
+
         private static Pulse _beating;
 
         private IPulseSink _sink;
         private float _interval = DefaultInterval;
+        private float _delivery = DefaultDelivery;
+
+        /// <summary>찍었으나 아직 건네지 않은 판독들.</summary>
+        private readonly System.Collections.Generic.List<string> _pending =
+            new System.Collections.Generic.List<string>();
         private bool _read;
 
         /// <summary>직전 판독이 sink 에 닿지 못했는지.</summary>
@@ -135,6 +151,11 @@ namespace Artel.Affordances.Live
                 return;
             }
 
+            // 지난 1초가 모은 것이 무엇이든 여전히 누군가의 것이고, 감시가 끝나는 순간은 대개 무언가 흥미로운 일이 막 일어난 직후다.
+            // 박자가 제 루프를 벗어나는 자리가 아니라 여기서 하는 것은, 박자가 거기 닿는 일이 없기 때문이다: carrier 를 파괴하면
+            // 코루틴이 선 자리에서 멈춘다.
+            _beating.Deliver();
+
             var carrier = _beating.gameObject;
 
             _beating._sink = null;
@@ -144,13 +165,58 @@ namespace Artel.Affordances.Live
 
         private IEnumerator Beat()
         {
-            // 첫 판독은 언제나 나간다. 아직 아무 말도 하지 않았으므로 "바뀌지 않음" 은 이것이 그것에 대해 할 수 있는 주장이
-            // 아니다.
+            var untilDelivery = _delivery;
+
+            // 첫 판독은 언제나 나간다. 아직 아무 말도 하지 않았으므로 "바뀌지 않음" 은 이것이 그것에 대해 할 수 있는 주장이 아니다.
             while (_beating == this)
             {
                 Take();
+
                 yield return new WaitForSecondsRealtime(_interval);
+
+                untilDelivery -= _interval;
+
+                if (untilDelivery > 0f)
+                {
+                    continue;
+                }
+
+                untilDelivery = _delivery;
+                Deliver();
             }
+        }
+
+        /// <summary>지난 전달 이후 읽은 것을 전부 건넨다.</summary>
+        private void Deliver()
+        {
+            for (var at = 0; at < _pending.Count; at++)
+            {
+                try
+                {
+                    _sink.Send(_pending[at]);
+                }
+                catch (Exception exception)
+                {
+                    // 판독은 도착했든 아니든 유효하다. 다음 전달에 그것들을 다시 보내면 sink 가 언짢은 동안 계속 그러게 되는데, 그것이 소켓
+                    // 하나가 망가진 것을 홍수로 바꾸는 모양이다.
+                    //
+                    // 대신 다음 것이 전량으로 나간다. 판독은 움직인 것만 나르므로 잃어버린 하나는 아무도 다시 듣지 못할 차이다 — 독자는
+                    // 무언가 그 값들을 움직이기 전까지 그것들에 대해 틀린 채로 있고, 그런 일은 영영 없을 수도 있다. 전량 판독 하나가 그것을
+                    // 고치고 그다음부터 차이가 다시 이어진다.
+                    //
+                    // 배치의 나머지는 시도하지 않고 버린다. 그것들은 도착하지 않은 판독에 대한 차이이므로, 보내면 독자는 값을 들은 적도 없는
+                    // 것에 대한 변경을 쥐게 된다.
+                    _lost = true;
+                    _pending.Clear();
+                    Debug.LogWarning("[Artel] A reading could not be delivered: " + exception.Message);
+                    return;
+                }
+
+                _lost = false;
+                Sent++;
+            }
+
+            _pending.Clear();
         }
 
         private void Take()
@@ -182,25 +248,8 @@ namespace Artel.Affordances.Live
 
             _read = true;
 
-            try
-            {
-                _sink.Send(document);
-            }
-            catch (Exception exception)
-            {
-                // 판독은 도착했든 아니든 유효하다. 해시를 잊으면 다음 박자에 같은 문서를 다시 보내고 sink 가 언짢은 동안 계속 그러게
-                // 되는데, 그것이 소켓 하나가 망가진 것을 홍수로 바꾸는 모양이다.
-                //
-                // 대신 다음 것이 전량으로 나간다. 판독은 움직인 것만 나르므로 잃어버린 하나는 아무도 다시 듣지 못할 차이다 — 독자는
-                // 무언가 그 값들을 움직이기 전까지 그것들에 대해 틀린 채로 있고, 그런 일은 영영 없을 수도 있다. 전량 판독 하나가 그것을
-                // 고치고 그다음부터 차이가 다시 이어지는데, 그것은 재전송이 만들 홍수가 아니다.
-                _lost = true;
-                Debug.LogWarning("[Artel] A reading could not be delivered: " + exception.Message);
-                return;
-            }
-
-            _lost = false;
-            Sent++;
+            // 여기서 보내지 않고 전달 박자까지 쥐고 있는다. 찍는 것과 건네는 것은 두 속도이고, 이것은 게임을 따라가야 하는 쪽이다.
+            _pending.Add(document);
         }
 
         private void OnDestroy()
