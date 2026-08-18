@@ -9,10 +9,11 @@
   Unity 가 스스로 만든 preserve 파일들만 적혀 있었다. 어느 쪽이든 실패가 스스로 말하게 만드는
   것은 ManagedStrippingWarning 의 검사이고, 그 검사는 ARTEL-395 와 함께 온다.
 
-  Artel.Affordances.Scan 도 존재하게 되면 함께 보존한다. 미리 적지 않고 빼 둔 것은, 어떤
-  어셈블리로도 해석되지 않는 이름을 링커가 어떻게 다루는지 확인된 바가 없고 이 파일이 그것을
-  알아볼 자리는 아니기 때문이다. ARTEL-394 에서 추가한다.
+  Artel.Affordances.Scan 은 ARTEL-394 와 함께 도착했고 그때부터 함께 보존한다. 어셈블리가
+  존재하기 전까지 미리 적지 않고 빼 두었던 것은, 아무것으로도 해석되지 않는 이름을 링커가 어떻게
+  다루는지 확인된 바가 없었고 이 파일이 그것을 알아볼 자리가 아니었기 때문이다.
 -->
 <linker>
   <assembly fullname="Artel.Affordances.Runtime" preserve="all"/>
+  <assembly fullname="Artel.Affordances.Scan" preserve="all"/>
 </linker>
