@@ -15,7 +15,7 @@ using UnityEngine;
 
 namespace Artel
 {
-    public sealed class ArtelManager : MonoBehaviour
+    public sealed class ArtelManager : MonoBehaviour, IReadingChannel
     {
         private const float SceneScanIntervalSeconds = 1f;
         private const float PerformanceReportIntervalSeconds = 1f;
@@ -157,7 +157,8 @@ namespace Artel
                     jsonCodec,
                     () => server,
                     ArtelSdkSession.LoadToken,
-                    ArtelSdkSession.LoadInstanceId));
+                    ArtelSdkSession.LoadInstanceId),
+                this);
             sceneStatePoller = new SceneStatePoller(
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
@@ -297,13 +298,85 @@ namespace Artel
                     "[Artel] WebSocket transport is owned by another component, " +
                     "so this game will not connect to the orchestration server. " +
                     "Remove ArtelTestPageManager from the scene to connect.");
+
+                // discovery 는 이미 따라가고 있다: 그 전송을 설치한 쪽은 SetWebSocketTransport 를 거쳤고 그것이 시작시킨다. 여기서
+                // 다시 시작하면 같은 연결에 대한 두 번째 주장이 되고, 둘 중 하나가 움직이는 순간 어긋난다.
                 return;
             }
 
             webSocketTransport.Start();
             sceneStatePoller.Reset(Time.unscaledTime);
+            BeginDiscovery();
             Debug.Log("[Artel] WebSocket transport started.");
         }
+
+        /// <summary>
+        /// 이제 지켜볼 누군가가 연결됐으므로 게임을 읽기 시작한다.
+        /// </summary>
+        /// <remarks>
+        /// 인스턴스를 연결하는 것이 동의다. 게임은 여러 이유로 이 SDK 를 나르고 그중 하나만이 QA 다 — 화면을 스트리밍하거나 프레임
+        /// 시간을 재는 프로젝트는 씬 로드마다 스캔되기를 청한 적도, 플레이어의 디스크에 리포트가 나타나기를 청한 적도 없다. 그저
+        /// 게임을 시작하는 것만으로 그 둘이 다 일어나곤 했다.
+        ///
+        /// 전송이 존재하게 되는 자리마다 불리고, 그것은 두 곳이다: <see cref="StartTransport"/> 가 제 것을 만들 때와,
+        /// <see cref="SetWebSocketTransport"/> 가 하나를 건네받을 때. 두 번째가 로컬 테스트 페이지가 연결하는 방식이고 그쪽은
+        /// StartTransport 에 아예 닿지 않는다 — 그래서 앞쪽에만 둔 시작은 테스트 페이지 경로 전체를 아무도 연결되지 않은 것으로
+        /// 읽는다.
+        ///
+        /// 완료된 핸드셰이크가 아니라 전송을 가지는 것이 방아쇠다. 소켓은 비동기로 열리고 테스트 페이지의 서버는 어떤 브라우저가
+        /// 붙기 전부터 듣고 있으므로, 반대쪽 끝을 기다리면 첫 스캔이 예측할 수 없는 순간에 도착하거나 아무도 열지 않는 페이지에
+        /// 대해서는 영영 오지 않는다. 연결을 청하는 것이 동의이고, 핸드셰이크는 배관이다.
+        /// </remarks>
+        private void BeginDiscovery()
+        {
+            Affordances.Scan.AffordanceBootstrap.Follow();
+        }
+
+        /// <summary>연결이 사라지면 게임 읽기를 멈춘다.</summary>
+        /// <remarks>
+        /// 여기서 시작시킨 것이 없는데도 판독도 여기서 멈춘다. 연결이 끊겨 끝나는 세션은 <see cref="StopReadings"/> 를 부를
+        /// 기회를 얻지 못하고, 돌게 남겨진 박자는 게임이 떠 있는 내내 아무도 읽지 않을 파일에 쓴다.
+        /// </remarks>
+        private void EndDiscovery()
+        {
+            Affordances.Scan.AffordanceBootstrap.StopFollowing();
+            StopReadings();
+        }
+
+        /// <summary>
+        /// 라이브 판독을 시작하고, 지금 돌고 있는지를 말한다.
+        /// </summary>
+        /// <remarks>
+        /// 연결로 함의되는 것이 아니라 청해지는 것이고, 그 분리가 이 메서드의 전부다. 연결은 도구가 봐도 된다고 말하고, 세션은
+        /// 실행이 시작됐다고 말하며, 그것이 언제인지는 실행을 모는 쪽만 안다.
+        ///
+        /// 그 값이 얼마인지 재기 전까지 둘은 같은 순간이었다. 모든 씬을 도는 순회도 연결에서 시작하고 그것은 아무도 걸어가지 않은
+        /// 화면을 방문한다 — 그래서 그 곁에서 찍은 판독은 플레이어가 본 적 없는 화면에 게임이 있다고 보고한다. 샘플 게임에서
+        /// 실측했다: 순회 동안 찍은 판독은 8초에 125,548 바이트였고 플레이어가 있은 적 없는 씬 셋을 서술했다. 순회 뒤에 시작한
+        /// 같은 채널은 4,369 바이트짜리 판독 하나를 쓰고 14초 동안 아무것도 쓰지 않았다.
+        ///
+        /// 독자가 걸러 낼 수 있는 잡음도 아니다. 판독은 자기가 순회 중이라고 말하지 않으므로 걸러 낼 근거가 그 안에 없다.
+        ///
+        /// 멱등이다: 이미 읽고 있는 동안의 두 번째 호출은 참으로 답하고 아무것도 바꾸지 않는다.
+        /// </remarks>
+        public bool StartReadings()
+        {
+            if (Affordances.Scan.AffordanceBootstrap.Watching)
+            {
+                return true;
+            }
+
+            return Affordances.Scan.AffordanceBootstrap.WatchLiveState();
+        }
+
+        /// <summary>라이브 판독을 끝낸다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
+        public void StopReadings()
+        {
+            Affordances.Scan.AffordanceBootstrap.StopWatching();
+        }
+
+        /// <summary>라이브 판독이 돌고 있는지.</summary>
+        internal bool Reading => Affordances.Scan.AffordanceBootstrap.Watching;
 
         public void StopTransport()
         {
@@ -323,6 +396,10 @@ namespace Artel
             // Ahead of the ownership checks: whoever owns the socket, a run that ends mid-drag must
             // not leave the game holding a button nobody will ever send the release for.
             ReleaseAgentInput();
+
+            // 게임 읽기가 그것을 청한 연결보다 오래 사는 것이 이 짝짓기가 피하려고 존재하는 값이다 — 아무도 없는데 씬 로드마다
+            // 스캔하고 파일이 자라는 것.
+            EndDiscovery();
 
             if (webSocketTransport == null)
             {
@@ -371,6 +448,10 @@ namespace Artel
             ReleaseAgentInput();
             webSocketTransport = null;
             ownsTransport = true;
+
+            // 읽기를 청한 연결이 사라졌으므로 읽기도 함께 간다 — 이 매니저가 스스로 만든 전송에 대해 StopTransport 가 지키는 것과
+            // 같은 짝짓기다.
+            EndDiscovery();
         }
 
         internal void SetWebSocketTransport(IArtelWebSocketTransport transport, bool takeOwnership)
@@ -383,6 +464,10 @@ namespace Artel
             webSocketTransport = transport ?? throw new ArgumentNullException(nameof(transport));
             ownsTransport = takeOwnership;
             sceneStatePoller.Reset(Time.unscaledTime);
+
+            // 주입된 전송도 다른 것과 마찬가지로 하나의 연결이다. 로컬 테스트 페이지는 여기로만 도착하고 — StartTransport 를 결코
+            // 부르지 않는다 — 그래서 그 실행이 게임을 읽겠다고 청하는 누군가로 인식될 수 있는 유일한 자리가 여기다.
+            BeginDiscovery();
         }
 
         public void SetServer(Server configuredServer)

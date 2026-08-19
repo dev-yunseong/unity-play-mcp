@@ -1,0 +1,16 @@
+{
+  "name": "Artel.Affordances.Scan",
+  "rootNamespace": "Artel.Affordances.Scan",
+  "references": [
+    "Artel.Affordances.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

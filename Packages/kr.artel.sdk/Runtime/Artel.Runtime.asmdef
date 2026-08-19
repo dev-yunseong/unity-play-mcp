@@ -5,7 +5,8 @@
     "Unity.TextMeshPro",
     "Unity.WebRTC",
     "UnityEngine.UI",
-    "UnityEngine.UnityWebRequestModule"
+    "UnityEngine.UnityWebRequestModule",
+    "Artel.Affordances.Scan"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

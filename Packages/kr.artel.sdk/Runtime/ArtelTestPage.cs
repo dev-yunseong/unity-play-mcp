@@ -34,6 +34,8 @@ namespace Artel
     <button id=""scan"">Scan</button>
     <button id=""scan-all"">Scan all scenes</button>
     <button id=""scan-all-full"">Scan all scenes (full)</button>
+    <button id=""readings-start"">Start readings</button>
+    <button id=""readings-stop"">Stop readings</button>
     <span id=""status"">idle</span>
   </header>
   <section class=""controls"" aria-label=""Keyboard input"">
@@ -122,6 +124,10 @@ namespace Artel
     document.getElementById('scan').onclick = scan;
     document.getElementById('scan-all').onclick = () => scanAllScenes();
     document.getElementById('scan-all-full').onclick = () => scanAllScenes('full');
+    // 판독은 연결이 아니라 세션이다. 연결은 도구가 봐도 된다고 말하고, 이것들은 실행이 시작됐다고 말한다. 갈라 둔 것은 모든
+    // 씬을 도는 순회도 연결에서 시작하는데 그 동안 찍은 판독이 아무도 걸어가지 않은 화면을 서술하기 때문이다.
+    document.getElementById('readings-start').onclick = () => sendAction('start_readings', []);
+    document.getElementById('readings-stop').onclick = () => sendAction('stop_readings', []);
     document.getElementById('snapshot-clear').onclick = clearSnapshot;
     document.getElementById('key-click').onclick = clickKey;
     document.getElementById('key-down').onclick = () => holdKey('key_down');
