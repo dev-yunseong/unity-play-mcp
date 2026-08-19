@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Reflection;
+using System.Security.Authentication;
 using System.Text;
 using Artel.Auth;
 using Artel.Domain;
@@ -10,6 +11,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using WebSocketSharp;
 
 namespace Artel.Tests.Transport
 {
@@ -236,6 +238,29 @@ namespace Artel.Tests.Transport
             Assert.That(
                 endpoint.AbsoluteUri,
                 Is.EqualTo("wss://socket.artel.example/ws/sdk?token=sdk%20token&instanceId=7"));
+        }
+
+        // 이 어셈블리의 기본값은 Ssl3 | TLS 1.0이라, 덮어쓰지 않으면 TLS 1.2 이상만 받는
+        // 프록시와 핸드셰이크가 성립하지 않는다.
+        [Test]
+        public void WebSocketClient_RaisesSecureSocketToTls12()
+        {
+            var socket = new WebSocket("wss://socket.artel.example/ws/sdk");
+
+            ArtelWebSocketClient.EnableModernTls(socket);
+
+            Assert.That(
+                socket.SslConfiguration.EnabledSslProtocols,
+                Is.EqualTo(SslProtocols.Tls12));
+        }
+
+        // 평문 소켓에는 SslConfiguration이 없다. 무조건 건드리면 여기서 터진다.
+        [Test]
+        public void WebSocketClient_LeavesPlainSocketUntouched()
+        {
+            var socket = new WebSocket("ws://socket.artel.example/ws/sdk");
+
+            Assert.That(() => ArtelWebSocketClient.EnableModernTls(socket), Throws.Nothing);
         }
 
         [Test]

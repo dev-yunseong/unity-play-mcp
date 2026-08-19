@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Security.Authentication;
 using Artel.Domain;
 using WebSocketSharp;
 
@@ -27,12 +28,32 @@ namespace Artel
             }
 
             client = new WebSocket(url);
+            EnableModernTls(client);
             client.OnMessage += OnMessage;
             client.OnOpen += OnOpen;
             client.OnError += OnError;
             client.OnClose += OnClose;
             UnityEngine.Debug.Log("[Artel] Connecting WebSocket to " + url);
             client.ConnectAsync();
+        }
+
+        // websocket-sharp opens its own TcpClient and negotiates TLS through Mono's SslStream,
+        // so the protocol list comes from this library and not from the native stack behind
+        // UnityWebRequest. Its default is SslProtocols.Default, which is Ssl3 | TLS 1.0. A proxy
+        // serving TLS 1.2 and up answers that ClientHello with a protocol_version alert, and the
+        // socket closes with code 1015 before the HTTP upgrade is ever sent. REST calls to the
+        // same host keep working, so the failure reads as a WebSocket outage rather than a TLS one.
+        //
+        // TLS 1.3 is left out deliberately: Unity's Mono TLS provider does not implement it, and
+        // requesting it fails the handshake instead of falling back to 1.2.
+        internal static void EnableModernTls(WebSocket socket)
+        {
+            if (!socket.IsSecure)
+            {
+                return;
+            }
+
+            socket.SslConfiguration.EnabledSslProtocols = SslProtocols.Tls12;
         }
 
         // ConnectAsync reports nothing to the caller, so without these the socket can fail to

@@ -13,7 +13,8 @@
   "allowUnsafeCode": false,
   "overrideReferences": true,
   "precompiledReferences": [
-    "Newtonsoft.Json.dll"
+    "Newtonsoft.Json.dll",
+    "websocket-sharp.dll"
   ],
   "autoReferenced": false,
   "defineConstraints": [],
