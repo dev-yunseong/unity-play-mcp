@@ -41,8 +41,15 @@ namespace Artel.Affordances.Scan
         /// 다섯은 <c>createdBy</c> 옆에 <c>calledBy</c> 를, 그리고 아무도 읽을 수 없던 조건에 <c>unread</c> 를 더한다. 둘 다
         /// 더하기만 하고 그것들을 무시하는 독자는 전에 읽던 것을 읽는다 — 그래도 버전은 움직인다. 숫자를 기준으로 삼는 독자는
         /// 모양이 늘었다는 것을 발견하는 것이 아니라 들어야 하기 때문이다.
+        /// 일곱은 <c>createdBy</c> 의 <b>항목 타입을 바꾼다</b> — 문자열에서 객체로. 여섯까지의 변화가 전부 더하기였던 것과
+        /// 다르다. 문자열 하나로는 두 항목이 같은 프리팹인지 답할 수 없었고, 실측에서
+        /// <c>MagicEnemy.fireShoot</c> 와 <c>BossEnemy.fireShoot</c> 는 서로 다른 프리팹이었다.
+        ///
+        /// 같은 세대에서 <c>cut</c> 이 붙은 항목이 생긴다. 걷기가 깊이에 막혀 읽지 못한 프리팹이고, 이것이 없으면 빈
+        /// <c>createdBy</c> 가 "아무도 만들지 않는다"와 "우리가 못 걸어갔다" 둘 다를 뜻해 <b>살아 있는 타입이 폐기로
+        /// 적재된다</b>. 버린 자리는 <c>gaps</c> 에도 남는다.
         /// </remarks>
-        public const int SchemaVersion = 6;
+        public const int SchemaVersion = 7;
 
         /// <summary>더 오래된 것이 갈아치워지기를 그만두기 전까지 몇 개의 씬을 쥐고 있는지.</summary>
         private const int MaxScenes = 256;
@@ -65,8 +72,8 @@ namespace Artel.Affordances.Scan
         /// <summary>분석기가 호출 대상을 적는 방식: 어셈블리, 타입, 메서드, 시그니처.</summary>
         private const string TargetMarker = "\"targetId\":\"";
 
-        private static readonly Dictionary<string, List<string>> Makers =
-            new Dictionary<string, List<string>>(System.StringComparer.Ordinal);
+        private static readonly Dictionary<string, List<Maker>> Makers =
+            new Dictionary<string, List<Maker>>(System.StringComparer.Ordinal);
 
         /// <summary>
         /// 어셈블리가 근거를 나르지만 어느 씬도 쥐고 있는 것으로 발견되지 않은 타입들.
@@ -183,25 +190,112 @@ namespace Artel.Affordances.Scan
         /// 못한 타입 목록만 있고 그중 무엇이 죽은 코드인지 가릴 방법이 없다 — 그리고 죽은 타입의 규칙을 게임의 규칙으로 발행하는
         /// 것이, 이 표가 그냥 거짓인 명세를 만들어낼 수 있는 유일한 길이다.
         /// </remarks>
-        internal static void Creates(string carriedType, string ownerType, string field)
+        internal static void Creates(
+            string carriedType, string ownerType, string field, string prefabName, int prefabId)
         {
             if (string.IsNullOrEmpty(carriedType) || string.IsNullOrEmpty(ownerType))
             {
                 return;
             }
 
-            if (!Makers.TryGetValue(carriedType, out var makers))
+            Record(carriedType, new Maker
             {
-                makers = new List<string>();
-                Makers[carriedType] = makers;
+                Field = ownerType + "." + field,
+                Prefab = prefabName,
+                PrefabId = prefabId
+            });
+        }
+
+        /// <summary>
+        /// 걷기가 깊이에 막힌 자리에서 만난 프리팹을 적어 둔다.
+        /// </summary>
+        /// <remarks>
+        /// 반환하는 그 순간에도 프리팹은 손에 있었다 — 읽을 수 없어서 없는 것이 아니라 이미 본 것을
+        /// 안 적는 것이었다. 여기 남기지 않으면 <c>createdBy</c> 가 비고, 소비자는 그것을 죽은
+        /// 코드로 읽는다. <b>빈 목록은 아무도 만들지 않는다는 뜻이어야 한다.</b>
+        ///
+        /// <c>cut</c> 이 말하는 것은 "이 프리팹을 못 봤다"가 아니라 <b>"이 프리팹 뒤로 더 걷지
+        /// 않았다"</b>이다. 그 너머에 또 다른 프리팹이 있었다면 그것은 여전히 이 리포트에 없다.
+        /// </remarks>
+        internal static void CreatesCut(
+            string carriedType, string ownerType, string field, string prefabName, int prefabId, string reason)
+        {
+            if (string.IsNullOrEmpty(carriedType) || string.IsNullOrEmpty(ownerType))
+            {
+                return;
             }
 
-            var maker = ownerType + "." + field;
-
-            if (!makers.Contains(maker) && makers.Count < MaxMakers)
+            Record(carriedType, new Maker
             {
-                makers.Add(maker);
+                Field = ownerType + "." + field,
+                Prefab = prefabName,
+                PrefabId = prefabId,
+                Cut = reason
+            });
+
+            WalkGap("trace-depth-exceeded:" + carriedType);
+        }
+
+        /// <summary>같은 프리팹을 두 번 적지 않으면서, 넘친 자리를 gap 으로 남긴다.</summary>
+        private static void Record(string key, Maker maker)
+        {
+            if (!Makers.TryGetValue(key, out var makers))
+            {
+                makers = new List<Maker>();
+                Makers[key] = makers;
             }
+
+            for (var at = 0; at < makers.Count; at++)
+            {
+                if (makers[at].Field == maker.Field && makers[at].PrefabId == maker.PrefabId)
+                {
+                    return;
+                }
+            }
+
+            if (makers.Count >= MaxMakers)
+            {
+                // 8 이라는 숫자만으로는 잘렸는지 알 수 없다. 실측에서 SpellObj 는 여덟이 적히고
+                // 일곱이 사라졌으며, 사라졌다는 표시가 없었다.
+                WalkGap("makers-truncated:" + key);
+                return;
+            }
+
+            makers.Add(maker);
+        }
+
+        /// <summary>
+        /// 한 프리팹이 나르는 컴포넌트 목록이 한계에 걸렸다.
+        /// </summary>
+        internal static void CarriedTruncated(string prefabName)
+        {
+            if (!string.IsNullOrEmpty(prefabName))
+            {
+                WalkGap("carried-truncated:" + prefabName);
+            }
+        }
+
+        /// <summary>
+        /// <c>createdBy</c> 한 항목. 어느 필드가 어느 프리팹을 쥐고 있는가.
+        /// </summary>
+        /// <remarks>
+        /// 문자열 하나였을 때는 두 항목이 같은 프리팹인지 다른 프리팹인지 리포트만 봐서는 답이
+        /// 없었다 — 실측에서 <c>MagicEnemy.fireShoot</c> 와 <c>BossEnemy.fireShoot</c> 는 서로
+        /// 다른 프리팹(YellowProjectile / LightGreenProjectile)이었다.
+        ///
+        /// <see cref="PrefabId"/> 는 <c>refs[].id</c> 와 같은 값이라 리포트 한 벌 안에서 프리팹
+        /// 단위 조인이 성립한다. 실행 밖에서는 뜻이 없다 — 실행을 넘는 지문은 이름과
+        /// <c>carries</c> 이고, 그 조인은 소비자 몫이다.
+        /// </remarks>
+        internal struct Maker
+        {
+            /// <summary>씬 안에서 이 프리팹을 쥔 필드. 깊이에 막힌 항목은 출발 필드다.</summary>
+            public string Field;
+            public string Prefab;
+            public int PrefabId;
+
+            /// <summary>걷기가 왜 멈췄나. null 이면 끝까지 읽었다는 뜻이다.</summary>
+            public string Cut;
         }
 
         private static readonly List<string> Order = new List<string>();
@@ -253,6 +347,17 @@ namespace Artel.Affordances.Scan
         private static string _persistent = string.Empty;
         private static bool _persistentRead;
         private static readonly List<string> _persistentGaps = new List<string>();
+
+        /// <summary>
+        /// 걷기가 버린 것. 씬이 아니라 프리팹과 타입에 대한 사실이라 화면 하나에 귀속시킬 수 없다.
+        /// </summary>
+        /// <remarks>
+        /// 같은 프리팹이 여러 씬에서 같은 한계에 걸리므로 집합으로 든다 — 같은 말을 씬 수만큼
+        /// 되풀이하면 읽는 쪽이 그 수를 빈도로 오해한다.
+        /// </remarks>
+        private static readonly HashSet<string> _walkGaps = new HashSet<string>();
+
+        private static void WalkGap(string gap) => _walkGaps.Add(gap);
 
         /// <summary>이미 읽은 씬에 대해 할 말을 하나 더한다.</summary>
         internal static void Note(string scene, string gap)
@@ -317,6 +422,7 @@ namespace Artel.Affordances.Scan
             _persistent = string.Empty;
             _persistentRead = false;
             _persistentGaps.Clear();
+            _walkGaps.Clear();
             SerializedReferences.Forget();
         }
 
@@ -376,6 +482,51 @@ namespace Artel.Affordances.Scan
         /// 로드를 건너 아무것도 쥐지 못한 플레이어 스캔도 여전히 <c>persistent-objects-v1</c> 이라고 말한다. 그 주장은 무엇이
         /// 있었다면 그 필드가 무엇을 뜻했을지에 대한 것이기 때문이다.
         /// </remarks>
+        /// <summary>
+        /// <c>createdBy</c> 한 항목을 쓴다.
+        /// </summary>
+        /// <remarks>
+        /// <c>cut</c> 이 붙은 항목은 그 프리팹 뒤를 걷지 않았다는 뜻이다. <c>carries</c> 가 없는
+        /// 것은 결함이 아니라 사실이며, 읽는 쪽이 그것을 "컴포넌트가 없다"로 읽으면 안 된다.
+        /// </remarks>
+        internal static void WriteMaker(StringBuilder text, Maker maker)
+        {
+            text.Append('{');
+
+            var wrote = false;
+
+            if (!string.IsNullOrEmpty(maker.Field))
+            {
+                Json.Property(text, "field", maker.Field);
+                wrote = true;
+            }
+
+            if (!string.IsNullOrEmpty(maker.Prefab))
+            {
+                if (wrote)
+                {
+                    text.Append(',');
+                }
+
+                Json.Property(text, "prefab", maker.Prefab);
+                text.Append(',');
+                Json.Property(text, "prefabId", maker.PrefabId);
+                wrote = true;
+            }
+
+            if (!string.IsNullOrEmpty(maker.Cut))
+            {
+                if (wrote)
+                {
+                    text.Append(',');
+                }
+
+                Json.Property(text, "cut", maker.Cut);
+            }
+
+            text.Append('}');
+        }
+
         private static void Promises(StringBuilder text)
         {
             text.Append("\"capabilities\":[");
@@ -558,7 +709,7 @@ namespace Artel.Affordances.Scan
                             text.Append(',');
                         }
 
-                        Json.String(text, makers[maker]);
+                        WriteMaker(text, makers[maker]);
                     }
                 }
 
@@ -642,6 +793,17 @@ namespace Artel.Affordances.Scan
                 }
 
                 Json.String(text, "dont-destroy-on-load-not-walked");
+                first = false;
+            }
+
+            foreach (var gap in _walkGaps)
+            {
+                if (!first)
+                {
+                    text.Append(',');
+                }
+
+                Json.String(text, gap);
                 first = false;
             }
 

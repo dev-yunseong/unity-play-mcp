@@ -217,9 +217,31 @@ namespace Artel.Affordances.Scan
         private static void Follow(
             UnityEngine.Object value, string ownerType, string field, int depth, HashSet<int> seen)
         {
-            if (value == null || depth > MaxTraceDepth || seen.Count >= MaxTraced ||
-                !seen.Add(value.GetInstanceID()))
+            if (value == null || seen.Count >= MaxTraced || !seen.Add(value.GetInstanceID()))
             {
+                return;
+            }
+
+            if (depth > MaxTraceDepth)
+            {
+                // 반환하는 이 순간에도 프리팹은 손에 있다. 여기서 놓으면 createdBy 가 비고, 소비자는
+                // 그것을 죽은 코드로 읽는다 — 읽을 수 없어서 없는 것이 아니라 이미 본 것을 안 적는
+                // 것이 된다.
+                //
+                // 이 프리팹이 무엇을 나르는지는 읽는다. 한계가 막으려는 것은 **그래프를 더 걷는
+                // 비용**이고 컴포넌트 한 번 읽기는 거기 해당하지 않는다. 읽지 않으면 어느 타입의
+                // createdBy 에 넣을지 알 수 없어, 프리팹 이름만 남기고 정작 살릴 타입을 못 살린다.
+                var unread = value as GameObject ?? (value as Component)?.gameObject;
+
+                if (unread != null && !unread.scene.IsValid())
+                {
+                    foreach (var carried in CarriedBy(unread))
+                    {
+                        AffordanceReport.CreatesCut(
+                            carried, ownerType, field, unread.name, unread.GetInstanceID(), "depth");
+                    }
+                }
+
                 return;
             }
 
@@ -235,7 +257,7 @@ namespace Artel.Affordances.Scan
 
                 foreach (var carried in CarriedBy(subject))
                 {
-                    AffordanceReport.Creates(carried, ownerType, field);
+                    AffordanceReport.Creates(carried, ownerType, field, subject.name, subject.GetInstanceID());
                 }
 
                 // 프리팹 자신의 컴포넌트가 또 다른 프리팹을 쥘 수 있다 — 자기가 만들어낼 것을 쥔 풀.
@@ -385,8 +407,16 @@ namespace Artel.Affordances.Scan
             {
                 foreach (var component in prefab.GetComponentsInChildren<Component>(true))
                 {
-                    if (component == null || carried.Count >= MaxCarriedTypes)
+                    if (component == null)
                     {
+                        continue;
+                    }
+
+                    if (carried.Count >= MaxCarriedTypes)
+                    {
+                        // 목록 길이만으로는 다 실린 것인지 잘린 것인지 알 수 없다. 잘렸다는 사실은
+                        // 여기서만 알 수 있으므로 여기서 적는다.
+                        AffordanceReport.CarriedTruncated(prefab.name);
                         continue;
                     }
 
@@ -405,10 +435,18 @@ namespace Artel.Affordances.Scan
                     {
                         var name = current.FullName;
 
-                        if (name != null && !carried.Contains(name) && carried.Count < MaxCarriedTypes)
+                        if (name == null || carried.Contains(name))
                         {
-                            carried.Add(name);
+                            continue;
                         }
+
+                        if (carried.Count >= MaxCarriedTypes)
+                        {
+                            AffordanceReport.CarriedTruncated(prefab.name);
+                            continue;
+                        }
+
+                        carried.Add(name);
                     }
                 }
             }

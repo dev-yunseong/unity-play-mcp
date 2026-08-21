@@ -4,7 +4,8 @@
   "references": [
     "Artel.Runtime",
     "Artel.Tracking.Fixtures",
-    "Unity.TextMeshPro"
+    "Unity.TextMeshPro",
+    "Artel.Affordances.Scan"
   ],
   "includePlatforms": [
     "Editor"
