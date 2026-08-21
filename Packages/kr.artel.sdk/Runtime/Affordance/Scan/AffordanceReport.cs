@@ -73,7 +73,7 @@ namespace Artel.Affordances.Scan
         private const string TargetMarker = "\"targetId\":\"";
 
         private static readonly Dictionary<string, List<Maker>> Makers =
-            new Dictionary<string, List<string>>(System.StringComparer.Ordinal);
+            new Dictionary<string, List<Maker>>(System.StringComparer.Ordinal);
 
         /// <summary>
         /// 어셈블리가 근거를 나르지만 어느 씬도 쥐고 있는 것으로 발견되지 않은 타입들.
