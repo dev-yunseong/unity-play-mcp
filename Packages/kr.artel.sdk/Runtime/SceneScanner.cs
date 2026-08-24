@@ -12,7 +12,6 @@ namespace Artel
 {
     internal sealed class SceneScanner : ISceneSnapshotScanner
     {
-        private readonly Dictionary<int, ScannedTarget> targetsById = new Dictionary<int, ScannedTarget>();
         private readonly StateReader stateReader = new StateReader();
         private readonly BlockTransformReader transformReader = new BlockTransformReader();
 
@@ -25,7 +24,6 @@ namespace Artel
         {
             using (ArtelProfilerMarkers.SceneScanScan.Auto())
             {
-                targetsById.Clear();
                 transformReader.BeginScan();
 
                 var actionCommits = new List<ActionBatchCommit>();
@@ -62,9 +60,42 @@ namespace Artel
                 children);
         }
 
+        /// <summary>
+        /// id 로 조작 대상을 찾는다. Unity 에 직접 묻는다.
+        /// </summary>
+        /// <remarks>
+        /// 한때 이것은 스캔이 채우고 매 스캔마다 비우는 사전이었다. 그래서 스캔이 멈추면 — <c>GAME_STATE</c> 가 꺼진
+        /// 빌드가 그렇다(ARTEL-513) — 사전이 비고, 판독으로 무엇이 바뀌었는지 아는 독자가 <b>그것을 건드릴 방법을
+        /// 잃었다.</b>
+        ///
+        /// <c>Resources.InstanceIDToObject</c> 가 그 일을 이미 하고 있었다. 사전을 대신할 <c>AimableTargets</c> 를
+        /// 만들었다가 폐기한 것이 그 발견이다(ARTEL-397): 에디터가 아닌 실제 플레이어에서, 네 variation(mono·il2cpp ×
+        /// development·nondevelopment) 전부에 이 메서드가 있고 <c>onClick.Invoke()</c> 까지 실제로 됐다.
+        ///
+        /// 사전이 없어지면서 조준이 스캔에서 풀린다. 무엇을 겨눌 수 있는지는 이제 판독이 말하고, 그것을 실제로 쥐는
+        /// 일은 Unity 가 한다.
+        /// </remarks>
         public bool TryGetTarget(int id, out ScannedTarget target)
         {
-            return targetsById.TryGetValue(id, out target);
+            var found = Resources.InstanceIDToObject(id);
+
+            // 판독은 GameObject 의 id 를 싣지만 이 경로의 유일한 부름은 아니다. 컴포넌트를 받았으면 그것이 매달린
+            // 객체가 답이다 — 둘을 가르는 것은 부르는 쪽의 부담이 아니다.
+            var gameObject = found as GameObject;
+            if (gameObject == null)
+            {
+                var component = found as Component;
+                gameObject = component == null ? null : component.gameObject;
+            }
+
+            if (gameObject == null)
+            {
+                target = null;
+                return false;
+            }
+
+            target = ScannedTarget.FromGameObject(gameObject);
+            return true;
         }
 
         private SceneBlock ScanTransform(
@@ -85,7 +116,6 @@ namespace Artel
 
             var id = transform.gameObject.GetInstanceID();
             var target = ScannedTarget.FromGameObject(transform.gameObject);
-            targetsById[id] = target;
 
             var children = new List<SceneBlock>();
             for (var i = 0; i < transform.childCount; i++)

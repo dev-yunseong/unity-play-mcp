@@ -378,6 +378,52 @@ namespace Artel.Tests
             Assert.That(EditTextOf(scene, "locked tmp field").Interactable, Is.False);
         }
 
+        /// <summary>
+        /// 스캔한 적이 없어도 id 로 조준할 수 있다 (ARTEL-513).
+        ///
+        /// <c>GAME_STATE</c> 가 꺼진 빌드는 스캔이 돌지 않는다. 조준이 스캔에 매달려 있으면 판독으로 무엇이
+        /// 바뀌었는지 아는 독자가 그것을 건드릴 방법을 잃는다 — 이 테스트가 그 매달림이 없다는 것이다.
+        /// </summary>
+        [Test]
+        public void TryGetTarget_ResolvesWithoutAScan()
+        {
+            var target = Spawn("button nobody scanned", typeof(Button));
+            var scanner = new SceneScanner();
+
+            // Scan() 을 부르지 않는다.
+            Assert.That(scanner.TryGetTarget(target.GetInstanceID(), out var scanned), Is.True);
+            Assert.That(scanned.CanClick, Is.True);
+        }
+
+        /// <summary>없는 id 는 여전히 없다고 답한다. 되살림이 조준 실패를 삼키면 안 된다.</summary>
+        [Test]
+        public void TryGetTarget_StillFailsForAnUnknownId()
+        {
+            var scanner = new SceneScanner();
+
+            Assert.That(scanner.TryGetTarget(0, out var missing), Is.False);
+            Assert.That(missing, Is.Null);
+        }
+
+        /// <summary>
+        /// 파괴된 객체는 조준할 수 없다.
+        ///
+        /// 사전이던 시절에는 스캔 사이에 사라진 객체가 사전에 남아 있었다. Unity 에 직접 물으면 그 창이 없다 —
+        /// 없어진 것은 없어진 것으로 답한다.
+        /// </summary>
+        [Test]
+        public void TryGetTarget_FailsForADestroyedObject()
+        {
+            var target = Spawn("button that goes away", typeof(Button));
+            var id = target.GetInstanceID();
+            var scanner = new SceneScanner();
+            Assert.That(scanner.TryGetTarget(id, out _), Is.True);
+
+            Object.DestroyImmediate(target);
+
+            Assert.That(scanner.TryGetTarget(id, out _), Is.False);
+        }
+
         [Test]
         public void Click_RefusesAButtonLockedAfterTheScan()
         {
