@@ -21,6 +21,7 @@ namespace Artel.Auth
         private const string DisplayNamePlayerPrefsKey = "Artel.SdkDisplayName";
         private const string ProjectIdPlayerPrefsKey = "Artel.ProjectId";
         private const string InstanceIdPlayerPrefsKey = "Artel.InstanceId";
+        private const string GameBuildIdPlayerPrefsKey = "Artel.GameBuildId";
 
         /// <summary>로그인한 사람의 표시 이름. 없으면 빈 문자열.</summary>
         public static string DisplayName
@@ -156,6 +157,35 @@ namespace Artel.Auth
             PlayerPrefs.Save();
         }
 
+        public static bool TryLoadGameBuildId(out string gameBuildId)
+        {
+            return TryLoadNonEmpty(GameBuildIdPlayerPrefsKey, out gameBuildId);
+        }
+
+        public static string LoadGameBuildId()
+        {
+            return TryLoadGameBuildId(out var gameBuildId) ? gameBuildId : string.Empty;
+        }
+
+        /// <summary>
+        /// 등록 응답의 gameBuildId. 근거 문서가 어느 빌드에 붙는지를 이 값이 정한다.
+        /// </summary>
+        /// <remarks>
+        /// instanceId 와 짝이지만 축이 다르다. WebSocket 세션은 살아 있는 인스턴스로 묶이고 근거 문서는 빌드로 묶이는데,
+        /// 빌드에서 인스턴스로 가는 길이 서버에 없다. 그래서 등록 응답을 받은 이 자리가 두 축을 함께 쥐고 있는 유일한 순간이고,
+        /// 여기서 붙들지 않으면 SDK 는 제 문서를 어디에 올릴지 영영 모른다.
+        /// </remarks>
+        public static void SaveGameBuildId(string gameBuildId)
+        {
+            if (string.IsNullOrWhiteSpace(gameBuildId))
+            {
+                throw new ArgumentException("Game build id is required.", nameof(gameBuildId));
+            }
+
+            PlayerPrefs.SetString(GameBuildIdPlayerPrefsKey, gameBuildId.Trim());
+            PlayerPrefs.Save();
+        }
+
         /// <summary>
         /// 로그아웃. 프로젝트와 인스턴스도 함께 지운다 — 토큰이 바뀌면 다른 사용자일 수 있고,
         /// 그 사람이 접근할 수 없는 프로젝트를 그대로 들고 있으면 404만 반복한다.
@@ -169,6 +199,7 @@ namespace Artel.Auth
             PlayerPrefs.DeleteKey(DisplayNamePlayerPrefsKey);
             PlayerPrefs.DeleteKey(ProjectIdPlayerPrefsKey);
             PlayerPrefs.DeleteKey(InstanceIdPlayerPrefsKey);
+            PlayerPrefs.DeleteKey(GameBuildIdPlayerPrefsKey);
             PlayerPrefs.Save();
         }
 

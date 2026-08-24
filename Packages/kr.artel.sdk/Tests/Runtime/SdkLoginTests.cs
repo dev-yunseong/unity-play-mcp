@@ -15,7 +15,8 @@ namespace Artel.Tests.Auth
             "Artel.SdkRefreshTokenExpiresAt",
             "Artel.SdkDisplayName",
             "Artel.ProjectId",
-            "Artel.InstanceId"
+            "Artel.InstanceId",
+            "Artel.GameBuildId"
         };
 
         [SetUp]
@@ -142,6 +143,7 @@ namespace Artel.Tests.Auth
             Assert.That(token, Is.Empty);
             Assert.That(ArtelSdkSession.TryLoadProjectId(out _), Is.False);
             Assert.That(ArtelSdkSession.TryLoadInstanceId(out _), Is.False);
+            Assert.That(ArtelSdkSession.TryLoadGameBuildId(out _), Is.False);
         }
 
         [Test]
@@ -150,6 +152,7 @@ namespace Artel.Tests.Auth
             ArtelSdkSession.SaveToken("  jwt-token  ", "2999-01-01T00:00:00Z", "octocat");
             ArtelSdkSession.SaveProjectId("1");
             ArtelSdkSession.SaveInstanceId("7");
+            ArtelSdkSession.SaveGameBuildId(" 5 ");
 
             Assert.That(ArtelSdkSession.TryLoadToken(out var token), Is.True);
             Assert.That(token, Is.EqualTo("jwt-token"));
@@ -158,11 +161,15 @@ namespace Artel.Tests.Auth
             Assert.That(projectId, Is.EqualTo("1"));
             Assert.That(ArtelSdkSession.LoadInstanceId(), Is.EqualTo("7"));
 
+            // 근거 문서가 어느 빌드에 붙는지를 정하는 값. 없으면 scan_evidence 는 올릴 곳을 모른다.
+            Assert.That(ArtelSdkSession.LoadGameBuildId(), Is.EqualTo("5"));
+
             ArtelSdkSession.Clear();
 
             Assert.That(ArtelSdkSession.TryLoadToken(out _), Is.False);
             Assert.That(ArtelSdkSession.TryLoadProjectId(out _), Is.False);
             Assert.That(ArtelSdkSession.TryLoadInstanceId(out _), Is.False);
+            Assert.That(ArtelSdkSession.TryLoadGameBuildId(out _), Is.False);
         }
 
         [Test]

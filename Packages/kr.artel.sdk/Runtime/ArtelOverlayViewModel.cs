@@ -476,6 +476,14 @@ namespace Artel
             }
 
             ArtelSdkSession.SaveInstanceId(registration.InstanceId);
+
+            // gameBuildId 는 없어도 등록을 실패시키지 않는다. 없어서 막히는 것은 근거 문서 업로드 하나뿐이고 그 사유는
+            // scan_evidence 의 결과에 실린다 — instanceId 처럼 연결과 캡처가 통째로 붙을 곳을 잃는 값이 아니다.
+            if (!string.IsNullOrWhiteSpace(registration.GameBuildId))
+            {
+                ArtelSdkSession.SaveGameBuildId(registration.GameBuildId);
+            }
+
             HasError = false;
             State = ArtelConnectionState.Connecting;
             SetStatus("등록에 성공했습니다. 실시간 서버에 연결하는 중...");
