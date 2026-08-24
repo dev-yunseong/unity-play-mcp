@@ -374,7 +374,14 @@ namespace Artel
                 return true;
             }
 
-            return Affordances.Scan.AffordanceBootstrap.WatchLiveState();
+            // 연결이 있으면 판독은 그 소켓으로 나간다. 없으면 sink 를 건네지 않아 예전대로
+            // 파일로 떨어진다 — 아무도 듣고 있지 않을 때에도 채널을 지켜볼 수 있어야 한다는
+            // 것이 이 채널을 만들 때의 규율이고, 연결이 없다는 것이 그것을 거둘 이유는 아니다.
+            var sink = webSocketTransport == null
+                ? null
+                : new WebSocketPulseSink(() => webSocketTransport, () => nextMessageId++);
+
+            return Affordances.Scan.AffordanceBootstrap.WatchLiveState(sink);
         }
 
         /// <summary>라이브 판독을 끝낸다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
