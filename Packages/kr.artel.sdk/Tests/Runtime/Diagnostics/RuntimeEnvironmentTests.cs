@@ -86,6 +86,18 @@ namespace Artel.Tests.Diagnostics
         }
 
         [Test]
+        public void ReadDeviceContext_DeclaresTheCollectedMetricGroups()
+        {
+            // 이 목록이 비면 서버는 값이 없는 군을 전부 "이 SDK가 모르는 군"으로 읽는다.
+            // 못 쟀다는 것과 아예 모른다는 것이 한 덩어리가 되어 회귀 판단이 성립하지 않는다.
+            // 목록과 실제 보고 필드의 대응은 MetricGroupContractTests가 지킨다.
+            var context = RuntimeEnvironment.ReadDeviceContext();
+
+            CollectionAssert.IsNotEmpty(context.CollectedGroups);
+            CollectionAssert.AllItemsAreNotNull(context.CollectedGroups);
+        }
+
+        [Test]
         public void ReadStatus_ReportsAKnownBatteryStatus()
         {
             var status = RuntimeEnvironment.ReadStatus();

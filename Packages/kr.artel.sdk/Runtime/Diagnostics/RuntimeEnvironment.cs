@@ -1,3 +1,4 @@
+using Artel.Protocol;
 using Artel.Protocol.Dto;
 using UnityEngine;
 
@@ -67,7 +68,8 @@ namespace Artel.Diagnostics
                 IsEditor = Application.isEditor,
                 IsDebugBuild = Debug.isDebugBuild,
                 ScriptingBackend = ScriptingBackend,
-                SdkVersion = SdkVersion
+                SdkVersion = SdkVersion,
+                CollectedGroups = MetricGroupNames.Collected()
             };
         }
 

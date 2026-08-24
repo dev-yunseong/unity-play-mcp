@@ -127,5 +127,18 @@ namespace Artel.Protocol.Dto
         /// </summary>
         [JsonProperty("sdkVersion")]
         public string SdkVersion { get; set; }
+
+        /// <summary>
+        /// 이 SDK 빌드가 수집을 시도하는 지표군 이름.
+        ///
+        /// 값이 없는 군을 두 가지로 갈라 읽게 하는 유일한 근거다. 목록에 있는데 값이 안 왔으면
+        /// 재려 했으나 이 플랫폼·빌드에 카운터가 없었던 것이고, 목록에 아예 없으면 이 SDK 버전이
+        /// 그 군을 모르는 것이다. 이 필드가 없으면 둘이 한 덩어리가 되어, 어제 있던 값이 오늘
+        /// 없을 때 SDK를 올려서인지 게임이 그 경로를 안 타서인지 답할 수 없다.
+        ///
+        /// 플랫폼에 따라 달라지지 않는다. 자세한 것은 <see cref="MetricGroupNames.Collected"/>.
+        /// </summary>
+        [JsonProperty("collectedGroups")]
+        public string[] CollectedGroups { get; set; }
     }
 }

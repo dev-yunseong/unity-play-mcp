@@ -27,7 +27,7 @@ namespace Artel.Protocol.Dto
         /// <c>frameTimes</c>를 쪼갠 값이 아니다. 창이 서로 달라서(자세한 이유는
         /// <see cref="FrameTimingDto"/>) 두 그룹을 하나의 분포처럼 합치면 안 된다.
         /// </summary>
-        [JsonProperty("frameTiming", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonProperty(MetricGroupNames.FrameTiming, NullValueHandling = NullValueHandling.Ignore)]
         public FrameTimingDto FrameTiming { get; set; }
 
         /// <summary>
@@ -45,7 +45,7 @@ namespace Artel.Protocol.Dto
         /// 다른 지표군과 달리 이 창의 집계가 아닌 순간값이고, Scene view 렌더가 섞여 있어
         /// Standalone 수치와 나란히 놓을 수 없다. <see cref="EditorRenderStatsDto"/> 참고.
         /// </summary>
-        [JsonProperty("editorRender", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonProperty(MetricGroupNames.EditorRender, NullValueHandling = NullValueHandling.Ignore)]
         public EditorRenderStatsDto EditorRender { get; set; }
 
         /// <summary>
