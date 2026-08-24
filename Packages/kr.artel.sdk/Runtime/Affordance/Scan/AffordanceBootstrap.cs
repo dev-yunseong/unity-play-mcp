@@ -135,6 +135,14 @@ namespace Artel.Affordances.Scan
             return SceneWalk.Begin();
         }
 
+        /// <summary>순회가 지금 돌고 있는지.</summary>
+        /// <remarks>
+        /// <see cref="Watching"/> 와 같은 이유로 여기에 있다. <c>SceneWalk</c> 는 이 어셈블리 안에서만 뜻이 있어 internal 이고,
+        /// 순회를 청한 바깥쪽 — 원격 스캔 명령을 받는 자리 — 은 그것이 끝났는지 물어볼 다른 방법이 없다. 물어볼 수 없는 쪽은
+        /// 제 답을 따로 쥐고 있어야 하는데, 그것이 어긋나는 짝이다.
+        /// </remarks>
+        public static bool Walking => SceneWalk.InProgress;
+
         /// <summary>
         /// 근거가 이름 댄 모든 것의 살아 있는 값을 보내기 시작한다.
         /// </summary>

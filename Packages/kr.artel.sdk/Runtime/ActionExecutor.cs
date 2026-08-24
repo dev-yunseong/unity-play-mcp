@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using Artel.Capture;
+using Artel.Evidence;
 using Artel.Protocol.Dto;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -25,8 +26,16 @@ namespace Artel
         /// </remarks>
         private readonly IReadingChannel readings;
         private readonly ICaptureUploader uploader;
+
+        /// <summary>원격 스캔 명령이 부르는 두 이음매. 이것들 없이 만들어진 실행기에서는 null 이고, 그러면 그 액션은 거절된다.</summary>
+        private readonly IEvidenceScan evidenceScan;
+        private readonly IEvidenceUploader evidenceUploader;
+
         private readonly Action<Vector2> cursorMoved;
         private readonly Action<Vector2> pointerMoved;
+
+        /// <summary>서버와 맞춘 액션 이름. 결과에도 이 이름을 그대로 실어 서버가 짝을 맞춘다.</summary>
+        private const string ScanEvidence = "scan_evidence";
 
         // The time scale as it was when pause_time froze the game, so resume_time gives back the
         // speed the game was actually running at rather than assuming 1. Null means not paused.
@@ -43,7 +52,9 @@ namespace Artel
             PointerEventDispatcher pointerEvents,
             IScreenCapturer capturer = null,
             ICaptureUploader uploader = null,
-            IReadingChannel readings = null)
+            IReadingChannel readings = null,
+            IEvidenceScan evidenceScan = null,
+            IEvidenceUploader evidenceUploader = null)
         {
             this.readings = readings;
             this.scanner = scanner;
@@ -51,6 +62,8 @@ namespace Artel
             this.pointerEvents = pointerEvents;
             this.capturer = capturer;
             this.uploader = uploader;
+            this.evidenceScan = evidenceScan;
+            this.evidenceUploader = evidenceUploader;
 
             var startupScene = SceneManager.GetActiveScene();
             startupSceneBuildIndex = startupScene.buildIndex;
@@ -137,6 +150,10 @@ namespace Artel
 
                 case "capture_screen":
                     yield return ExecuteCaptureScreen(actionId, parameters, completed);
+                    yield break;
+
+                case "scan_evidence":
+                    yield return ExecuteScanEvidence(actionId, completed);
                     yield break;
             }
 
@@ -525,6 +542,63 @@ namespace Artel
                 TargetId = request.TargetId,
                 Clipped = clipped
             }));
+        }
+
+        /// <summary>
+        /// 서버가 보낸 원격 스캔 명령. 근거를 스캔하고, 그 문서를 올리고, 무엇이 되었는지 답한다.
+        /// </summary>
+        /// <remarks>
+        /// 파라미터가 없다. 어느 빌드에 올릴지는 SDK 가 등록 응답에서 받아 쥐고 있는 gameBuildId 가 정하고, 서버는 그것을
+        /// 다시 말해 줄 필요가 없다 — 말해 준다면 그것이 어긋날 수 있는 두 번째 사실이 된다.
+        ///
+        /// 받았다와 끝났다를 나누지 않는다. 이 실행기가 돌려주는 결과는 액션 큐가 다 비었을 때 ACTION_RESULT 한 프레임으로
+        /// 나가고, 서버는 그것을 붙잡고 기다리지 않는다 — 화면은 ingested_at 이 바뀌는 것으로 완료를 안다. 이 답은 무엇이
+        /// 잘못됐는지를 사람이 볼 수 있게 하는 쪽이다.
+        ///
+        /// 실패는 어느 걸음의 것이든 결과에 실린다. 조용히 삼키면 서버는 "보냈다"까지만 알고 화면은 영원히 기다린다.
+        /// </remarks>
+        private IEnumerator ExecuteScanEvidence(int actionId, Action<ActionResultDto> completed)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (evidenceScan == null || evidenceUploader == null)
+            {
+                completed(ActionResultDto.Failure(
+                    actionId, ScanEvidence, "This build cannot scan and upload evidence."));
+                yield break;
+            }
+
+            var scanned = default(ScannedEvidence);
+            yield return evidenceScan.Run(result => scanned = result);
+            if (!scanned.IsSuccess)
+            {
+                completed(ActionResultDto.Failure(actionId, ScanEvidence, scanned.Error));
+                yield break;
+            }
+
+            var upload = default(EvidenceUpload);
+            yield return evidenceUploader.Upload(scanned.Document, uploaded => upload = uploaded);
+            if (!upload.IsSuccess)
+            {
+                completed(ActionResultDto.Failure(actionId, ScanEvidence, upload.Error));
+                yield break;
+            }
+
+            completed(ActionResultDto.Success(actionId, ScanEvidence, new EvidenceScanResultDto
+            {
+                ObjectKey = upload.ObjectKey,
+                EvidenceDigest = upload.EvidenceDigest,
+                ByteSize = upload.ByteSize,
+                SchemaVersion = upload.SchemaVersion,
+                SceneCount = scanned.SceneCount,
+                AlreadyRegistered = upload.AlreadyRegistered
+            }));
+#else
+            // 출시된 빌드에는 읽을 근거가 애초에 구워지지 않는다. 빈 문서를 올려 서버의 표를 지우는 것보다 거절이 정직하다.
+            // 같은 심볼 쌍을 AffordanceBootstrap.Follow 가 읽고, 그쪽이 씬 로드를 따라갈지를 정한다.
+            completed(ActionResultDto.Failure(
+                actionId, ScanEvidence, "Evidence is not baked into a release build, so there is nothing to scan."));
+            yield break;
+#endif
         }
 
         private static string NotInteractable(int targetId)

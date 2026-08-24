@@ -5,6 +5,7 @@ using Artel.Auth;
 using Artel.Capture;
 using Artel.Diagnostics;
 using Artel.Domain;
+using Artel.Evidence;
 using Artel.Protocol.Dto;
 using Artel.Protocol.Mapping;
 using Artel.Serialization;
@@ -158,7 +159,14 @@ namespace Artel
                     () => server,
                     ArtelSdkSession.LoadToken,
                     ArtelSdkSession.LoadInstanceId),
-                this);
+                this,
+                new WalkedEvidenceScan(),
+                // 캡처와 축이 다르다. 근거 문서는 살아 있는 인스턴스가 아니라 빌드에 붙으므로 gameBuildId 를 읽는다.
+                new EvidenceUploader(
+                    jsonCodec,
+                    () => server,
+                    ArtelSdkSession.LoadToken,
+                    ArtelSdkSession.LoadGameBuildId));
             sceneStatePoller = new SceneStatePoller(
                 scanner,
                 new SceneStateHashTracker(jsonCodec),
