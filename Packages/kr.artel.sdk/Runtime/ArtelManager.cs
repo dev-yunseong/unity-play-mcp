@@ -29,22 +29,23 @@ namespace Artel
         private static ArtelManager instance;
 
         /// <summary>
-        /// <c>GAME_STATE</c> 채널을 보내는가 (ARTEL-513).
+        /// <c>GAME_STATE</c> 채널을 보내는가 (ARTEL-513). <b>기본은 끔이다.</b>
         /// </summary>
         /// <remarks>
-        /// <b>임시 스위치다.</b> 지우는 것은 ARTEL-400 이고, 그때 이것도 함께 사라진다.
+        /// <b>임시 스위치다.</b> 실제로 지우는 것은 ARTEL-400 이고, 그때 이 속성도 함께 사라진다.
         ///
-        /// 판독이 <c>GAME_STATE</c> 를 대신할 수 있는지는 지금까지 잰 적이 없다 — 둘이 늘 함께 오므로 어느 쪽이 무엇을
-        /// 하고 있는지 가릴 방법이 없었다. 폐기는 되돌리기 어렵고, 판독만으로 돌려 본 적 없이 생산자를 걷어내면 부족한
-        /// 것이 배포된 뒤에 드러난다. 이 스위치가 그 확인을 되돌릴 수 있게 만든다.
+        /// 목적은 채널을 덜어내는 것이지 선택지를 만드는 것이 아니다. 그래서 기본이 끔이다 — 켜 두고 누군가 끄기를
+        /// 기다리면 아무도 끄지 않고, 판독이 <c>GAME_STATE</c> 를 대신할 수 있는지는 영영 재지지 않는다. 둘이 함께
+        /// 오는 동안에는 어느 쪽이 무엇을 하고 있는지 가릴 방법이 없다.
+        ///
+        /// 그럼에도 지우지 않고 스위치로 둔 것은 <b>되돌릴 수 있어야 하기 때문</b>이다. 판독이 못 덮는 것이 실제
+        /// 게임에서 드러나면 코드를 되살리는 대신 이 값을 <c>true</c> 로 돌려 그 자리에서 복구한다.
         ///
         /// 프레임만 막지 않고 <see cref="sceneStatePoller"/> 앞에서 막는 것이 요점이다. ARTEL-400 이 지우려는 것은
         /// 전송이 아니라 <b>씬 순회</b>(<c>SceneScanner</c>·<c>SceneStatePoller</c>)이므로, 그것이 돌지 않는 상태를
         /// 재야 폐기 뒤를 예측할 수 있다.
-        ///
-        /// 기본이 켜짐인 이유: 이 스위치가 배포의 부수 효과로 QA 를 바꾸면 안 된다. 끄는 것은 재려는 사람의 선택이다.
         /// </remarks>
-        public static bool SendsGameState { get; set; } = true;
+        public static bool SendsGameState { get; set; } = false;
 
         [SerializeField] private bool connectOnEnable;
         [SerializeField] private Server server = new Server();
@@ -333,8 +334,8 @@ namespace Artel
             webSocketTransport.Start();
             sceneStatePoller.Reset(Time.unscaledTime);
             BeginDiscovery();
-            Debug.Log("[Artel] WebSocket transport started."
-                      + (SendsGameState ? string.Empty : " GAME_STATE is switched off (ARTEL-513)."));
+            Debug.Log("[Artel] WebSocket transport started. GAME_STATE is "
+                      + (SendsGameState ? "on (restored, ARTEL-513)." : "off; read the pulse channel."));
         }
 
         /// <summary>

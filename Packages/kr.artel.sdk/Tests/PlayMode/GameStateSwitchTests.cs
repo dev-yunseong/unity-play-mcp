@@ -8,11 +8,11 @@ using UnityEngine;
 namespace Artel.Tests
 {
     /// <summary>
-    /// <c>GAME_STATE</c> 채널을 끌 수 있다 (ARTEL-513).
+    /// <c>GAME_STATE</c> 채널이 꺼져 있고, 되돌릴 수 있다 (ARTEL-513).
     ///
     /// <b>임시 스위치의 테스트다.</b> 폐기는 ARTEL-400 이고 그때 이 파일도 함께 사라진다. 그때까지 지키는 것은
-    /// "끄면 정말 안 나가고, 켜져 있으면 아무것도 달라지지 않는다" 둘이다 — 기본값이 무엇을 바꾸면 이 스위치가
-    /// 재려던 것 대신 배포 사고를 만든다.
+    /// 둘이다 — 기본이 정말 꺼져 있는가, 그리고 되돌리면 종전대로 돌아오는가. 앞의 것이 이 스택의 목적이고
+    /// 뒤의 것이 그것을 되돌릴 수 있게 만드는 장치다.
     ///
     /// 살아 있는 매니저가 필요해 플레이 모드에서만 돈다. <c>Awake</c> 가 <c>DontDestroyOnLoad</c> 를 부르는데
     /// 그것은 에디터 스크립트에서 부를 수 없다.
@@ -40,12 +40,15 @@ namespace Artel.Tests
         }
 
         /// <summary>
-        /// 기본은 켜짐이다. 이 스위치가 배포의 부수 효과로 QA 를 바꾸면 안 된다 — 끄는 것은 재려는 사람의 선택이다.
+        /// 기본은 꺼짐이다.
+        ///
+        /// 목적이 채널을 덜어내는 것이지 선택지를 만드는 것이 아니다. 켜 두고 누군가 끄기를 기다리면 아무도 끄지
+        /// 않고, 판독이 <c>GAME_STATE</c> 를 대신할 수 있는지는 영영 재지지 않는다.
         /// </summary>
         [Test]
-        public void SendsGameState_DefaultsToOn()
+        public void SendsGameState_DefaultsToOff()
         {
-            Assert.That(wasSending, Is.True);
+            Assert.That(wasSending, Is.False);
         }
 
         /// <summary>배치 안의 <c>scan_scene</c> 은 배치가 자기 몫으로 끼운 것이라 답을 기다리는 쪽이 없다. 조용히 건너뛴다.</summary>
@@ -68,9 +71,14 @@ namespace Artel.Tests
             Assert.That(FramesOfType(transport, "GAME_STATE"), Is.Empty);
         }
 
-        /// <summary>같은 배치가 켜져 있을 때는 종전대로 화면을 낸다. 끄는 것이 무엇을 막는지 이 대조가 정한다.</summary>
+        /// <summary>
+        /// 되돌리면 종전대로 화면을 낸다.
+        ///
+        /// 이것이 이 스위치를 지우는 대신 남겨 둔 이유다 — 판독이 못 덮는 것이 실제 게임에서 드러났을 때, 코드를
+        /// 되살리는 대신 이 값 하나로 그 자리에서 복구할 수 있어야 한다.
+        /// </summary>
         [Test]
-        public void BatchScan_StillSends_WhenSwitchedOn()
+        public void BatchScan_SendsAgain_WhenRestored()
         {
             var transport = new RecordingTransport();
             var manager = CreateManager(transport);

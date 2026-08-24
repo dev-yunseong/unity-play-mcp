@@ -20,16 +20,24 @@ namespace Artel.Tests
         private GameObject buttonObject;
         private GameObject labelObject;
         private ArtelManager displacedInstance;
+        private bool wasSendingGameState;
 
         [SetUp]
         public void SetUp()
         {
             displacedInstance = ArtelManagerSlot.Clear();
+
+            // 이 픽스처가 보는 것은 배치가 액션 사이사이의 스캔을 어떻게 끼워 넣는가이고, 그
+            // 스캔의 결과가 GAME_STATE 다. 그 채널은 기본이 꺼짐이므로(ARTEL-513) 여기서
+            // 명시적으로 켠다 — 끄는 것이 무엇을 막는지는 GameStateSwitchTests 가 따로 본다.
+            wasSendingGameState = ArtelManager.SendsGameState;
+            ArtelManager.SendsGameState = true;
         }
 
         [TearDown]
         public void TearDown()
         {
+            ArtelManager.SendsGameState = wasSendingGameState;
             Object.DestroyImmediate(buttonObject);
             Object.DestroyImmediate(labelObject);
             Object.DestroyImmediate(host);
