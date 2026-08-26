@@ -19,9 +19,12 @@ namespace Artel.Tests
     /// 쓰는 실제 워크를 돈다 — 실제 게임에서 persistent 오브젝트가 살아남은 경로다.
     /// </summary>
     /// <remarks>
-    /// 워크는 Build Settings를 읽으므로 테스트가 씬 두 개를 만들어 등록한다. 그 작업은 플레이
-    /// 모드에 들어가기 전에 끝나야 해서 <see cref="IPrebuildSetup"/>에 둔다. 원래 목록은
-    /// <see cref="IPostBuildCleanup"/>에서 되돌린다.
+    /// 워크는 Build Settings를 읽으므로 테스트가 씬 두 개를 만들어 등록한다. 씬 파일을 만드는
+    /// 일은 플레이 모드에 들어가기 전에 끝나야 해서 <see cref="IPrebuildSetup"/>에 둔다. 원래
+    /// 목록은 <see cref="IPostBuildCleanup"/>에서 되돌린다.
+    ///
+    /// 목록은 테스트 안에서 한 번 더 좁힌다. Test Framework가 플레이 모드에 들어가면서 제 임시
+    /// 실행 씬을 목록에 끼워 넣는데, 워크가 그 씬까지 방문하면 실행 전체가 다시 돈다.
     /// </remarks>
     public sealed class SceneWalkTests : IPrebuildSetup, IPostBuildCleanup
     {
@@ -51,8 +54,8 @@ namespace Artel.Tests
 
             EditorBuildSettings.scenes = new[]
             {
-                new EditorBuildSettingsScene(EmptyScenePath, true),
-                new EditorBuildSettingsScene(PersistentScenePath, true)
+                new EditorBuildSettingsScene(PersistentScenePath, true),
+                new EditorBuildSettingsScene(EmptyScenePath, true)
             };
 #endif
         }
@@ -102,19 +105,33 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator WalkAllScenes_DoomsPersistentRootLeftByAVisitedScene()
         {
-            // Test Framework가 플레이 모드 실행용 임시 씬을 Build Settings에 끼워 넣으므로
-            // 개수로 단언하지 않는다. 우리 씬 둘이 들어 있는지만 본다.
+#if UNITY_EDITOR
+            // Test Framework는 플레이 모드로 들어가면서 제 임시 실행 씬을 Build Settings 끝에
+            // 끼워 넣는다. 워크는 그 목록을 그대로 도므로 그 씬까지 Single로 다시 로드하고,
+            // 그러면 러너가 하나 더 살아나 실행 전체가 처음부터 다시 돈다 — 뒤에 오는 픽스처가
+            // 두 번째 판의 더럽혀진 상태에서 돌아 깨진다. 워크가 볼 목록을 여기서 우리 씬 둘로
+            // 좁혀 그 임시 씬을 방문 대상에서 뺀다. IPrebuildSetup이 저장해 둔 원래 목록은
+            // 그대로이므로 Cleanup이 되돌린다.
+            //
+            // persistent 씬을 먼저 둔다. 방문 씬이 남긴 root는 다음 Single 로드가 데려가는데,
+            // 임시 씬을 뺀 뒤에는 워크가 돌아갈 origin이 없어 마지막 로드가 한 번 더 오지 않는다.
+            // 그 자리에 놓인 씬의 잔여물은 죽을 기회를 못 얻는다.
+            EditorBuildSettings.scenes = new[]
+            {
+                new EditorBuildSettingsScene(PersistentScenePath, true),
+                new EditorBuildSettingsScene(EmptyScenePath, true)
+            };
+#endif
+
             var buildScenes = Enumerable
                 .Range(0, SceneManager.sceneCountInBuildSettings)
                 .Select(SceneUtility.GetScenePathByBuildIndex)
                 .ToList();
-            CollectionAssert.Contains(buildScenes, PersistentScenePath, "IPrebuildSetup이 돌지 않았다.");
-            CollectionAssert.Contains(buildScenes, EmptyScenePath, "IPrebuildSetup이 돌지 않았다.");
+            CollectionAssert.AreEqual(
+                new[] { PersistentScenePath, EmptyScenePath },
+                buildScenes,
+                "워크가 볼 씬 목록이 이 테스트의 씬 둘로 좁혀지지 않았다.");
             Assert.IsNull(FindPersistentRoot(), "워크 전에 이미 픽스처가 살아 있다.");
-
-            var originalScene = SceneManager.GetActiveScene();
-            var originalBuildIndex = originalScene.buildIndex;
-            var sceneCountBefore = SceneManager.sceneCount;
 
             // 무엇을 걷어냈는지와 워크가 끝났다는 사실 자체가 로그로 남아야 한다. 이게 없으면
             // "0개 걷어냈다"와 "정리가 아예 안 돌았다"를 사후에 구분할 방법이 없다.
@@ -139,12 +156,12 @@ namespace Artel.Tests
                 "방문 씬이 남긴 persistent root가 워크 뒤에도 살아 있다: " +
                 (leftover == null ? string.Empty : leftover.scene.name));
 
-            if (originalBuildIndex >= 0)
-            {
-                Assert.AreEqual(sceneCountBefore, SceneManager.sceneCount, "방문 씬이 언로드되지 않았다.");
-                Assert.AreEqual(originalBuildIndex, SceneManager.GetActiveScene().buildIndex,
-                    "활성 씬이 복구되지 않았다.");
-            }
+            // 워크가 돌아갈 origin을 일부러 없앴으므로 활성 씬은 마지막 방문 씬 그대로다.
+            // 원래 씬으로의 복귀는 이 테스트가 재는 것이 아니다.
+            Assert.AreEqual(
+                EmptyScenePath,
+                SceneManager.GetActiveScene().path,
+                "워크가 마지막 방문 씬에 서 있지 않다.");
         }
 
         private static GameObject FindPersistentRoot()
