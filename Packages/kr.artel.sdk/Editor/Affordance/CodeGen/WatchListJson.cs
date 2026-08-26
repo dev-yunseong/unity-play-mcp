@@ -186,7 +186,17 @@ namespace Artel.Affordances.CodeGen
         /// </remarks>
         private sealed class Offer
         {
-            internal readonly List<string> Keys = new List<string>();
+            /// <summary>키 이름 → 그 키가 하는 일. 값이 비면 무엇을 하는지 모른다는 뜻이다.</summary>
+            /// <remarks>
+            /// 이름만 담던 자리다. 그때는 테스터가 다섯 키를 받아도 어느 것이 무엇을 하는지 알 길이 없었고,
+            /// 실제로 Map 씬의 QA 가 그래서 전투에 진입하지 못했다 — 화살표를 눌러 보고 화면이 안 바뀌자
+            /// 진입할 수 없다고 판단했다. 근거는 `Return` 이 씬을 바꾼다는 것을 알고 있었다.
+            ///
+            /// 정렬된 사전인 이유: 키 순서가 판독마다 흔들리면 그 자체가 차이로 보고된다.
+            /// </remarks>
+            internal readonly SortedDictionary<string, SortedSet<string>> Keys =
+                new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+
             internal readonly List<string> Pointers = new List<string>();
         }
 
@@ -226,13 +236,23 @@ namespace Artel.Affordances.CodeGen
             var gestures = new List<InputRead>();
             variant.When.CollectGestures(gestures, new HashSet<Condition>());
 
+            // 이 갈래가 무엇을 하는지. 같은 키가 여러 갈래에서 읽히면 그 전부가 모인다 —
+            // 어느 갈래를 타는지는 런타임 조건이 정하고 분석은 그것을 모른다.
+            var does = Does(variant);
+
             foreach (var gesture in gestures)
             {
                 var said = gesture.ToString();
 
-                if (!offer.Keys.Contains(said))
+                if (!offer.Keys.TryGetValue(said, out var effects))
                 {
-                    offer.Keys.Add(said);
+                    effects = new SortedSet<string>(StringComparer.Ordinal);
+                    offer.Keys[said] = effects;
+                }
+
+                foreach (var effect in does)
+                {
+                    effects.Add(effect);
                 }
             }
 
@@ -243,6 +263,55 @@ namespace Artel.Affordances.CodeGen
                 offer.Pointers.Add(entry);
             }
         }
+
+        /// <summary>
+        /// 이 갈래를 타면 무엇이 일어나는가. 읽는 사람이 고를 수 있을 만큼만 짧게.
+        /// </summary>
+        /// <remarks>
+        /// 효과 전부를 옮기지 않는다. 판독은 초당 열 번 나가고 이 목록은 객체마다 붙으므로, 근거 문서를
+        /// 그대로 실으면 크기가 그쪽에 매인다. 여기서 고르는 것은 <b>테스터가 화면에서 확인할 수 있는
+        /// 것</b>이다 — 씬이 바뀐다, 어떤 상태가 쓰인다. 나머지는 <c>inspect</c> 로 물을 수 있고,
+        /// 물어야 알 만한 것이기도 하다.
+        /// </remarks>
+        private static List<string> Does(Variant variant)
+        {
+            var said = new List<string>();
+
+            foreach (var outcome in variant.Outcomes)
+            {
+                if (outcome == null || outcome.Kind == null)
+                {
+                    continue;
+                }
+
+                // 씬 이동이 가장 크게 읽히는 결과다. 그것 하나로 "이 키가 나를 어디로 데려가는가" 에
+                // 답할 수 있고, QA 시나리오가 대개 그것을 묻는다.
+                if (outcome.Kind == "scene" && outcome.Target != null)
+                {
+                    Remember(said, "→ " + outcome.Target);
+                    continue;
+                }
+
+                if (outcome.Kind == "write" && outcome.Target != null)
+                {
+                    Remember(said, "sets " + outcome.Target);
+                }
+            }
+
+            return said;
+        }
+
+        private static void Remember(List<string> said, string what)
+        {
+            // 같은 갈래가 같은 말을 두 번 하는 일이 흔하다. 호출 경로가 갈렸다가 다시 만나면 그렇다.
+            if (said.Count < MaxEffectsPerKey && !said.Contains(what))
+            {
+                said.Add(what);
+            }
+        }
+
+        /// <summary>키 하나에 적어 두는 효과의 수. 넘는 것은 적지 않는다 — 고르는 데 필요한 만큼이다.</summary>
+        private const int MaxEffectsPerKey = 3;
 
         /// <summary>writer 가 assembly|type|name|signature 로 만든 id 에서 꺼낸 메서드 자신의 이름.</summary>
         private static string Method(string entryId)
@@ -275,6 +344,7 @@ namespace Artel.Affordances.CodeGen
                     continue;
                 }
 
+
                 if (written > 0)
                 {
                     text.Append(',');
@@ -283,7 +353,7 @@ namespace Artel.Affordances.CodeGen
                 text.Append('{');
                 Property(text, "declaring", owner);
                 text.Append(",\"keys\":[");
-                Flat(text, offer.Keys);
+                Keyed(text, offer.Keys);
                 text.Append("],\"pointers\":[");
                 Flat(text, offer.Pointers);
                 text.Append("]}");
@@ -291,6 +361,42 @@ namespace Artel.Affordances.CodeGen
             }
 
             text.Append(']');
+        }
+
+        /// <summary>
+        /// 키마다 무엇을 하는지 함께 쓴다. 배열은 평평하게 두고 효과를 문자열 안에 싣는다.
+        /// </summary>
+        /// <remarks>
+        /// 객체 배열로 쓰고 싶은 모양이지만 못 쓴다. 이 문서를 읽는 <c>WatchList.Entries</c> 는 항목의 끝을
+        /// 첫 <c>}</c> 로 찾는데 — 필드가 제 대괄호를 나르는 제네릭 타입 이름을 쥐어서 괄호를 셀 수 없기
+        /// 때문이다 — 키를 객체로 만들면 항목이 첫 키에서 잘린다. 실제로 그렇게 만들었다가 키가 통째로
+        /// 사라졌다.
+        ///
+        /// 그래서 구분자를 쓴다. <c>\u0001</c> 은 식별자에도 씬 이름에도 나타날 수 없고 JSON 에서
+        /// 이스케이프된다. 판독으로 나갈 때 <see cref="Artel.Affordances.Live.WatchList"/> 가 다시 가른다.
+        /// </remarks>
+        private static void Keyed(
+            StringBuilder text, SortedDictionary<string, SortedSet<string>> keys)
+        {
+            var written = 0;
+
+            foreach (var pair in keys)
+            {
+                if (written > 0)
+                {
+                    text.Append(',');
+                }
+
+                var said = new StringBuilder(pair.Key);
+
+                foreach (var effect in pair.Value)
+                {
+                    said.Append('\u0001').Append(effect);
+                }
+
+                EvidenceJson.String(text, said.ToString());
+                written++;
+            }
         }
 
         private static void Flat(StringBuilder text, List<string> said)
