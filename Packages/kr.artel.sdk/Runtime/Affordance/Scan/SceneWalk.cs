@@ -31,6 +31,9 @@ namespace Artel.Affordances.Scan
 
         private static SceneWalk _walking;
 
+        private readonly StraySpawnTracker strays = new StraySpawnTracker();
+        private int removed;
+
         internal static bool InProgress => _walking != null;
 
         internal static bool Begin()
@@ -77,12 +80,14 @@ namespace Artel.Affordances.Scan
             for (var index = 0; index < count; index++)
             {
                 Debug.Log("[Artel] Walking scene " + (index + 1) + " of " + count + ".");
+                strays.Capture();
                 yield return Read(index);
             }
 
             for (var index = 0; index < addressed.Count; index++)
             {
                 Debug.Log("[Artel] Walking addressed scene " + (index + 1) + " of " + addressed.Count + ".");
+                strays.Capture();
                 yield return Read(addressed[index]);
             }
 
@@ -95,8 +100,8 @@ namespace Artel.Affordances.Scan
             // 바로 그 같은 씬에 산다 — 스스로 설치되는 패키지가 그 씬에 대해 가진 유일한 손잡이다.
             SceneEvidenceScan.CapturePersistent(gameObject.scene);
 
-            Debug.Log("[Artel] Walk finished. " + AffordanceReport.SceneCount + " scenes in the report: " +
-                      AffordanceBootstrap.Save());
+            Debug.Log("[Artel] Walk finished. " + AffordanceReport.SceneCount + " scenes in the report; removed " +
+                      removed + " object(s) left behind: " + AffordanceBootstrap.Save());
 
             Finish();
         }
@@ -154,6 +159,7 @@ namespace Artel.Affordances.Scan
 
             SceneEvidenceScan.CaptureLoaded();
             AffordanceReport.Note(SceneManager.GetActiveScene().name, "scene-loaded-alone");
+            Collect(SceneManager.GetActiveScene(), address);
         }
 
         private IEnumerator Read(int buildIndex)
@@ -172,6 +178,25 @@ namespace Artel.Affordances.Scan
             }
 
             SceneEvidenceScan.Capture(scene);
+            Collect(scene, SceneUtility.GetScenePathByBuildIndex(buildIndex));
+        }
+
+        /// <summary>방문 씬이 DDOL 씬으로 빼낸 새 root를 다시 방문 씬에 붙인다.</summary>
+        /// <remarks>
+        /// 다음 <c>Single</c> 로드가 방문 씬을 버릴 때 함께 파괴된다. <c>Destroy</c>를 바로 부르면
+        /// 다음 씬의 <c>Awake</c>보다 늦게 파괴돼 singleton 중복 검사를 오염시킬 수 있다.
+        /// </remarks>
+        private void Collect(Scene scene, string identity)
+        {
+            var moved = strays.MoveInto(scene);
+            removed += moved.Count;
+
+            if (moved.Count > 0)
+            {
+                Debug.Log(
+                    "[Artel] Scene walk will unload " + moved.Count + " object(s) left behind by " +
+                    identity + ": " + string.Join(", ", moved) + ".");
+            }
         }
 
         private IEnumerator Load(int buildIndex)
