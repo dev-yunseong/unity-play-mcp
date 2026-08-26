@@ -35,7 +35,13 @@ namespace Artel
 
             // 스캔은 부가 정보다. 씬 워크가 어디서 터지더라도 등록 자체를 막으면 안 되므로
             // 직접 돌리면서 예외를 삼킨다. 터지기 전까지 담은 씬은 그대로 보고에 남는다.
-            var walk = ScanEveryScene(report, onProgress);
+            //
+            // 워크 이터레이터를 여기서 직접 돌려야 한다. 한 겹 감싼 코루틴이 워크를
+            // yield return으로 넘기면 Unity가 그걸 중첩 코루틴으로 따로 돌리고, 그 안에서 나는
+            // 예외는 여기 MoveNext를 거치지 않아 아래 catch가 영영 못 본다.
+            List<ScannedSceneDto> scanned = null;
+            var walk = new AllSceneScanner(new SceneScanner())
+                .ScanAll(SceneScanOptions.Default, result => scanned = result, onProgress);
             while (true)
             {
                 object current;
@@ -51,26 +57,24 @@ namespace Artel
                 catch (Exception exception)
                 {
                     Debug.LogWarning("Artel: 전체 씬 스캔이 중단되어 스캔한 데까지만 보고합니다. " + exception.Message);
+                    Debug.LogException(exception);
                     break;
                 }
 
                 yield return current;
             }
 
-            onCompleted(report);
-        }
-
-        // ActionExecutor가 쓰는 스캐너와 타깃 맵을 공유하면 안 되므로 새 인스턴스로 스캔한다.
-        private static IEnumerator ScanEveryScene(SceneScanReportDto report, Action<int, int> onProgress)
-        {
-            List<ScannedSceneDto> scanned = null;
-            yield return new AllSceneScanner(new SceneScanner())
-                .ScanAll(SceneScanOptions.Default, result => scanned = result, onProgress);
-
-            foreach (var scene in scanned)
+            // 워크가 중간에 죽었으면 null이다. 그때까지 담은 씬은 워크가 돌려주지 않으므로
+            // 보고에는 씬 목록만 남는다.
+            if (scanned != null)
             {
-                report.ScannedScenes.Add(SceneScanReportMapper.ToReport(scene.Scene));
+                foreach (var scene in scanned)
+                {
+                    report.ScannedScenes.Add(SceneScanReportMapper.ToReport(scene.Scene));
+                }
             }
+
+            onCompleted(report);
         }
 
         // 목록을 못 만들어도 등록을 막을 이유는 없다.
