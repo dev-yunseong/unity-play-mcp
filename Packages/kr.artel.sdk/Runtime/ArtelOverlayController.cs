@@ -12,7 +12,7 @@ namespace Artel
     [RequireComponent(typeof(ArtelManager))]
     public sealed class ArtelOverlayController : MonoBehaviour
     {
-        private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
+        private const string DarkThemePlayerPrefsKey = ArtelOwnedPlayerPrefs.DarkTheme;
 
         // 게이트가 세로로 그릴 수 있는 프로젝트 수. 고정 좌표 배치라 이보다 많으면 화면을
         // 벗어난다.

@@ -14,14 +14,14 @@ namespace Artel.Auth
     /// </remarks>
     internal static class ArtelSdkSession
     {
-        private const string TokenSecretKey = "Artel.SdkToken";
-        private const string ExpiresAtPlayerPrefsKey = "Artel.SdkTokenExpiresAt";
-        private const string RefreshTokenSecretKey = "Artel.SdkRefreshToken";
-        private const string RefreshExpiresAtPlayerPrefsKey = "Artel.SdkRefreshTokenExpiresAt";
-        private const string DisplayNamePlayerPrefsKey = "Artel.SdkDisplayName";
-        private const string ProjectIdPlayerPrefsKey = "Artel.ProjectId";
-        private const string InstanceIdPlayerPrefsKey = "Artel.InstanceId";
-        private const string GameBuildIdPlayerPrefsKey = "Artel.GameBuildId";
+        private const string TokenSecretKey = ArtelOwnedPlayerPrefs.SdkTokenSecret;
+        private const string ExpiresAtPlayerPrefsKey = ArtelOwnedPlayerPrefs.SdkTokenExpiresAt;
+        private const string RefreshTokenSecretKey = ArtelOwnedPlayerPrefs.SdkRefreshTokenSecret;
+        private const string RefreshExpiresAtPlayerPrefsKey = ArtelOwnedPlayerPrefs.SdkRefreshTokenExpiresAt;
+        private const string DisplayNamePlayerPrefsKey = ArtelOwnedPlayerPrefs.SdkDisplayName;
+        private const string ProjectIdPlayerPrefsKey = ArtelOwnedPlayerPrefs.ProjectId;
+        private const string InstanceIdPlayerPrefsKey = ArtelOwnedPlayerPrefs.InstanceId;
+        private const string GameBuildIdPlayerPrefsKey = ArtelOwnedPlayerPrefs.GameBuildId;
 
         /// <summary>로그인한 사람의 표시 이름. 없으면 빈 문자열.</summary>
         public static string DisplayName

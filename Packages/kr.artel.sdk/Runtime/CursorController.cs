@@ -10,7 +10,7 @@ namespace Artel
         private const int CursorWidth = 36;
         private const int CursorHeight = 48;
         private const int OverlaySortingOrder = short.MaxValue;
-        private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
+        private const string DarkThemePlayerPrefsKey = ArtelOwnedPlayerPrefs.DarkTheme;
 
         [SerializeField] private bool smoothMovement;
         [SerializeField] private float movementDurationSeconds = 0.35f;

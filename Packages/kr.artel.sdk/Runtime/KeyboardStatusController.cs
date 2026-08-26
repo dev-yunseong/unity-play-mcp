@@ -9,7 +9,7 @@ namespace Artel
     public sealed class KeyboardStatusController : MonoBehaviour
     {
         private const int OverlaySortingOrder = short.MaxValue - 2;
-        private const string DarkThemePlayerPrefsKey = "Artel.DarkTheme";
+        private const string DarkThemePlayerPrefsKey = ArtelOwnedPlayerPrefs.DarkTheme;
         // artel-home tokens.css의 bg.surface. 게임 화면 위에 뜨므로 알파를 남겨 두되
         // 글자 대비를 지킬 만큼은 불투명해야 한다.
         internal static readonly Color32 DarkPanelColor = new Color32(0x1A, 0x1D, 0x24, 0xF5);
