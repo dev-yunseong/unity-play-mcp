@@ -3,6 +3,7 @@
   "rootNamespace": "Artel.Tests.PlayMode",
   "references": [
     "Artel.Runtime",
+    "Artel.Affordances.Scan",
     "Unity.TextMeshPro"
   ],
   "includePlatforms": [],

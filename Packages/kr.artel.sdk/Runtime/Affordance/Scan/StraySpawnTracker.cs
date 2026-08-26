@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Artel
+namespace Artel.Affordances.Scan
 {
     /// <summary>
     /// Records every root object alive before a scene is visited, so the ones that visit leaves

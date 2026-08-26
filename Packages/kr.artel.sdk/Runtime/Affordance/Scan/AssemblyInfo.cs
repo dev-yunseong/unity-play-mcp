@@ -4,3 +4,4 @@ using System.Runtime.CompilerServices;
 // 그런데 그 문서의 모양이 곧 소비자와의 계약이고, 계약을 검증하려면 그 진입점을 불러야 한다.
 // 테스트에만 연다.
 [assembly: InternalsVisibleTo("Artel.Runtime.Tests")]
+[assembly: InternalsVisibleTo("Artel.Runtime.PlayModeTests")]

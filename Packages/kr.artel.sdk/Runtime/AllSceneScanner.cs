@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Artel.Affordances.Scan;
 using Artel.Protocol.Dto;
 using Artel.Protocol.Mapping;
 using Artel.Tracking;

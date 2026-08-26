@@ -1,4 +1,5 @@
 using System.Collections;
+using Artel.Affordances.Scan;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
