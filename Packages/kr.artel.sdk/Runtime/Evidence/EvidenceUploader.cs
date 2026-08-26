@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using Artel.Domain;
 using Artel.Protocol.Dto;
 using Artel.Serialization;
+using UnityEngine;
 using UnityEngine.Networking;
 
 namespace Artel.Evidence
@@ -21,6 +23,9 @@ namespace Artel.Evidence
         /// <summary>같은 문서가 이미 등록되어 있었는지. 실패가 아니다.</summary>
         public bool AlreadyRegistered;
 
+        /// <summary>서버에 붙은 씬 이미지 수. 캡처를 아예 안 보낸 실행에서는 0 이다.</summary>
+        public int SceneCapturesRegistered;
+
         /// <summary>업로드가 성공했으면 null.</summary>
         public string Error;
 
@@ -34,7 +39,9 @@ namespace Artel.Evidence
 
     internal interface IEvidenceUploader
     {
-        IEnumerator Upload(byte[] document, Action<EvidenceUpload> completed);
+        /// <param name="thumbnails">씬 대표 이미지들. null 이거나 비어 있으면 캡처 없이 등록한다.</param>
+        IEnumerator Upload(
+            byte[] document, IReadOnlyList<SceneThumbnail> thumbnails, Action<EvidenceUpload> completed);
     }
 
     /// <summary>
@@ -54,6 +61,9 @@ namespace Artel.Evidence
     {
         private const string ContentMapPathFormat = "/api/sdk/game-builds/{0}/content-map";
 
+        /// <summary>서버가 씬 이미지에 대해 받는 유일한 형식.</summary>
+        private const string SceneCaptureContentType = "image/jpeg";
+
         private readonly IJsonCodec jsonCodec;
         private readonly Func<Server> server;
         private readonly Func<string> token;
@@ -68,7 +78,8 @@ namespace Artel.Evidence
             this.gameBuildId = gameBuildId ?? throw new ArgumentNullException(nameof(gameBuildId));
         }
 
-        public IEnumerator Upload(byte[] document, Action<EvidenceUpload> completed)
+        public IEnumerator Upload(
+            byte[] document, IReadOnlyList<SceneThumbnail> thumbnails, Action<EvidenceUpload> completed)
         {
             if (completed == null)
             {
@@ -139,9 +150,14 @@ namespace Artel.Evidence
                 }
             }
 
+            // 문서가 스토리지에 앉은 뒤, 등록 전. 캡처의 objectKey 는 등록 body 에 실려야 하므로 그 전에 올라가 있어야 하고,
+            // 등록보다 앞서야 실패했을 때 아무것도 붙지 않은 상태로 끝난다.
+            var captures = new List<SceneCaptureRegistrationDto>();
+            yield return UploadThumbnails(sdkToken, registeredBuildId, thumbnails, captures);
+
             RegisterEvidenceDocumentResponseDto registration = null;
 
-            using (var register = CreateRegisterRequest(sdkToken, registeredBuildId, ticket.ObjectKey))
+            using (var register = CreateRegisterRequest(sdkToken, registeredBuildId, ticket.ObjectKey, captures))
             {
                 yield return register.SendWebRequest();
 
@@ -171,6 +187,7 @@ namespace Artel.Evidence
 
             completed(new EvidenceUpload
             {
+                SceneCapturesRegistered = captures.Count,
                 ObjectKey = ticket.ObjectKey,
                 EvidenceDigest = registration.EvidenceDigest,
                 ByteSize = registration.ByteSize,
@@ -189,12 +206,210 @@ namespace Artel.Evidence
         }
 
         private UnityWebRequest CreateRegisterRequest(
-            string sdkToken, string registeredBuildId, string objectKey)
+            string sdkToken,
+            string registeredBuildId,
+            string objectKey,
+            List<SceneCaptureRegistrationDto> captures)
         {
             return CreatePostRequest(
                 sdkToken,
                 ContentMapPath(registeredBuildId),
-                new RegisterEvidenceDocumentRequestDto { ObjectKey = objectKey });
+                new RegisterEvidenceDocumentRequestDto
+                {
+                    ObjectKey = objectKey,
+
+                    // 빈 목록은 보내지 않는다. 이 절을 모르는 서버가 받던 것과 글자 그대로 같은 body 가 된다.
+                    SceneCaptures = captures.Count == 0 ? null : captures
+                });
+        }
+
+        /// <summary>
+        /// 씬 이미지를 올리고, 등록에 실을 항목을 <paramref name="captures"/> 에 채운다.
+        /// </summary>
+        /// <remarks>
+        /// <b>여기서는 아무것도 실패하지 않는다.</b> 이미지는 근거 문서의 곁다리다. 티켓을 못 받았든, PUT 이 거절됐든,
+        /// 서버가 이 경로 자체를 모르든(404) — 그 실행의 근거 문서는 여전히 올라가야 한다. 이미지가 없는 씬 명세는 덜 친절할
+        /// 뿐이지만, 근거가 없는 빌드는 아무것도 아니다.
+        ///
+        /// 그래서 실패한 씬은 <c>failureCode</c> 로 적어 함께 보낸다. 조용히 빼면 화면은 "SDK 가 안 찍었다"와 "찍었는데 못
+        /// 올렸다"를 구분할 수 없다.
+        /// </remarks>
+        private IEnumerator UploadThumbnails(
+            string sdkToken,
+            string registeredBuildId,
+            IReadOnlyList<SceneThumbnail> thumbnails,
+            List<SceneCaptureRegistrationDto> captures)
+        {
+            if (thumbnails == null || thumbnails.Count == 0)
+            {
+                yield break;
+            }
+
+            var wanted = new List<SceneThumbnail>();
+
+            for (var index = 0; index < thumbnails.Count; index++)
+            {
+                var thumbnail = thumbnails[index];
+
+                if (string.IsNullOrWhiteSpace(thumbnail.SceneName))
+                {
+                    continue;
+                }
+
+                if (thumbnail.IsSuccess)
+                {
+                    wanted.Add(thumbnail);
+                }
+                else
+                {
+                    // 못 찍은 것은 올릴 것이 없다. 사실만 등록에 싣는다.
+                    captures.Add(new SceneCaptureRegistrationDto
+                    {
+                        SceneName = thumbnail.SceneName,
+                        FailureCode = thumbnail.FailureCode ?? "capture-failed"
+                    });
+                }
+            }
+
+            if (wanted.Count == 0)
+            {
+                yield break;
+            }
+
+            SceneCaptureTicketBatchResponseDto batch = null;
+
+            using (var request = CreateSceneCaptureTicketRequest(sdkToken, registeredBuildId, wanted))
+            {
+                yield return request.SendWebRequest();
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    // 404 면 이 서버는 씬 이미지를 아직 모른다. 그것도 못 올린 이유이므로 같은 자리에 적는다.
+                    var reason = request.responseCode == 404 ? "server-has-no-capture-endpoint" : "upload-refused";
+                    Debug.LogWarning(
+                        "[Artel] Scene captures were not uploaded (HTTP " + request.responseCode + ").");
+                    MarkAll(wanted, captures, reason);
+                    yield break;
+                }
+
+                string failure = null;
+                batch = Read<SceneCaptureTicketBatchResponseDto>(request, ref failure);
+
+                if (failure != null || batch == null || batch.Captures == null)
+                {
+                    MarkAll(wanted, captures, "upload-refused");
+                    yield break;
+                }
+            }
+
+            var tickets = new Dictionary<string, SceneCaptureUploadTicketDto>();
+
+            for (var index = 0; index < batch.Captures.Count; index++)
+            {
+                var ticket = batch.Captures[index];
+
+                if (ticket != null && !string.IsNullOrEmpty(ticket.SceneName) &&
+                    !string.IsNullOrEmpty(ticket.UploadUrl))
+                {
+                    tickets[ticket.SceneName] = ticket;
+                }
+            }
+
+            for (var index = 0; index < wanted.Count; index++)
+            {
+                var thumbnail = wanted[index];
+
+                if (!tickets.TryGetValue(thumbnail.SceneName, out var ticket))
+                {
+                    // 청한 씬에 티켓이 안 왔다. 서버가 뭔가 걸렀다는 뜻이고, 그 씬은 이미지 없이 등록된다.
+                    captures.Add(Failed(thumbnail, "no-ticket"));
+                    continue;
+                }
+
+                using (var put = CreateCapturePutRequest(ticket, thumbnail.Jpeg))
+                {
+                    yield return put.SendWebRequest();
+
+                    if (put.result != UnityWebRequest.Result.Success)
+                    {
+                        Debug.LogWarning(
+                            "[Artel] The screen for " + thumbnail.SceneName + " could not be stored (HTTP " +
+                            put.responseCode + ").");
+                        captures.Add(Failed(thumbnail, "upload-failed"));
+                        continue;
+                    }
+                }
+
+                captures.Add(new SceneCaptureRegistrationDto
+                {
+                    SceneName = thumbnail.SceneName,
+                    ObjectKey = ticket.ObjectKey,
+                    ContentType = SceneCaptureContentType,
+                    Width = thumbnail.Width,
+                    Height = thumbnail.Height
+                });
+            }
+        }
+
+        private static void MarkAll(
+            List<SceneThumbnail> thumbnails, List<SceneCaptureRegistrationDto> captures, string failureCode)
+        {
+            for (var index = 0; index < thumbnails.Count; index++)
+            {
+                captures.Add(Failed(thumbnails[index], failureCode));
+            }
+        }
+
+        private static SceneCaptureRegistrationDto Failed(SceneThumbnail thumbnail, string failureCode)
+        {
+            return new SceneCaptureRegistrationDto
+            {
+                SceneName = thumbnail.SceneName,
+                FailureCode = failureCode
+            };
+        }
+
+        private UnityWebRequest CreateSceneCaptureTicketRequest(
+            string sdkToken, string registeredBuildId, List<SceneThumbnail> thumbnails)
+        {
+            var requested = new List<SceneCaptureTicketRequestDto>();
+
+            for (var index = 0; index < thumbnails.Count; index++)
+            {
+                var thumbnail = thumbnails[index];
+                requested.Add(new SceneCaptureTicketRequestDto
+                {
+                    SceneName = thumbnail.SceneName,
+                    ContentType = SceneCaptureContentType,
+                    ContentLength = thumbnail.Jpeg.LongLength,
+                    Width = thumbnail.Width,
+                    Height = thumbnail.Height
+                });
+            }
+
+            return CreatePostRequest(
+                sdkToken,
+                ContentMapPath(registeredBuildId) + "/scene-captures/tickets",
+                new SceneCaptureTicketBatchRequestDto { Captures = requested });
+        }
+
+        private static UnityWebRequest CreateCapturePutRequest(SceneCaptureUploadTicketDto ticket, byte[] jpeg)
+        {
+            var put = new UnityWebRequest(ticket.UploadUrl, UnityWebRequest.kHttpVerbPUT)
+            {
+                uploadHandler = new UploadHandlerRaw(jpeg),
+                downloadHandler = new DownloadHandlerBuffer()
+            };
+
+            if (ticket.RequiredHeaders != null)
+            {
+                foreach (var header in ticket.RequiredHeaders)
+                {
+                    put.SetRequestHeader(header.Key, header.Value);
+                }
+            }
+
+            return put;
         }
 
         private UnityWebRequest CreatePostRequest(string sdkToken, string path, object body)

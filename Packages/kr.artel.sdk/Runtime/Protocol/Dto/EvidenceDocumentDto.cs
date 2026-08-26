@@ -37,6 +37,96 @@ namespace Artel.Protocol.Dto
     }
 
     /// <summary>
+    /// 씬 대표 이미지 한 장의 업로드 티켓 요청.
+    /// </summary>
+    internal sealed class SceneCaptureTicketRequestDto
+    {
+        [JsonProperty("sceneName")]
+        public string SceneName { get; set; }
+
+        [JsonProperty("contentType")]
+        public string ContentType { get; set; }
+
+        [JsonProperty("contentLength")]
+        public long ContentLength { get; set; }
+
+        [JsonProperty("width")]
+        public int Width { get; set; }
+
+        [JsonProperty("height")]
+        public int Height { get; set; }
+    }
+
+    /// <summary>
+    /// 티켓을 씬 수만큼 한 번에 청한다.
+    /// </summary>
+    /// <remarks>
+    /// 씬마다 왕복하면 수백 씬짜리 순회가 그만큼 길어지고, 그 사이 서명이 만료되는 티켓이 생긴다.
+    /// </remarks>
+    internal sealed class SceneCaptureTicketBatchRequestDto
+    {
+        [JsonProperty("captures")]
+        public List<SceneCaptureTicketRequestDto> Captures { get; set; }
+    }
+
+    internal sealed class SceneCaptureUploadTicketDto
+    {
+        [JsonProperty("sceneName")]
+        public string SceneName { get; set; }
+
+        [JsonProperty("objectKey")]
+        public string ObjectKey { get; set; }
+
+        [JsonProperty("uploadUrl")]
+        public string UploadUrl { get; set; }
+
+        [JsonProperty("requiredHeaders")]
+        public Dictionary<string, string> RequiredHeaders { get; set; }
+
+        [JsonProperty("uploadExpiresAt")]
+        public string UploadExpiresAt { get; set; }
+    }
+
+    internal sealed class SceneCaptureTicketBatchResponseDto
+    {
+        [JsonProperty("captures")]
+        public List<SceneCaptureUploadTicketDto> Captures { get; set; }
+    }
+
+    /// <summary>
+    /// 등록에 함께 싣는 씬 캡처 결과.
+    /// </summary>
+    /// <remarks>
+    /// 성공이면 <c>objectKey</c>·<c>contentType</c>·<c>width</c>·<c>height</c> 가 다 차고 <c>failureCode</c> 가 비며,
+    /// 실패면 정확히 그 반대다. 섞어 보내면 서버가 등록 전체를 400 으로 돌려준다 — 반쯤 찬 행을 받아 두면 화면이 무엇을
+    /// 믿을지 정할 수 없기 때문이다.
+    ///
+    /// null 인 필드를 아예 빼고 보낸다. 성공 항목에 <c>failureCode: null</c> 을 실어도 서버는 같게 읽지만, 실패 항목에
+    /// <c>width: 0</c> 이 실리면 그것은 "0 픽셀"이라는 다른 말이 된다.
+    /// </remarks>
+    [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
+    internal sealed class SceneCaptureRegistrationDto
+    {
+        [JsonProperty("sceneName")]
+        public string SceneName { get; set; }
+
+        [JsonProperty("objectKey")]
+        public string ObjectKey { get; set; }
+
+        [JsonProperty("contentType")]
+        public string ContentType { get; set; }
+
+        [JsonProperty("width")]
+        public int? Width { get; set; }
+
+        [JsonProperty("height")]
+        public int? Height { get; set; }
+
+        [JsonProperty("failureCode")]
+        public string FailureCode { get; set; }
+    }
+
+    /// <summary>
     /// 올라간 문서를 빌드에 붙인다. <c>objectKey</c> 하나만 보낸다.
     /// </summary>
     /// <remarks>
@@ -47,6 +137,15 @@ namespace Artel.Protocol.Dto
     {
         [JsonProperty("objectKey")]
         public string ObjectKey { get; set; }
+
+        /// <summary>
+        /// 씬 대표 이미지들. 비어 있으면 아예 보내지 않는다.
+        /// </summary>
+        /// <remarks>
+        /// 이 절을 모르는 옛 서버에 빈 배열을 보내도 무시되지만, 보내지 않는 쪽이 그 서버가 받던 것과 글자 그대로 같다.
+        /// </remarks>
+        [JsonProperty("sceneCaptures", NullValueHandling = NullValueHandling.Ignore)]
+        public List<SceneCaptureRegistrationDto> SceneCaptures { get; set; }
     }
 
     internal sealed class RegisterEvidenceDocumentResponseDto

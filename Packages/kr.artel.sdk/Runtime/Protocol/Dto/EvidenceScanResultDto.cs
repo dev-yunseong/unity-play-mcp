@@ -26,6 +26,10 @@ namespace Artel.Protocol.Dto
         [JsonProperty("sceneCount")]
         public int SceneCount { get; set; }
 
+        /// <summary>등록에 실린 씬 화면 수. 못 찍은 것과 못 올린 것도 사실로 세므로 씬 수보다 작을 수 있다.</summary>
+        [JsonProperty("sceneCapturesRegistered")]
+        public int SceneCapturesRegistered { get; set; }
+
         [JsonProperty("alreadyRegistered")]
         public bool AlreadyRegistered { get; set; }
     }

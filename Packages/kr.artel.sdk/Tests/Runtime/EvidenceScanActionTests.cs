@@ -170,9 +170,16 @@ namespace Artel.Tests.Evidence
 
             public int Attempts { get; private set; }
 
-            public IEnumerator Upload(byte[] document, Action<EvidenceUpload> completed)
+            /// <summary>마지막 업로드가 받은 씬 화면들. 액션이 스캔 결과를 그대로 넘기는지 보는 자리다.</summary>
+            public System.Collections.Generic.IReadOnlyList<SceneThumbnail> Thumbnails { get; private set; }
+
+            public IEnumerator Upload(
+                byte[] document,
+                System.Collections.Generic.IReadOnlyList<SceneThumbnail> thumbnails,
+                Action<EvidenceUpload> completed)
             {
                 Attempts++;
+                Thumbnails = thumbnails;
                 completed(upload);
                 yield break;
             }

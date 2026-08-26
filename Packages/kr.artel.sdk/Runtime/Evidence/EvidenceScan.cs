@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using Artel.Affordances.Scan;
+using Artel.Capture;
 
 namespace Artel.Evidence
 {
@@ -14,6 +16,9 @@ namespace Artel.Evidence
 
         /// <summary>문서가 서술하는 씬 수. 무엇이 올라가는지를 결과에 적기 위한 것.</summary>
         public int SceneCount;
+
+        /// <summary>씬마다 한 장씩 뜬 화면. 캡처가 통째로 실패한 실행에서는 비어 있다.</summary>
+        public IReadOnlyList<SceneThumbnail> Thumbnails;
 
         /// <summary>스캔이 성공했으면 null.</summary>
         public string Error;
@@ -47,6 +52,14 @@ namespace Artel.Evidence
     /// </remarks>
     internal sealed class WalkedEvidenceScan : IEvidenceScan
     {
+        private readonly IScreenCapturer capturer;
+
+        /// <param name="capturer">null 이면 화면을 뜨지 않는다. 근거 문서는 그대로 나온다.</param>
+        public WalkedEvidenceScan(IScreenCapturer capturer = null)
+        {
+            this.capturer = capturer;
+        }
+
         public IEnumerator Run(Action<ScannedEvidence> completed)
         {
             if (completed == null)
@@ -62,16 +75,36 @@ namespace Artel.Evidence
                 yield break;
             }
 
-            if (!AffordanceBootstrap.WalkAllScenes())
+            // 순회가 씬을 하나씩 읽는 동안 그 씬의 화면도 한 장씩 뜬다. 순회가 끝난 뒤에 몰아서 뜰 수는 없다 — 그때 화면에
+            // 남아 있는 것은 마지막 씬 하나뿐이다.
+            var collector = capturer == null ? null : new SceneThumbnailCollector(capturer);
+
+            if (collector != null)
             {
-                completed(ScannedEvidence.Failed(
-                    "The scene walk would not start. It needs play mode: scenes are read as the game loads them."));
-                yield break;
+                collector.Attach();
             }
 
-            while (AffordanceBootstrap.Walking)
+            try
             {
-                yield return null;
+                if (!AffordanceBootstrap.WalkAllScenes())
+                {
+                    completed(ScannedEvidence.Failed(
+                        "The scene walk would not start. It needs play mode: scenes are read as the game loads them."));
+                    yield break;
+                }
+
+                while (AffordanceBootstrap.Walking)
+                {
+                    yield return null;
+                }
+            }
+            finally
+            {
+                // 순회가 어떻게 끝나든 뗀다. 남겨 두면 다음 순회가 이 수집기에 계속 쌓아 두 실행의 화면이 섞인다.
+                if (collector != null)
+                {
+                    collector.Detach();
+                }
             }
 
             var path = AffordanceBootstrap.ReportPath;
@@ -93,7 +126,10 @@ namespace Artel.Evidence
             completed(new ScannedEvidence
             {
                 Document = document,
-                SceneCount = AffordanceReport.SceneCount
+                SceneCount = AffordanceReport.SceneCount,
+                Thumbnails = collector == null
+                    ? (IReadOnlyList<SceneThumbnail>)Array.Empty<SceneThumbnail>()
+                    : collector.Thumbnails
             });
         }
     }

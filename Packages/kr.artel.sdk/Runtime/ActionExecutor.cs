@@ -601,7 +601,7 @@ namespace Artel
             }
 
             var upload = default(EvidenceUpload);
-            yield return evidenceUploader.Upload(scanned.Document, uploaded => upload = uploaded);
+            yield return evidenceUploader.Upload(scanned.Document, scanned.Thumbnails, uploaded => upload = uploaded);
             if (!upload.IsSuccess)
             {
                 completed(ActionResultDto.Failure(actionId, ScanEvidence, upload.Error));
@@ -615,6 +615,7 @@ namespace Artel
                 ByteSize = upload.ByteSize,
                 SchemaVersion = upload.SchemaVersion,
                 SceneCount = scanned.SceneCount,
+                SceneCapturesRegistered = upload.SceneCapturesRegistered,
                 AlreadyRegistered = upload.AlreadyRegistered
             }));
 #else

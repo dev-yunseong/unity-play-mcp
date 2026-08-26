@@ -179,7 +179,9 @@ namespace Artel
                     ArtelSdkSession.LoadToken,
                     ArtelSdkSession.LoadInstanceId),
                 this,
-                new WalkedEvidenceScan(),
+                // 순회가 씬을 하나씩 띄우는 그 자리에서 화면도 한 장씩 뜬다. 같은 capturer 를 쓰는 이유는 back buffer 를
+                // 읽는 경로가 하나뿐이어야 `capture_screen` 이 보는 것과 근거에 실리는 것이 갈라지지 않기 때문이다.
+                new WalkedEvidenceScan(new ScreenCapturer()),
                 // 캡처와 축이 다르다. 근거 문서는 살아 있는 인스턴스가 아니라 빌드에 붙으므로 gameBuildId 를 읽는다.
                 new EvidenceUploader(
                     jsonCodec,

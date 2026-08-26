@@ -159,6 +159,16 @@ namespace Artel.Affordances.Scan
 
             SceneEvidenceScan.CaptureLoaded();
             AffordanceReport.Note(SceneManager.GetActiveScene().name, "scene-loaded-alone");
+
+            // 판독을 뜬 바로 그 자리에서 화면도 남긴다. 다음 씬 로드가 시작되면 back buffer 는 이미 다른 씬이다.
+            // Collect 앞이다 — 저쪽은 앞선 씬이 남긴 것을 이 씬으로 옮겨 붙이는 일이고, 화면은 그 전의 이 씬이다.
+            var afterAddressed = SceneWalkHooks.OnSceneRead(SceneManager.GetActiveScene().name);
+
+            if (afterAddressed != null)
+            {
+                yield return afterAddressed;
+            }
+
             Collect(SceneManager.GetActiveScene(), address);
         }
 
@@ -178,6 +188,14 @@ namespace Artel.Affordances.Scan
             }
 
             SceneEvidenceScan.Capture(scene);
+
+            var afterScene = SceneWalkHooks.OnSceneRead(scene.name);
+
+            if (afterScene != null)
+            {
+                yield return afterScene;
+            }
+
             Collect(scene, SceneUtility.GetScenePathByBuildIndex(buildIndex));
         }
 
