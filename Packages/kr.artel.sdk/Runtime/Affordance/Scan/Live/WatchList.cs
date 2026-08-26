@@ -95,8 +95,23 @@ namespace Artel.Affordances.Live
         /// </remarks>
         internal sealed class Offer
         {
-            internal readonly List<string> Keys = new List<string>();
+            internal readonly List<KeyOffer> Keys = new List<KeyOffer>();
             internal readonly List<string> Pointers = new List<string>();
+        }
+
+        /// <summary>키 하나와, 그것을 누르면 무엇이 일어나는지.</summary>
+        /// <remarks>
+        /// 이름만 나르던 자리다. 그때는 씬의 키 다섯이 대등하게 실려, 어느 것이 무엇을 하는지 읽는 쪽이 알
+        /// 길이 없었다 — 실제로 Map 씬의 QA 가 그래서 전투에 진입하지 못했다. 근거는 `Return` 이 씬을
+        /// 바꾼다는 것을 알고 있었고, 그 앎이 여기서 버려지고 있었다(ARTEL-539).
+        ///
+        /// <see cref="Does"/> 가 비어 있는 것은 "아무 일도 안 한다" 가 아니라 "분석이 못 읽었다" 이다.
+        /// 그 둘은 읽는 쪽의 다음 수가 다르므로 방출에서도 갈라 쓴다.
+        /// </remarks>
+        internal sealed class KeyOffer
+        {
+            internal string Key;
+            internal readonly List<string> Does = new List<string>();
         }
 
         /// <summary>이 타입이 무엇에 답하는지, 또는 null.</summary>
@@ -366,8 +381,40 @@ namespace Artel.Affordances.Live
                 _offers[declaring] = offer;
             }
 
-            Listed(entry, "\"keys\":[", offer.Keys);
+            Keyed(entry, offer.Keys);
             Listed(entry, "\"pointers\":[", offer.Pointers);
+        }
+
+        /// <summary>
+        /// 키 배열을 읽는다. 각 항목은 <c>키\u0001효과\u0001효과…</c> 다.
+        /// </summary>
+        /// <remarks>
+        /// 배열이 평평한 이유는 <see cref="Entries"/> 에 있다. 그것은 항목의 끝을 첫 <c>}</c> 로 찾으므로
+        /// — 괄호를 셀 수 없다, 필드가 제 대괄호를 나르는 제네릭 타입 이름을 쥔다 — 키를 객체로 만들면
+        /// 항목이 첫 키에서 잘린다. 실제로 그렇게 만들었다가 키가 통째로 사라졌다(ARTEL-539).
+        ///
+        /// 구분자가 없는 항목은 옛 형식이다. 그때는 이름만 실렸고, 그 리소스로 만든 빌드도 무엇을 누를 수
+        /// 있는지는 그대로 말할 수 있어야 한다.
+        /// </remarks>
+        private static void Keyed(string entry, List<KeyOffer> into)
+        {
+            var said = new List<string>();
+            Listed(entry, "\"keys\":[", said);
+
+            foreach (var one in said)
+            {
+                // 이 파일의 파서는 JSON 이스케이프를 풀지 않는다 — 값이 식별자와 경로뿐이라 그럴 일이
+                // 없었다. 구분자는 그 규칙의 첫 예외라 여기서만 푼다.
+                var parts = one.Replace("\\u0001", "\u0001").Split('\u0001');
+                var offer = new KeyOffer { Key = parts[0] };
+
+                for (var at = 1; at < parts.Length; at++)
+                {
+                    offer.Does.Add(parts[at]);
+                }
+
+                into.Add(offer);
+            }
         }
 
         /// <summary>

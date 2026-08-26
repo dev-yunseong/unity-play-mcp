@@ -929,7 +929,7 @@ namespace Artel.Affordances.Live
 
             var said = new StringBuilder(128);
             var calls = new List<PersistentCall>();
-            var keys = new List<string>();
+            var keys = new List<WatchList.KeyOffer>();
             var pointers = new List<string>();
 
             foreach (var component in transform.GetComponents<Component>())
@@ -955,7 +955,7 @@ namespace Artel.Affordances.Live
                     continue;
                 }
 
-                Add(keys, offer.Keys);
+                AddKeys(keys, offer.Keys);
                 Add(pointers, offer.Pointers);
             }
 
@@ -994,7 +994,7 @@ namespace Artel.Affordances.Live
                 written++;
             }
 
-            written += Flat(said, "keys", keys, written);
+            written += Keys(said, keys, written);
             Flat(said, "pointers", pointers, written);
 
             said.Append('}');
@@ -1038,6 +1038,80 @@ namespace Artel.Affordances.Live
 
             text.Append(']');
             return 1;
+        }
+
+        /// <summary>
+        /// 키와 그것이 하는 일을 함께 쓴다.
+        /// </summary>
+        /// <remarks>
+        /// <c>clicks</c> 와 같은 모양(객체 배열)으로 맞춘다. 이름만 나르던 시절에는 씬의 키 다섯이
+        /// 대등하게 실려 읽는 쪽이 어느 것을 눌러야 할지 알 수 없었다(ARTEL-539).
+        ///
+        /// 하는 일을 모르는 키는 <c>does</c> 를 아예 쓰지 않는다. 빈 배열은 "아무 일도 안 한다" 로 읽히는데
+        /// 실제로는 "분석이 못 읽었다" 이고, 그 둘은 다음 수가 다르다.
+        /// </remarks>
+        private static int Keys(StringBuilder text, List<WatchList.KeyOffer> offered, int written)
+        {
+            if (offered.Count == 0)
+            {
+                return 0;
+            }
+
+            if (written > 0)
+            {
+                text.Append(',');
+            }
+
+            // 순서를 고정한다. 흔들리면 판독마다 그 자체가 차이로 보고된다.
+            offered.Sort((left, right) => string.CompareOrdinal(left.Key, right.Key));
+            text.Append("\"keys\":[");
+
+            for (var at = 0; at < offered.Count; at++)
+            {
+                if (at > 0)
+                {
+                    text.Append(',');
+                }
+
+                text.Append('{');
+                Json.Property(text, "key", offered[at].Key);
+
+                var does = offered[at].Does;
+
+                if (does.Count > 0)
+                {
+                    text.Append(",\"does\":[");
+
+                    for (var which = 0; which < does.Count; which++)
+                    {
+                        if (which > 0)
+                        {
+                            text.Append(',');
+                        }
+
+                        Json.String(text, does[which]);
+                    }
+
+                    text.Append(']');
+                }
+
+                text.Append('}');
+            }
+
+            text.Append(']');
+            return 1;
+        }
+
+        private static void AddKeys(
+            List<WatchList.KeyOffer> into, List<WatchList.KeyOffer> more)
+        {
+            foreach (var one in more)
+            {
+                if (!into.Exists(seen => seen.Key == one.Key))
+                {
+                    into.Add(one);
+                }
+            }
         }
 
         private static void Add(List<string> into, List<string> more)
