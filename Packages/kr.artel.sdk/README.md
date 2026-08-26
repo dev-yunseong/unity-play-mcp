@@ -422,6 +422,35 @@ game has opened since and rebuilds the first one from the data the launch used.
 { "type": "ACTION", "id": 5, "actions": [{ "id": 1, "method": "reset_game", "params": [] }] }
 ```
 
+`params: [{ "clearPlayerPrefs": true }]` empties the game's `PlayerPrefs` as
+well, immediately before the reload — so the startup scene's `Awake` and `Start`
+read a store that is already gone rather than one cleared a frame too late.
+
+```json
+{ "type": "ACTION", "id": 5, "actions": [{ "id": 1, "method": "reset_game", "params": [{ "clearPlayerPrefs": true }] }] }
+```
+
+Omitting `params` keeps the original behaviour: the scene reload only, with the
+store left alone. The field takes `true` or `false` and nothing else — a string
+`"true"` or a `1` is refused, because a flag this destructive must never be
+coerced from something that merely looks truthy. A build that predates this flag
+ignores it and resets scene state only; there is no version field in the `ACTION`
+protocol to detect that from the server side.
+
+The SDK's own `Artel.*` entries are read out before the wipe and written back
+after it, so a reset does not log the game out of the server that ordered it.
+Everything else in the store goes — including the entries Unity itself keeps
+there, such as `Screenmanager Resolution Width` / `Height`,
+`Screenmanager Fullscreen mode`, and the `unity.*` analytics keys. A reset with
+this flag therefore also reverts the player's window size and fullscreen choice
+on the next launch. Those names are tied to the Unity version, so the SDK does
+not try to preserve them: a stale allowlist would claim a protection it no longer
+gives.
+
+A cleared store is all this promises, and not that the game is in a first-run
+state: a manager destroyed by the reload can write its keys back from
+`OnDestroy`.
+
 It is a batch method only — the reload spans frames. The result arrives once the
 new scene has loaded and settled, so a `scan_scene` after it in the same batch
 reads the fresh scene. Every target id from before is dead by then; a
@@ -439,10 +468,12 @@ running the reset. A game whose managers are created by a bootstrap scene the ru
 did not start in loses them for good — the SDK logs every object it drops, by
 name, for exactly that case.
 
-What no reload can reach: static fields, `PlayerPrefs`, and save files. A game
-that keeps its progress in one of those comes back holding it. The action fails,
-changing nothing, when the scene the game started in is not in Build Settings —
-there is no index to return to.
+What no reload can reach: static fields and save files on disk. A game that keeps
+its progress in one of those comes back holding it, whether or not
+`clearPlayerPrefs` was set. The action fails, changing nothing — the store
+included — when the scene the game started in is not in Build Settings, or when
+the params are malformed; there is no index to return to, and a refused reset
+must leave the game exactly as it found it.
 
 ## State and action tracking
 

@@ -137,7 +137,7 @@ namespace Artel
                     yield break;
 
                 case "reset_game":
-                    yield return ExecuteResetGame(actionId, completed);
+                    yield return ExecuteResetGame(actionId, parameters, completed);
                     yield break;
 
                 case "start_readings":
@@ -360,19 +360,35 @@ namespace Artel
         }
 
         /// <summary>
-        /// Puts the game back where the run found it by reloading the scene it started in.
+        /// 실행이 처음 만난 자리로 게임을 되돌린다. 시작 씬을 다시 열고, 호출이 그렇게 말하면
+        /// 게임의 <c>PlayerPrefs</c> 도 함께 비운다.
         /// </summary>
         /// <remarks>
-        /// A single load tears down every loaded scene and rebuilds the start one from the same
-        /// serialized data the launch used, and the game's <c>DontDestroyOnLoad</c> objects are
-        /// dropped with it — a manager holding the score, the inventory or the run's progress is
-        /// exactly what a reset has to clear, and the reloaded scene builds its own again through
-        /// the same singleton guard that let the old one live. What no reload can reach: static
-        /// fields, and anything already written to <c>PlayerPrefs</c> or disk.
-        /// ponytail: scene state only, add save-data wiping when a game needs it.
+        /// 로드 한 번이 열려 있는 모든 씬을 허물고, 실행이 처음 썼던 것과 같은 직렬화 데이터로
+        /// 시작 씬을 다시 세운다. 게임의 <c>DontDestroyOnLoad</c> 오브젝트도 함께 사라진다 —
+        /// 점수·인벤토리·진행도를 쥐고 있는 매니저야말로 리셋이 지워야 할 것이고, 다시 열린
+        /// 씬이 예전 것을 살려 두었던 바로 그 싱글턴 가드를 통해 자기 것을 새로 만든다.
+        ///
+        /// 씬 상태는 언제나 사라진다. <c>PlayerPrefs</c> 는 <c>clearPlayerPrefs</c> 가 그렇게
+        /// 말할 때만 사라지고, 그때도 SDK 자신의 <c>Artel.*</c> 항목은 지우기 앞뒤로 꺼냈다가
+        /// 되쓴다 — 그러지 않으면 리셋을 시킨 서버로부터 이 세션이 스스로 로그아웃한다.
+        /// 정적 필드와 디스크의 파일은 어느 쪽으로도 사라지지 않는다.
+        ///
+        /// 약속하는 것은 저장소를 비웠다는 것까지다. 게임이 첫 실행 상태라는 뜻은 아니다 —
+        /// 리로드로 죽는 매니저가 <c>OnDestroy</c> 에서 자기 키를 다시 쓸 수 있고, 이 코루틴
+        /// 안의 어떤 순서도 그것을 막지 못한다.
         /// </remarks>
-        private IEnumerator ExecuteResetGame(int actionId, Action<ActionResultDto> completed)
+        private IEnumerator ExecuteResetGame(
+            int actionId, List<object> parameters, Action<ActionResultDto> completed)
         {
+            // params 를 먼저 읽는다. Build Settings 가드보다 뒤에 두면 잘못 만든 호출이
+            // "씬이 Build Settings 에 없다" 로 잘못 진단되어 돌아간다.
+            if (!ResetRequestReader.TryRead(parameters, out var request, out var error))
+            {
+                completed(ActionResultDto.Failure(actionId, error));
+                yield break;
+            }
+
             if (startupSceneBuildIndex < 0)
             {
                 // Loading by path fails the same way, so there is nothing to try: the scene has to
@@ -389,6 +405,14 @@ namespace Artel
             RestoreTimeScale();
             pointerEvents.ReleaseAll();
             ArtelInput.ReleaseAllVirtualInput();
+
+            // 리로드보다 먼저 지운다. 게임이 세이브 데이터를 처음 읽는 자리는 시작 씬의
+            // Awake/Start 이므로, 로드한 뒤에 지우면 구조적으로 한 프레임 늦어 이미 읽힌
+            // 진행도를 남긴 채 Success 를 돌려주게 된다. 사이에 yield 를 두지 않는다.
+            if (request.ClearPlayerPrefs)
+            {
+                ArtelOwnedPlayerPrefs.DeleteAllExceptOwn();
+            }
 
             DoomPersistentObjects();
             yield return SceneManager.LoadSceneAsync(startupSceneBuildIndex, LoadSceneMode.Single);

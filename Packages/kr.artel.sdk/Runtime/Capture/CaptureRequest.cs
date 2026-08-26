@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Artel.Protocol;
 
 namespace Artel.Capture
 {
@@ -81,8 +82,7 @@ namespace Artel.Capture
                 return true;
             }
 
-            var options = parameters[1] as IDictionary<string, object>;
-            if (options == null)
+            if (!ActionParamsObject.TryRead(parameters[1], out var options))
             {
                 error = "capture_screen options must be an object.";
                 return false;

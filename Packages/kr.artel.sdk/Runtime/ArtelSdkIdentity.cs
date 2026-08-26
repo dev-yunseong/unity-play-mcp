@@ -5,7 +5,7 @@ namespace Artel
 {
     internal static class ArtelSdkIdentity
     {
-        private const string PlayerPrefsKey = "Artel.SdkId";
+        private const string PlayerPrefsKey = ArtelOwnedPlayerPrefs.SdkId;
 
         public static string LoadOrCreate()
         {
