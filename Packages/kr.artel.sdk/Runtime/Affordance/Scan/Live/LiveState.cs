@@ -112,7 +112,8 @@ namespace Artel.Affordances.Live
             // Camera.main 은 태그로 하는 씬 전체 조회다. 객체마다 한 번이면 순회를 잡아먹으므로 판독 전체에 대해 한 번 푼다.
             ScreenArea.Begin();
 
-            var truncated = Objects(persistent, byOwner, ledger, showing, hidden);
+            var truncated = Objects(
+                persistent, active.IsValid() ? active.name : null, byOwner, ledger, showing, hidden);
 
             ScreenArea.Forget();
 
@@ -320,7 +321,7 @@ namespace Artel.Affordances.Live
         /// 녹화가 답할 수 없는 유일한 것이 그것이다.
         /// </remarks>
         private static int Objects(
-            Scene persistent, Dictionary<Type, List<Watched>> byOwner, Ledger ledger,
+            Scene persistent, string top, Dictionary<Type, List<Watched>> byOwner, Ledger ledger,
             Bin showing, Bin hidden)
         {
             var seen = new Dictionary<Type, int>();
@@ -335,7 +336,7 @@ namespace Artel.Affordances.Live
                     continue;
                 }
 
-                dropped += In(scene, byOwner, seen, ledger, showing, hidden);
+                dropped += In(scene, top, byOwner, seen, ledger, showing, hidden);
             }
 
             // 게임이 씬 로드를 건너 쥐고 있던 것. Unity 는 그것을 로드된 씬으로 세지 않으므로 그것들만 걷는 순회는 이것을 놓치고 —
@@ -346,7 +347,7 @@ namespace Artel.Affordances.Live
             // 그것들을 따로 정리해 두기 때문이다.
             if (persistent.IsValid() && persistent.isLoaded)
             {
-                dropped += In(persistent, byOwner, seen, ledger, showing, hidden);
+                dropped += In(persistent, top, byOwner, seen, ledger, showing, hidden);
             }
 
             return dropped;
@@ -354,6 +355,7 @@ namespace Artel.Affordances.Live
 
         private static int In(
             Scene scene,
+            string top,
             Dictionary<Type, List<Watched>> byOwner,
             Dictionary<Type, int> seen,
             Ledger ledger,
@@ -395,7 +397,7 @@ namespace Artel.Affordances.Live
 
                     var said = new StringBuilder(256);
 
-                    if (!Object(said, transform, scene, index, byOwner, ledger))
+                    if (!Object(said, transform, scene, top, index, byOwner, ledger))
                     {
                         continue;
                     }
@@ -420,6 +422,7 @@ namespace Artel.Affordances.Live
             StringBuilder into,
             Transform transform,
             Scene scene,
+            string top,
             int rootIndex,
             Dictionary<Type, List<Watched>> byOwner,
             Ledger ledger)
@@ -446,8 +449,15 @@ namespace Artel.Affordances.Live
             // instance id 는 프로세스를 넘어 살아남지 못하고, selector 도 여기 있는 이유가 그것이다. 새로 생긴 약점은 아니지만 —
             // 씬 보고도 같은 숫자로 주소지정한다 — 결국 selector 가 액션이 지목할 것이 되어야 하는 이유다.
             text.Append('{');
-            Json.Property(text, "scene", scene.name);
-            text.Append(",\"id\":").Append(transform.gameObject.GetInstanceID());
+
+            // 최상위가 이미 씬을 말한다. 다른 씬의 객체만 제 이름을 댄다 — persistent 씬이 그렇다.
+            if (scene.name != top)
+            {
+                Json.Property(text, "scene", scene.name);
+                text.Append(',');
+            }
+
+            text.Append("\"id\":").Append(transform.gameObject.GetInstanceID());
             text.Append(',');
             Json.Property(text, "path", ScenePath.Of(transform));
             text.Append(',');
@@ -455,15 +465,27 @@ namespace Artel.Affordances.Live
 
             // 객체에 써넣지 않고 장부에 말해 둔다. 어느 목록에 들어가는지가 이미 그것을 말하고, 두 번 말하는 것은 한 사실이 어긋날
             // 자리를 둘 두는 일이다. 장부는 여전히 그것이 필요하다. 꺼지는 일이 차이가 되어 그 객체를 독자에게 데려오도록.
-            var moved = ledger.Keep(
-                identity + "|active",
-                transform.gameObject.activeInHierarchy ? "true" : "false");
+            var live = transform.gameObject.activeInHierarchy;
+
+            var flipped = ledger.Keep(identity + "|active", live ? "true" : "false");
+            var moved = flipped;
+
+            // 꺼져 있는 동안은 값을 싣지 않는다. 독자가 그것을 그리지 않기 때문이다 — 화면에 없고
+            // 누를 수도 없어 조준 후보가 아니다. 풀에서 대기하는 적 열여덟이 전량 판독의 41% 를
+            // 차지하고 있었고, 그 32 KB 는 실려 가서 버려졌다.
+            //
+            // **버리는 것이 아니라 미룬다.** 켜지는 순간 그 객체의 값을 전부 싣는다. 그러지 않으면
+            // 적이 웨이브에 나올 때 독자가 그 HP 를 영영 모른다 — 값이 안 변했으면 델타에 안 실리고,
+            // held 에 들어간 적도 없기 때문이다. 실제로 값만 빼 봤다가 렌더 대조에서 그것이 걸렸다.
+            var silent = !live && !flipped;
+            var everything = live && flipped;
 
             moved |= Where(text, transform, ledger, identity);
 
             moved |= Offered(text, transform, ledger, identity);
 
-            text.Append(",\"members\":[");
+            // 컴포넌트별로 묶어 낸다. `on` 을 멤버마다 되풀이하지 않는다(ARTEL-540).
+            text.Append(",\"by\":[");
 
             var written = 0;
 
@@ -503,16 +525,21 @@ namespace Artel.Affordances.Live
                     continue;
                 }
 
+                // 이 컴포넌트가 내놓은 것들. `on` 을 멤버마다 되풀이하지 않고 한 번만 쓰기 위해 모은다 —
+                // 한 문서에서 `on` 316개 중 295개가 같은 값이었다.
+                var mine = new StringBuilder(128);
+                var count = 0;
+
                 foreach (var member in members)
                 {
                     var said = new StringBuilder(96);
 
                     said.Append('{');
-                    Json.Property(said, "on", type.FullName);
-                    said.Append(',');
                     Json.Property(said, "member", Named(member));
-                    said.Append(',');
-                    Json.Property(said, "type", member.Type);
+
+                    // `type` 은 싣지 않는다. 어셈블리 정규화된 이름이 멤버 하나에 200~350 B 인데
+                    // 아무 독자도 읽지 않는다 — 에이전트의 `PulseMember` 에는 필드조차 없고, SDK 의
+                    // 뷰어도 orchestration 도 만지지 않는다. 값의 모양으로 해석하지 이름으로 하지 않는다.
 
                     // 장부에 두는 것뿐 아니라 문서에도 말한다. 같은 타입과 같은 멤버의 이름을 댄 두 항목을 받은 독자는 각각이 그 객체의 어느
                     // 컴포넌트에서 왔는지 가릴 방법이 없다.
@@ -528,19 +555,38 @@ namespace Artel.Affordances.Live
 
                     said.Append(',');
 
-                    if (!Value(said, member, component, ledger, identity + "|" + among + member.Key))
+                    // 장부는 언제나 말한다. 안 보내는 것과 안 아는 것은 다르다 — 여기서 빼먹으면
+                    // 다음 판독이 그 값을 처음 보는 것으로 알고 전부 변화라고 보고한다.
+                    var wrote = Value(
+                        said, member, component, ledger, identity + "|" + among + member.Key,
+                        everything);
+
+                    if (!wrote || silent)
                     {
                         continue;
                     }
 
                     said.Append('}');
 
+                    if (count > 0)
+                    {
+                        mine.Append(',');
+                    }
+
+                    mine.Append(said);
+                    count++;
+                }
+
+                if (count > 0)
+                {
                     if (written > 0)
                     {
                         text.Append(',');
                     }
 
-                    text.Append(said);
+                    text.Append("{");
+                    Json.Property(text, "on", type.FullName);
+                    text.Append(",\"m\":[").Append(mine).Append("]}");
                     written++;
                 }
             }
@@ -569,7 +615,8 @@ namespace Artel.Affordances.Live
         /// </remarks>
         /// <returns>값이 이번 판독에 들어갈 때 참 — 움직였거나, 전부가 나가는 중이거나.</returns>
         private static bool Value(
-            StringBuilder text, Watched member, Component on, Ledger ledger, string key)
+            StringBuilder text, Watched member, Component on, Ledger ledger, string key,
+            bool always = false)
         {
             // 장부가 실제로 나간 것을 정확히 쥘 수 있도록 먼저 옆에 써 둔다. 값이 아니라 조각을 비교한다는 것은 그 둘이 결코 어긋날 수
             // 없다는 뜻이다 — 데드밴드가 붙잡아 둔 좌표는 두 번째 규칙이 그래야 한다고 말해서가 아니라 그것이 *같은 텍스트이기
@@ -580,7 +627,11 @@ namespace Artel.Affordances.Live
 
             // 쓰이든 쓰이지 않든 장부에는 말한다. 판독이 나르는 것과 판독이 아는 것은 다른 것이다: 가만히 있어서 빠진 값도 여전히
             // 기록돼야 하고, 그러지 않으면 다음 판독이 그것이 없다고 보고 그것을 변화라고 부른다.
-            if (!ledger.Keep(key, said.ToString()))
+            var kept = ledger.Keep(key, said.ToString());
+
+            // `always` 는 이 객체가 방금 켜졌다는 뜻이다. 꺼져 있는 동안 값을 안 보냈으므로 독자는
+            // 아무것도 모르고, 장부는 "안 바뀌었다" 고 말한다 — 그 둘이 겹치면 값이 영영 안 간다.
+            if (!kept && !always)
             {
                 return false;
             }
