@@ -15,7 +15,7 @@ namespace Artel.Affordances.Scan
     /// until it has finished loading. Both end up as new roots somewhere, which is what this
     /// tracks.
     /// </remarks>
-    internal sealed class StraySpawnTracker
+    public sealed class StraySpawnTracker
     {
         private readonly HashSet<int> preexisting = new HashSet<int>();
 
@@ -102,7 +102,7 @@ namespace Artel.Affordances.Scan
         /// The scene Unity parks <c>DontDestroyOnLoad</c> objects in, so its roots can be walked
         /// like any other scene's.
         /// </summary>
-        internal static Scene DontDestroyOnLoadScene()
+        public static Scene DontDestroyOnLoadScene()
         {
             // Unity hands out no reference to the DontDestroyOnLoad scene, and SceneManager does
             // not count it. Moving a throwaway object into it is the only way to read the handle
