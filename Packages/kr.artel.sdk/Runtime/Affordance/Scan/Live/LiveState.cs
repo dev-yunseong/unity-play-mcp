@@ -33,6 +33,9 @@ namespace Artel.Affordances.Live
         /// </remarks>
         private const int MaxHolders = 16;
 
+        /// <summary>객체마다 장부에 하나씩 두는 키. 사라짐을 읽어내는 자리이기도 하다.</summary>
+        private const string Active = "|active";
+
         /// <summary>
         /// 감시 대상 멤버를 전부 읽고 문서 하나를 쓴다.
         /// </summary>
@@ -149,6 +152,27 @@ namespace Artel.Affordances.Live
                 }
             }
 
+            // 그리고 무엇이 사라졌는지도 말한다. 위의 것은 판독을 나가게 만들 뿐 — 이름은 `changed` 에 멤버 키로 실리고, 읽는 쪽에서
+            // 그것은 "이 값이 움직였다" 로 읽힌다. 객체가 없어졌다는 것은 다른 문장이고, 아무도 그것을 말하지 않고 있었다.
+            var gone = Gone(since, now, everything, truncated);
+
+            if (gone != null)
+            {
+                text.Append(",\"gone\":[");
+
+                for (var at = 0; at < gone.Count; at++)
+                {
+                    if (at > 0)
+                    {
+                        text.Append(',');
+                    }
+
+                    Json.String(text, gone[at]);
+                }
+
+                text.Append(']');
+            }
+
             text.Append(",\"changed\":[");
             moved.Sort(StringComparer.Ordinal);
 
@@ -262,6 +286,60 @@ namespace Artel.Affordances.Live
             {
                 return Say(key, value) | Everything;
             }
+        }
+
+        /// <summary>사라진 객체들. 직전 판독에 있었고 이번 걷기가 만나지 못한 것.</summary>
+        /// <remarks>
+        /// 통이 둘뿐이었다 — <c>active</c> 와 <c>deactive</c>. 파괴된 객체는 어느 쪽에도 안 실린다: 걷기가 살아 있는 계층만 걷고,
+        /// 그래서 그것은 언급이 없어질 뿐이다. 읽는 쪽은 그 없음을 "이번에 소식이 없다" 로 읽고 마지막으로 본 좌표와 누를 수 있다는
+        /// 말을 계속 들고 있는다. 샘플 게임이 카드를 파괴하는데, 조합이 끝난 카드를 에이전트가 계속 집어 넣으려 했다.
+        ///
+        /// 객체마다 <c>|active</c> 를 하나씩 장부에 말해 두므로 — 멤버도 offer 도 없는 객체까지 — 그 키가 사라졌다는 것이 곧 이번
+        /// 걷기가 그것을 만나지 못했다는 뜻이다. 멤버 키로 세면 값을 안 든 객체는 영영 못 지운다.
+        ///
+        /// **걷지 못한 것과 없는 것을 가를 수 있는 것은 걷는 쪽뿐이다.** 읽는 쪽은 델타만 보는데 거기서 그 둘이 똑같은 없음으로
+        /// 보인다 — 장부는 읽은 전부를 쥐고 델타는 그중 움직인 것만 나르기 때문이다. 그것이 이 문장을 판독이 말해야 하는 이유다.
+        ///
+        /// 그래서 판독이 잘렸으면 아무 말도 하지 않는다. 한도에 걸려 안 걸은 객체를 사라졌다고 하면 읽는 쪽이 살아 있는 것을
+        /// 지운다. 침묵의 값은 잔상이 한 판독 더 남는 것이고 그것은 다음 전량 판독이 걷어가지만, 잘못 지운 카드는 아무도 되돌려
+        /// 주지 않는다.
+        ///
+        /// 전량 판독에도 필요 없다. 읽는 쪽이 그 판독에서 쥔 것을 통째로 갈아치운다.
+        ///
+        /// statics 는 이 병이 없다. 그 목록은 걷기가 아니라 watch list 에서 오므로 판독마다 같은 키를 말하고, 소유자가 죽으면
+        /// 키가 사라지는 것이 아니라 값이 <c>null</c> 이 된다.
+        /// </remarks>
+        internal static List<string> Gone(
+            Dictionary<string, string> since, Dictionary<string, string> now, bool everything, int truncated)
+        {
+            if (everything || truncated > 0)
+            {
+                return null;
+            }
+
+            List<string> gone = null;
+
+            foreach (var pair in since)
+            {
+                if (now.ContainsKey(pair.Key) || !pair.Key.EndsWith(Active, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (gone == null)
+                {
+                    gone = new List<string>();
+                }
+
+                gone.Add(pair.Key.Substring(0, pair.Key.Length - Active.Length));
+            }
+
+            if (gone != null)
+            {
+                gone.Sort(StringComparer.Ordinal);
+            }
+
+            return gone;
         }
 
         private static void Statics(StringBuilder text, List<Watched> statics, Ledger ledger)
@@ -467,7 +545,7 @@ namespace Artel.Affordances.Live
             // 자리를 둘 두는 일이다. 장부는 여전히 그것이 필요하다. 꺼지는 일이 차이가 되어 그 객체를 독자에게 데려오도록.
             var live = transform.gameObject.activeInHierarchy;
 
-            var flipped = ledger.Keep(identity + "|active", live ? "true" : "false");
+            var flipped = ledger.Keep(identity + Active, live ? "true" : "false");
             var moved = flipped;
 
             // 꺼져 있는 동안은 값을 싣지 않는다. 독자가 그것을 그리지 않기 때문이다 — 화면에 없고
