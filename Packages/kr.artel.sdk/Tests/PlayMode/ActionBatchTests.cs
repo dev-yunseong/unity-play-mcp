@@ -81,6 +81,67 @@ namespace Artel.Tests
         }
 
         [Test]
+        public void ActionResult_CarriesTheFrameTheBatchFinishedOn()
+        {
+            // 판독은 자기가 언제 잡혔는지를 말한다. 이 답이 안 말하면 받는 쪽은 어떤 판독이 이
+            // 액션 이후의 것인지 가릴 수 없고, 시간으로 어림잡게 된다 — 그 어림이 틀려서
+            // 에이전트가 같은 액션을 두 번 보냈다(ARTEL-620).
+            var transport = new RecordingTransport();
+            var manager = CreateManager(transport);
+            var before = Time.frameCount;
+            var request = new ArtelRequestDto
+            {
+                Type = "ACTION",
+                Actions = new List<ActionRequestDto>
+                {
+                    new ActionRequestDto
+                    {
+                        Id = 1,
+                        Method = "button_click",
+                        Parameters = new List<object> { buttonObject.GetInstanceID() }
+                    }
+                }
+            };
+
+            Drain(ExecuteActionRequest(manager, request));
+
+            var answer = JObject.Parse(transport.Sent[transport.Sent.Count - 1]);
+            Assert.That((string)answer["type"], Is.EqualTo("ACTION_RESULT"));
+            // 판독이 쓰는 그 시계라야 견주는 일이 뜻을 가진다.
+            Assert.That((int)answer["frame"], Is.GreaterThanOrEqualTo(before));
+        }
+
+        [Test]
+        public void ActionResult_FrameIsWhenTheBatchEndedNotWhenItArrived()
+        {
+            // 커서 활강처럼 여러 프레임에 걸치는 액션이 있다. 큐에 넣은 프레임을 찍으면 그런
+            // 액션에서 답이 화면보다 앞서고, 기다리는 쪽은 액션 이전 화면을 결과로 읽는다.
+            var transport = new RecordingTransport();
+            var manager = CreateManager(transport);
+            var request = new ArtelRequestDto
+            {
+                Type = "ACTION",
+                Actions = new List<ActionRequestDto>
+                {
+                    new ActionRequestDto
+                    {
+                        Id = 1,
+                        Method = "move_mouse",
+                        Parameters = new List<object> { 100f, 100f }
+                    }
+                }
+            };
+
+            var arrived = Time.frameCount;
+            Drain(ExecuteActionRequest(manager, request));
+            var finished = Time.frameCount;
+
+            var frame = (int)JObject.Parse(transport.Sent[transport.Sent.Count - 1])["frame"];
+            Assert.That(frame, Is.GreaterThanOrEqualTo(arrived));
+            Assert.That(frame, Is.LessThanOrEqualTo(finished));
+        }
+
+        [Test]
         public void BatchScan_ReportsSuccessWithoutReachingActionExecutor()
         {
             var transport = new RecordingTransport();
