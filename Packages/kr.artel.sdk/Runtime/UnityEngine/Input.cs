@@ -10,43 +10,57 @@ namespace Artel
         private static readonly VirtualAxisState VirtualAxes = new VirtualAxisState();
         private static readonly VirtualMouseMessenger MouseMessenger = new VirtualMouseMessenger();
 
+        /// <summary>
+        /// 키로 물어도 마우스 버튼은 마우스 상태가 답한다. <c>KeyCode.Mouse0</c> 은 왼쪽 버튼
+        /// 그 자체이므로, 가상 키보드만 보면 <c>mouse_down</c> 으로 들어온 클릭을 폴링하는 게임이
+        /// 보지 못한다. 실제 입력과 마찬가지로 둘을 OR 로 합친다 — 물리 클릭은 엔진이 이미 양쪽으로
+        /// 답하고, bool 의 OR 은 같은 사실을 두 번 세지 않는다.
+        /// </summary>
         public static bool GetKeyDown(KeyCode key)
         {
             return global::UnityEngine.Input.GetKeyDown(key) ||
-                   VirtualKeyboard.GetKeyDown(key, Time.frameCount, Time.unscaledTime);
+                   VirtualKeyboard.GetKeyDown(key, Time.frameCount, Time.unscaledTime) ||
+                   MouseButtonKeyCode.TryGetButton(key, out var button) &&
+                   VirtualMouse.GetButtonDown(button, Time.frameCount);
         }
 
+        /// <inheritdoc cref="GetKeyDown(KeyCode)"/>
         public static bool GetKeyDown(string name)
         {
             return global::UnityEngine.Input.GetKeyDown(name) ||
-                   TryParseKeyCode(name, out var key) &&
-                   VirtualKeyboard.GetKeyDown(key, Time.frameCount, Time.unscaledTime);
+                   TryParseKeyCode(name, out var key) && GetKeyDown(key);
         }
 
+        /// <inheritdoc cref="GetKeyDown(KeyCode)"/>
         public static bool GetKey(KeyCode key)
         {
             return global::UnityEngine.Input.GetKey(key) ||
-                   VirtualKeyboard.GetKey(key, Time.frameCount, Time.unscaledTime);
+                   VirtualKeyboard.GetKey(key, Time.frameCount, Time.unscaledTime) ||
+                   MouseButtonKeyCode.TryGetButton(key, out var button) &&
+                   VirtualMouse.GetButton(button, Time.frameCount);
         }
 
+        /// <inheritdoc cref="GetKeyDown(KeyCode)"/>
         public static bool GetKey(string name)
         {
             return global::UnityEngine.Input.GetKey(name) ||
-                   TryParseKeyCode(name, out var key) &&
-                   VirtualKeyboard.GetKey(key, Time.frameCount, Time.unscaledTime);
+                   TryParseKeyCode(name, out var key) && GetKey(key);
         }
 
+        /// <inheritdoc cref="GetKeyDown(KeyCode)"/>
         public static bool GetKeyUp(KeyCode key)
         {
             return global::UnityEngine.Input.GetKeyUp(key) ||
-                   VirtualKeyboard.GetKeyUp(key, Time.frameCount, Time.unscaledTime);
+                   VirtualKeyboard.GetKeyUp(key, Time.frameCount, Time.unscaledTime) ||
+                   MouseButtonKeyCode.TryGetButton(key, out var button) &&
+                   VirtualMouse.GetButtonUp(button, Time.frameCount);
         }
 
+        /// <inheritdoc cref="GetKeyDown(KeyCode)"/>
         public static bool GetKeyUp(string name)
         {
             return global::UnityEngine.Input.GetKeyUp(name) ||
-                   TryParseKeyCode(name, out var key) &&
-                   VirtualKeyboard.GetKeyUp(key, Time.frameCount, Time.unscaledTime);
+                   TryParseKeyCode(name, out var key) && GetKeyUp(key);
         }
 
         public static bool anyKey
@@ -54,7 +68,8 @@ namespace Artel
             get
             {
                 return global::UnityEngine.Input.anyKey ||
-                       VirtualKeyboard.AnyKey(Time.frameCount, Time.unscaledTime);
+                       VirtualKeyboard.AnyKey(Time.frameCount, Time.unscaledTime) ||
+                       VirtualMouse.IsAnyButtonHeld(Time.frameCount);
             }
         }
 
@@ -63,7 +78,8 @@ namespace Artel
             get
             {
                 return global::UnityEngine.Input.anyKeyDown ||
-                       VirtualKeyboard.AnyKeyDown(Time.frameCount, Time.unscaledTime);
+                       VirtualKeyboard.AnyKeyDown(Time.frameCount, Time.unscaledTime) ||
+                       VirtualMouse.IsAnyButtonDown(Time.frameCount);
             }
         }
 

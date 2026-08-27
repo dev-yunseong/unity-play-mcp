@@ -38,6 +38,55 @@ namespace Artel.Tests.Input
             Assert.That(mouse.IsAnyButtonHeld(4), Is.True);
         }
 
+        /// <summary>
+        /// <c>mouse_down</c> 과 <c>KeyCode.Mouse0</c> 을 실은 <c>key_down</c> 이 같은 버튼을 가리키므로
+        /// 둘이 겹쳐 들어올 수 있다. 그때 폴링하는 게임이 클릭을 두 번으로 세면 안 된다.
+        /// </summary>
+        [Test]
+        public void Press_OnAButtonAlreadyHeldChangesNothing()
+        {
+            var mouse = new VirtualMouseState();
+            mouse.Press(0, 10);
+
+            Assert.That(mouse.GetButtonDown(0, 11), Is.True);
+
+            mouse.Press(0, 11);
+
+            Assert.That(mouse.GetButton(0, 12), Is.True, "the button stays held");
+            Assert.That(
+                mouse.GetButtonDown(0, 12), Is.False,
+                "the second press must not start the hold over");
+        }
+
+        [Test]
+        public void Press_AfterAReleaseStartsANewHold()
+        {
+            var mouse = new VirtualMouseState();
+            mouse.Press(0, 10);
+            mouse.Release(0, 11);
+
+            // 놓기가 예약된 버튼은 이미 끝난 누름이다. 다음 누름을 삼키면 연타가 한 번이 된다.
+            mouse.Press(0, 11);
+
+            Assert.That(mouse.GetButtonDown(0, 12), Is.True);
+            Assert.That(mouse.GetButton(0, 12), Is.True);
+        }
+
+        [Test]
+        public void IsAnyButtonDown_OnlyReportsTheFrameThePressStartsOn()
+        {
+            var mouse = new VirtualMouseState();
+
+            Assert.That(mouse.IsAnyButtonDown(10), Is.False);
+
+            mouse.Press(2, 10);
+
+            Assert.That(mouse.IsAnyButtonDown(10), Is.False, "the press starts on the next frame");
+            Assert.That(mouse.IsAnyButtonDown(11), Is.True);
+            Assert.That(mouse.IsAnyButtonDown(12), Is.False, "held is not down");
+            Assert.That(mouse.IsAnyButtonHeld(12), Is.True);
+        }
+
         [Test]
         public void Press_IgnoresAButtonThatDoesNotExist()
         {

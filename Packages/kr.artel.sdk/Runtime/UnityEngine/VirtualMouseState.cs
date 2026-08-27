@@ -79,6 +79,16 @@ namespace Artel
                 return;
             }
 
+            // 이미 눌린 채인 버튼을 다시 누르면 StartFrame 이 새로 찍혀 GetButtonDown 이 한 번 더
+            // 참이 된다. mouse_down 과 KeyCode.Mouse0 을 실은 key_down 이 같은 버튼을 가리키므로
+            // 둘이 겹쳐 들어올 수 있고, 그때 폴링하는 게임이 클릭을 두 번으로 세면 안 된다.
+            // 놓기를 예약해 둔 버튼은 다시 누를 수 있다 — 그것은 이미 끝난 누름의 다음 누름이다.
+            var held = buttons[button];
+            if (held != null && !held.ReleaseFrame.HasValue)
+            {
+                return;
+            }
+
             // The frame after the request, matching the virtual keyboard: the action is handled in
             // the manager's Update, and a consumer polling in its own Update must not miss it
             // because of script execution order.
@@ -126,6 +136,23 @@ namespace Artel
             for (var button = 0; button < ButtonCount; button++)
             {
                 if (GetButton(button, frame))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Unity 의 <c>Input.anyKeyDown</c> 은 마우스 버튼도 센다. 가상 쪽만 그러지 않으면 에이전트가
+        /// 누른 버튼이 <c>anyKeyDown</c> 으로 넘길 화면에서만 조용해진다.
+        /// </summary>
+        public bool IsAnyButtonDown(int frame)
+        {
+            for (var button = 0; button < ButtonCount; button++)
+            {
+                if (GetButtonDown(button, frame))
                 {
                     return true;
                 }

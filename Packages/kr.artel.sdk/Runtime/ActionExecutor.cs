@@ -110,7 +110,7 @@ namespace Artel
                     yield break;
 
                 case "key_click":
-                    completed(ExecuteKeyClick(actionId, parameters));
+                    yield return ExecuteKeyClick(actionId, parameters, completed);
                     yield break;
 
                 case "key_down":
@@ -272,6 +272,20 @@ namespace Artel
                     method + " requires params [] or [button], where button is 0, 1, or 2.");
             }
 
+            SetButton(button, press);
+            return ActionResultDto.Success(actionId);
+        }
+
+        /// <summary>
+        /// 가상 마우스 상태와 uGUI 이벤트를 한 번에 민다.
+        /// </summary>
+        /// <remarks>
+        /// <c>mouse_down</c> 과 <c>KeyCode.Mouse0</c> 을 실은 <c>key_down</c> 이 같은 버튼을
+        /// 가리킨다. 두 경로가 각자 밀면 언젠가 한쪽만 절반을 밀어 "폴링에는 잡히는데 버튼은
+        /// 안 눌리는" 상태가 되므로, 미는 일은 여기 한 자리에만 둔다.
+        /// </remarks>
+        private void SetButton(int button, bool press)
+        {
             if (press)
             {
                 ArtelInput.PressMouseButton(button);
@@ -282,17 +296,24 @@ namespace Artel
                 ArtelInput.ReleaseMouseButton(button);
                 pointerEvents.Release(button);
             }
-
-            return ActionResultDto.Success(actionId);
         }
 
-        private static ActionResultDto ExecuteKeyHold(
+        private ActionResultDto ExecuteKeyHold(
             int actionId, string method, List<object> parameters, bool press)
         {
             if (parameters == null || parameters.Count == 0 ||
                 !TryReadKeyCode(parameters[0], out var key))
             {
                 return ActionResultDto.Failure(actionId, method + " requires params [keyCode].");
+            }
+
+            // KeyCode.Mouse0 은 마우스 왼쪽 버튼 그 자체다. 가상 키보드에만 넣으면 GetKey 로
+            // 폴링하는 게임에만 닿고, 포인터 아래 오브젝트의 OnMouseDown 도 uGUI 핸들러도
+            // 부르지 못한다 — 액션은 성공으로 보고되는데 게임은 아무 일도 없는 그 형태가 된다.
+            if (MouseButtonKeyCode.TryGetButton(key, out var button))
+            {
+                SetButton(button, press);
+                return ActionResultDto.Success(actionId);
             }
 
             if (press)
@@ -632,19 +653,45 @@ namespace Artel
             return "Target is not interactable: " + targetId;
         }
 
-        private static ActionResultDto ExecuteKeyClick(int actionId, List<object> parameters)
+        /// <summary>
+        /// 키를 그 시간만큼 눌렀다 놓는다. 마우스 버튼이면 놓는 일을 여기서 기다렸다 직접 한다.
+        /// </summary>
+        /// <remarks>
+        /// 가상 키보드는 만료를 스스로 안다. 가상 마우스는 그러지 않고, 만료를 그쪽 상태에 넣어도
+        /// 놓이는 순간을 아무도 몰라 <c>pointerUp</c> 과 <c>OnMouseUp</c> 이 빠진다. 그래서
+        /// 마우스만 코루틴으로 갈라, 누름과 놓음 양쪽 모두가 이벤트를 내게 한다.
+        ///
+        /// 기다림은 scaled time 이 아니다. <c>pause_time</c> 이 걸린 게임에서 scaled 로 재면
+        /// 영영 끝나지 않는다 — 가상 키보드도 같은 이유로 <c>unscaledTime</c> 으로 잰다.
+        ///
+        /// 기다리는 사이에 연결이 끊겨도 따로 정리할 것이 없다.
+        /// <c>ReleaseAllVirtualInput</c> 과 <c>pointerEvents.ReleaseAll</c> 이 이미 버튼을
+        /// 놓았고, 뒤늦은 놓음은 양쪽 모두에서 아무 일도 하지 않는다.
+        /// </remarks>
+        private IEnumerator ExecuteKeyClick(
+            int actionId, List<object> parameters, Action<ActionResultDto> completed)
         {
             if (parameters == null || parameters.Count < 2 ||
                 !TryReadKeyCode(parameters[0], out var key) ||
                 !TryReadDuration(parameters[1], out var durationSeconds))
             {
-                return ActionResultDto.Failure(
+                completed(ActionResultDto.Failure(
                     actionId,
-                    "key_click requires params [keyCode, positiveDurationSeconds].");
+                    "key_click requires params [keyCode, positiveDurationSeconds]."));
+                yield break;
             }
 
-            ArtelInput.ClickKey(key, durationSeconds);
-            return ActionResultDto.Success(actionId);
+            if (!MouseButtonKeyCode.TryGetButton(key, out var button))
+            {
+                ArtelInput.ClickKey(key, durationSeconds);
+                completed(ActionResultDto.Success(actionId));
+                yield break;
+            }
+
+            SetButton(button, true);
+            yield return new WaitForSecondsRealtime(durationSeconds);
+            SetButton(button, false);
+            completed(ActionResultDto.Success(actionId));
         }
 
         /// <summary>

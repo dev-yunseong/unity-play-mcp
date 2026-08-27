@@ -41,6 +41,10 @@ namespace Artel.Tests
         [TearDown]
         public void TearDown()
         {
+            // 가상 입력은 정적이라 테스트 사이를 넘어간다. 버튼을 쥔 채 끝난 테스트가 다음 테스트의
+            // 첫 줄을 참으로 만들어 두면, 실패는 엉뚱한 곳에서 난다.
+            ArtelInput.ReleaseAllVirtualInput();
+
             foreach (var alive in new[] { canvasObject, eventSystemObject, host })
             {
                 if (alive != null)
@@ -158,6 +162,152 @@ namespace Artel.Tests
             // A run that ends mid-drag must not leave the game waiting for an end that never comes.
             Assert.That(source.Events, Does.Contain("endDrag"));
             Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+        }
+
+        /// <summary>
+        /// <c>KeyCode.Mouse0</c> 은 마우스 왼쪽 버튼 그 자체다. 키로 들어온 요청이 버튼으로 들어온
+        /// 요청과 같은 곳에 닿아야, 클릭을 키코드로 읽는 게임이 에이전트를 본다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator KeyDownMouse0_PressesTheButtonAndFiresThePointerHandlers()
+        {
+            var manager = CreateManager(new RecordingTransport());
+            yield return null;
+            var target = CreateDragTarget("click target", UnityPointOf(GrabPoint));
+            yield return null;
+            IsolateFixtureRaycaster();
+
+            yield return RunBatch(
+                manager,
+                NewAction(1, "move_mouse", Coordinates(GrabPoint)),
+                NewAction(2, "key_down", Params("Mouse0")));
+            yield return null;
+
+            Assert.That(ArtelInput.GetMouseButton(0), Is.True, "key_down did not press the button");
+            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.True);
+            Assert.That(target.Events, Is.EqualTo(new[] { "down" }));
+
+            yield return RunBatch(manager, NewAction(3, "key_up", Params("Mouse0")));
+            yield return null;
+
+            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.False);
+            Assert.That(target.Events, Is.EqualTo(new[] { "down", "up", "click" }));
+        }
+
+        [UnityTest]
+        public IEnumerator MouseDown_IsVisibleToAGamePollingTheMouseKeyCode()
+        {
+            var manager = CreateManager(new RecordingTransport());
+
+            yield return RunBatch(manager, NewAction(1, "mouse_down", Params(0d)));
+            yield return null;
+
+            // 반대 방향. 이것이 없으면 Input.GetKey(KeyCode.Mouse0) 으로 클릭을 읽는 게임은
+            // mouse_down 으로 들어온 클릭을 보지 못한다.
+            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.True);
+
+            yield return RunBatch(manager, NewAction(2, "mouse_up", Params(0d)));
+            yield return null;
+
+            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator KeyClickMouse0_LetsGoAtTheEndOfTheDurationWithBothEdgesDispatched()
+        {
+            var manager = CreateManager(new RecordingTransport());
+            yield return null;
+            var target = CreateDragTarget("click target", UnityPointOf(GrabPoint));
+            yield return null;
+            IsolateFixtureRaycaster();
+
+            yield return RunBatch(
+                manager,
+                NewAction(1, "move_mouse", Coordinates(GrabPoint)),
+                NewAction(2, "key_click", Params("Mouse0", 0.05d)));
+            yield return null;
+
+            // 만료를 상태에 맡기면 놓이는 순간을 아무도 몰라 up 과 click 이 빠진다.
+            Assert.That(target.Events, Is.EqualTo(new[] { "down", "up", "click" }));
+            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+        }
+
+        /// <summary>
+        /// 게임이 멈춰 있어도 놓여야 한다. scaled time 으로 재면 <c>pause_time</c> 이 걸린 게임에서
+        /// 영영 끝나지 않고, 그 버튼은 실행이 끝날 때까지 눌린 채로 남는다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator KeyClickMouse0_LetsGoEvenWhileGameTimeIsFrozen()
+        {
+            var manager = CreateManager(new RecordingTransport());
+
+            yield return RunBatch(
+                manager,
+                NewAction(1, "pause_time", new List<object>()),
+                NewAction(2, "key_click", Params("Mouse0", 0.05d)),
+                NewAction(3, "resume_time", new List<object>()));
+            yield return null;
+
+            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+            Assert.That(Time.timeScale, Is.EqualTo(1f).Within(0.001f));
+        }
+
+        [UnityTest]
+        public IEnumerator MouseDownThenKeyDownMouse0_ReachesTheHandlerOnce()
+        {
+            var manager = CreateManager(new RecordingTransport());
+            yield return null;
+            var target = CreateDragTarget("click target", UnityPointOf(GrabPoint));
+            yield return null;
+            IsolateFixtureRaycaster();
+
+            yield return RunBatch(
+                manager,
+                NewAction(1, "move_mouse", Coordinates(GrabPoint)),
+                NewAction(2, "mouse_down", Params(0d)),
+                NewAction(3, "key_down", Params("Mouse0")));
+            yield return null;
+
+            // 같은 버튼을 두 어휘로 눌렀을 뿐이다. 게임이 클릭을 두 번으로 세면 안 된다.
+            Assert.That(target.Events, Is.EqualTo(new[] { "down" }));
+        }
+
+        [UnityTest]
+        public IEnumerator KeyDownMouse1_DrivesTheRightButtonAndLeavesTheLeftAlone()
+        {
+            var manager = CreateManager(new RecordingTransport());
+
+            yield return RunBatch(manager, NewAction(1, "key_down", Params("Mouse1")));
+            yield return null;
+
+            Assert.That(ArtelInput.GetMouseButton(1), Is.True);
+            Assert.That(ArtelInput.GetKey(KeyCode.Mouse1), Is.True);
+            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.False);
+
+            // Unity 의 anyKey 는 마우스 버튼도 센다.
+            Assert.That(ArtelInput.anyKey, Is.True);
+        }
+
+        /// <summary>
+        /// 마우스가 아닌 키는 아무것도 바뀌지 않았다. 라우팅이 너무 넓게 잡히면 여기서 걸린다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator KeyClick_OnANonMouseKeyStillExpiresOnItsOwn()
+        {
+            var manager = CreateManager(new RecordingTransport());
+
+            yield return RunBatch(manager, NewAction(1, "key_click", Params("Space", 0.05d)));
+            yield return null;
+
+            Assert.That(ArtelInput.GetKey(KeyCode.Space), Is.True);
+            Assert.That(ArtelInput.GetMouseButton(0), Is.False, "a keyboard key must not press a button");
+
+            yield return new WaitForSecondsRealtime(0.1f);
+            yield return null;
+
+            Assert.That(ArtelInput.GetKey(KeyCode.Space), Is.False);
         }
 
         [UnityTest]
