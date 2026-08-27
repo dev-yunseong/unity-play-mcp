@@ -480,6 +480,8 @@ namespace Artel.Affordances.Live
             var silent = !live && !flipped;
             var everything = live && flipped;
 
+            moved |= Tagged(text, transform, ledger, identity);
+
             moved |= Where(text, transform, ledger, identity);
 
             moved |= Offered(text, transform, ledger, identity);
@@ -853,6 +855,51 @@ namespace Artel.Affordances.Live
             text.Append(",\"z\":");
             Coordinate(text, restless.Settle(key + "|z", world.z));
             text.Append("}}");
+        }
+
+        /// <summary>
+        /// 게임이 이 객체를 무엇으로 분류해 두었는가.
+        /// </summary>
+        /// <remarks>
+        /// <c>CompareTag</c> 로 갈라지는 규칙이 Unity 에서 가장 흔한 관용구 중 하나이고, 그 갈래가 QA 가 확인해야 하는
+        /// 규칙인 경우도 흔하다. 샘플 게임의 조합 칸이 그렇다 — <c>card.CompareTag("Spell")</c> 이 어느 카드가 어느 칸에
+        /// 들어가는지를 정하는데, 판독에 그것을 가릴 값이 없어 에이전트가 카드를 반대로 넣었다. 사람이 채팅으로 알려줘야
+        /// 알았다.
+        ///
+        /// 조건이 물었기 때문에 싣는 것이 <b>아니다.</b> 그랬다면 감시 목록이 이미 가져왔을 것이다 — 실제로 그 조건은
+        /// <c>Cards.Word::tag</c> 를 목록에 올려놓았고, 다만 <c>Word</c> 가 컴포넌트가 아니라 읽어낼 인스턴스가 없었다.
+        /// 태그는 <see cref="Where"/> 가 싣는 자리나 <c>active</c> 와 같은 층이다: <b>Unity 가 모든 객체에 주는 것</b>이라
+        /// 싣는다. 게임별 지식이 아니므로 어느 프로젝트에서나 같은 뜻이다.
+        ///
+        /// <c>Untagged</c> 는 안 싣는다. 태그가 없는 객체가 대다수이고, 기본값을 전부에 붙이면 문서만 커지고 말하는 것이
+        /// 없다.
+        ///
+        /// 장부를 탄다. 이 게임은 런타임에 태그를 정하므로(<c>gameObject.tag = this.word.tag</c>) 그 순간이 변화로
+        /// 보고되어야 한다.
+        /// </remarks>
+        private static bool Tagged(
+            StringBuilder text, Transform transform, Ledger ledger, string identity)
+        {
+            var tag = transform.gameObject.tag;
+
+            if (string.IsNullOrEmpty(tag) || tag == "Untagged")
+            {
+                return false;
+            }
+
+            var said = new StringBuilder(32);
+            said.Append(',');
+            Json.Property(said, "tag", tag);
+
+            var rendered = said.ToString();
+
+            if (!ledger.Keep(identity + "|tag", rendered))
+            {
+                return false;
+            }
+
+            text.Append(rendered);
+            return true;
         }
 
         /// <summary>
