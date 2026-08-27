@@ -656,6 +656,10 @@ namespace Artel
                 // cannot serve: it is this message's own number and shares no
                 // sequence with the request's.
                 RequestId = request.Id,
+                // 여기서 읽는다. 배치를 받은 자리가 아니라 마지막 액션이 끝난 자리다 — 커서 활강처럼
+                // 여러 프레임에 걸치는 액션이 있고, 그때 둘이 갈린다. 기다리는 쪽이 궁금한 것은 배치가
+                // 끝난 뒤의 화면이므로 끝난 프레임이라야 답이 된다(ARTEL-620).
+                Frame = Time.frameCount,
                 Results = results
             };
 
