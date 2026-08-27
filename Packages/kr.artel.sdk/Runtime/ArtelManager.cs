@@ -68,6 +68,9 @@ namespace Artel
         /// <summary>Frame Timing Stats 경고를 한 번만 내기 위한 표시. 매 보고마다 찍으면 로그가 덮인다.</summary>
         private bool warnedFrameTimingUnavailable;
         private bool reportedDeviceContext;
+
+        /// <summary>지난 프레임의 전송 연결 상태. 새 연결이 열린 프레임을 집어내는 데만 쓴다.</summary>
+        private bool transportWasConnected;
         private ArtelStreamHost streamHost;
         private Coroutine webRtcPump;
 
@@ -258,8 +261,11 @@ namespace Artel
 
                 if (webSocketTransport == null)
                 {
+                    transportWasConnected = false;
                     return;
                 }
+
+                NoticeNewConnection();
 
                 using (ArtelProfilerMarkers.ManagerHandleMessage.Auto())
                 {
@@ -279,6 +285,29 @@ namespace Artel
                     SendPerformanceReport();
                 }
             }
+        }
+
+        /// <summary>
+        /// 연결이 새로 열린 프레임에 씬 해시를 비운다.
+        /// </summary>
+        /// <remarks>
+        /// 재연결한 서버 세션은 이 SDK 가 무엇을 띄우고 있는지 모른다. SceneStatePoller 는 마지막으로
+        /// 보낸 씬의 해시를 들고 있어서, 씬이 그대로면 GAME_STATE 를 다시 보내지 않는다. 그러면
+        /// 소켓만 되살아나고 새 세션은 빈 채로 남아, 에이전트가 아무것도 보지 못한 채 액션을 고른다.
+        ///
+        /// 상승 edge 를 여기서 재는 이유는 전송 쪽 콜백이 Unity 메인 스레드가 아니기 때문이다.
+        /// Update 에서 상태를 읽으면 그 판정과 Reset 이 모두 메인 스레드에 남는다.
+        /// </remarks>
+        private void NoticeNewConnection()
+        {
+            var connected = webSocketTransport.IsConnected;
+
+            if (connected && !transportWasConnected)
+            {
+                sceneStatePoller.Reset(Time.unscaledTime);
+            }
+
+            transportWasConnected = connected;
         }
 
         public void StartTransport()

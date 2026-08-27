@@ -263,6 +263,78 @@ namespace Artel.Tests.Transport
             Assert.That(() => ArtelWebSocketClient.EnableModernTls(socket), Throws.Nothing);
         }
 
+        // 4001은 토큰이나 인스턴스 접근이 거절됐다는 뜻이다. 재연결은 같은 URL을 다시 쓰므로
+        // 대답도 같고, 재시도하면 끝나지 않는 고리가 된다.
+        [Test]
+        public void ReconnectDelay_RefusesCredentialsRejection()
+        {
+            TimeSpan delay;
+
+            var retries = ArtelWebSocketClient.TryReconnectDelay(4001, 0, out delay);
+
+            Assert.That(retries, Is.False);
+        }
+
+        // 4002는 이미 붙어 있는 인스턴스다. 앞 연결이 서버에서 정리되면 풀리므로 기다렸다 다시 건다.
+        [Test]
+        public void ReconnectDelay_RetriesDuplicateInstance()
+        {
+            TimeSpan delay;
+
+            var retries = ArtelWebSocketClient.TryReconnectDelay(4002, 0, out delay);
+
+            Assert.That(retries, Is.True);
+            Assert.That(delay, Is.EqualTo(TimeSpan.FromSeconds(1)));
+        }
+
+        // 1005는 닫힘 코드가 없는 close frame이다. 프록시가 유휴 연결을 끊을 때 이 모습으로 온다.
+        [Test]
+        public void ReconnectDelay_BacksOffToCeiling()
+        {
+            var expected = new[] { 1d, 2d, 4d, 8d, 16d, 30d, 30d, 30d };
+
+            for (var attempt = 0; attempt < expected.Length; attempt++)
+            {
+                TimeSpan delay;
+
+                var retries = ArtelWebSocketClient.TryReconnectDelay(1005, attempt, out delay);
+
+                Assert.That(retries, Is.True, "attempt " + attempt);
+                Assert.That(delay.TotalSeconds, Is.EqualTo(expected[attempt]), "attempt " + attempt);
+            }
+        }
+
+        // 무한히 두드리지 않는다. 여기서 멈춘 뒤에는 오버레이의 연결 버튼이 수동 경로로 남는다.
+        [Test]
+        public void ReconnectDelay_GivesUpAfterEightAttempts()
+        {
+            TimeSpan delay;
+
+            var retries = ArtelWebSocketClient.TryReconnectDelay(1005, 8, out delay);
+
+            Assert.That(retries, Is.False);
+        }
+
+        // Start가 "client가 null이 아니면 물러선다"로 판정하면, 끊긴 소켓이 그 자리를 영원히
+        // 차지해 재연결이 막힌다. 판정 기준은 소켓이 살아 있는지다.
+        [Test]
+        public void LiveSocket_ExcludesClosedSocket()
+        {
+            var socket = new WebSocket("ws://socket.artel.example/ws/sdk");
+            Assert.That(ArtelWebSocketClient.IsLive(socket), Is.True);
+
+            ((IDisposable)socket).Dispose();
+
+            Assert.That(socket.ReadyState, Is.EqualTo(WebSocketState.Closed));
+            Assert.That(ArtelWebSocketClient.IsLive(socket), Is.False);
+        }
+
+        [Test]
+        public void LiveSocket_ExcludesMissingSocket()
+        {
+            Assert.That(ArtelWebSocketClient.IsLive(null), Is.False);
+        }
+
         [Test]
         public void WebSocketClient_RefusesEndpointWithoutInstanceId()
         {
