@@ -26,7 +26,20 @@ namespace Artel
         /// 것이기 때문이다. 이것 없이 executor 를 만드는 테스트에서는 null 이고, 아래의 모든 사용이 먼저 묻는 이유가 그것이다.
         /// </remarks>
         private readonly IReadingChannel readings;
-        private readonly ICaptureUploader uploader;
+
+        /// <summary>
+        /// Where a capture goes once it is encoded. Swappable, unlike the rest of these.
+        /// </summary>
+        /// <remarks>
+        /// The orchestration uploader asks that server for a ticket, and that endpoint refuses an
+        /// instance with no QA run in flight — which is every capture taken from the local test
+        /// page. So the test page hands its own uploader in and takes it back when it is switched
+        /// off, the same way it does with the transport.
+        /// </remarks>
+        private ICaptureUploader uploader;
+
+        /// <summary>The one built at construction, kept so a borrowed uploader can be given back.</summary>
+        private readonly ICaptureUploader defaultUploader;
 
         /// <summary>원격 스캔 명령이 부르는 두 이음매. 이것들 없이 만들어진 실행기에서는 null 이고, 그러면 그 액션은 거절된다.</summary>
         private readonly IEvidenceScan evidenceScan;
@@ -63,6 +76,7 @@ namespace Artel
             this.pointerEvents = pointerEvents;
             this.capturer = capturer;
             this.uploader = uploader;
+            defaultUploader = uploader;
             this.evidenceScan = evidenceScan;
             this.evidenceUploader = evidenceUploader;
 
@@ -79,6 +93,18 @@ namespace Artel
                 ArtelInput.MoveMouse(position);
                 pointerEvents.MoveTo(position);
             };
+        }
+
+        /// <summary>Sends captures somewhere other than orchestration until <see cref="RestoreCaptureUploader"/>.</summary>
+        internal void SetCaptureUploader(ICaptureUploader replacement)
+        {
+            uploader = replacement ?? throw new ArgumentNullException(nameof(replacement));
+        }
+
+        /// <summary>Puts the orchestration uploader back, including when there never was one.</summary>
+        internal void RestoreCaptureUploader()
+        {
+            uploader = defaultUploader;
         }
 
         public IEnumerator Execute(

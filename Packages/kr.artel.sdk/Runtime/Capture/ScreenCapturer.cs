@@ -56,6 +56,9 @@ namespace Artel.Capture
             {
                 screen = RenderTexture.GetTemporary(
                     screenWidth, screenHeight, 0, RenderTextureFormat.BGRA32);
+                // 다른 end-of-frame 소비자가 남긴 target으로 back buffer grab이 향하지 않게 한다.
+                // 호출자가 쓰던 target은 finally에서 되돌려 이 캡처도 전역 렌더 상태를 새지 않는다.
+                RenderTexture.active = null;
                 ScreenCapture.CaptureScreenshotIntoRenderTexture(screen);
 
                 scaled = RenderTexture.GetTemporary(

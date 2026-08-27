@@ -148,9 +148,13 @@ namespace Artel.Streaming
                 // downscale to maxWidth happens in the blit rather than here.
                 var backBuffer = RenderTexture.GetTemporary(
                     Mathf.Max(2, Screen.width), Mathf.Max(2, Screen.height), 0, RenderTextureFormat.BGRA32);
+                var previous = RenderTexture.active;
 
                 try
                 {
+                    // grab은 현재 target이 아니라 화면 back buffer에서 시작해야 한다. 복원하지 않으면
+                    // 같은 end-of-frame에 도는 capture_screen이 이 frame texture를 화면으로 오인한다.
+                    RenderTexture.active = null;
                     ScreenCapture.CaptureScreenshotIntoRenderTexture(backBuffer);
 
                     // The screenshot is written in framebuffer orientation, which under D3D is upside
@@ -161,6 +165,7 @@ namespace Artel.Streaming
                 }
                 finally
                 {
+                    RenderTexture.active = previous;
                     RenderTexture.ReleaseTemporary(backBuffer);
                 }
             }

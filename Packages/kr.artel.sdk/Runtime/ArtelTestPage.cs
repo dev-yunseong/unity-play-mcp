@@ -16,6 +16,13 @@ namespace Artel
     .controls label { display: grid; gap: 4px; font-size: 12px; color: #57606a; }
     .controls input { color: #1f2328; }
     #key-duration { width: 96px; }
+    #capture-target { width: 160px; }
+    .split { display: flex; gap: 16px; align-items: flex-start; }
+    .split main { flex: 1 1 auto; min-width: 0; }
+    #capture { flex: 0 0 360px; position: sticky; top: 16px; border: 1px solid #d0d7de; padding: 12px; }
+    #capture header { justify-content: space-between; margin-bottom: 8px; }
+    #capture img { display: block; max-width: 100%; border: 1px solid #d0d7de; }
+    #stream-viewer video { display: block; width: min(640px, 100%); background: #111; border: 1px solid #d0d7de; }
     .node { border-left: 2px solid #d0d7de; margin: 8px 0 8px 16px; padding-left: 12px; }
     .node.inactive { border-left-style: dashed; opacity: 0.6; }
     .label { font-size: 12px; color: #57606a; margin-bottom: 4px; }
@@ -88,6 +95,21 @@ namespace Artel
     <button id=""pointer-up"">Release</button>
     <button id=""pointer-drag"">Drag to here</button>
   </section>
+  <section class=""controls"" aria-label=""Capture"">
+    <strong>Capture</strong>
+    <label>
+      Target block id
+      <input id=""capture-target"" type=""number"" min=""1"" step=""1"" placeholder=""whole screen"">
+    </label>
+    <button id=""capture-screen"">Capture</button>
+  </section>
+  <section id=""stream-viewer"" class=""controls"" aria-label=""WebRTC stream"">
+    <strong>WebRTC</strong>
+    <button id=""stream-start"">Start stream</button>
+    <button id=""stream-stop"">Stop stream</button>
+    <span id=""stream-status"">idle</span>
+    <video id=""stream-video"" autoplay playsinline muted></video>
+  </section>
   <section id=""snapshot"" class=""empty"" aria-label=""Pinned scan"">
     <header>
       <span class=""label"" id=""snapshot-label""></span>
@@ -99,7 +121,20 @@ namespace Artel
       <pre id=""snapshot-json""></pre>
     </details>
   </section>
-  <main id=""scene""></main>
+  <div class=""split"">
+    <main id=""scene""></main>
+    <section id=""capture"" aria-label=""Latest capture"">
+      <header>
+        <span class=""label"" id=""capture-status"">no capture yet</span>
+        <button id=""capture-clear"">Clear</button>
+      </header>
+      <img id=""capture-image"" alt=""Latest capture"" hidden>
+      <details>
+        <summary>raw capture result</summary>
+        <pre id=""capture-json""></pre>
+      </details>
+    </section>
+  </div>
   <pre id=""log""></pre>
   <script>
     const wsUrl = '__WS_URL__';
@@ -107,6 +142,13 @@ namespace Artel
     let actionId = 1;
     let liveSceneId = null;
     let scanMode = 'default';
+    // 어느 결과가 이 캡처의 것인지 가리는 값. capture_screen 의 성공은 결과에 액션 이름을 싣지 않으므로
+    // 보낸 액션 id 로 짝을 맞춘다.
+    let pendingCaptureId = null;
+    let streamPeer = null;
+    let streamId = null;
+    let streamRenewTimer = null;
+    let pendingRemoteIce = [];
     const status = document.getElementById('status');
     const sceneRoot = document.getElementById('scene');
     const log = document.getElementById('log');
@@ -119,6 +161,13 @@ namespace Artel
     const snapshotLabel = document.getElementById('snapshot-label');
     const snapshotScene = document.getElementById('snapshot-scene');
     const snapshotJson = document.getElementById('snapshot-json');
+    const captureTarget = document.getElementById('capture-target');
+    const captureStatus = document.getElementById('capture-status');
+    const captureImage = document.getElementById('capture-image');
+    const captureJson = document.getElementById('capture-json');
+    const captureButton = document.getElementById('capture-screen');
+    const streamStatus = document.getElementById('stream-status');
+    const streamVideo = document.getElementById('stream-video');
 
     document.getElementById('connect').onclick = connect;
     document.getElementById('scan').onclick = scan;
@@ -129,6 +178,10 @@ namespace Artel
     document.getElementById('readings-start').onclick = () => sendAction('start_readings', []);
     document.getElementById('readings-stop').onclick = () => sendAction('stop_readings', []);
     document.getElementById('snapshot-clear').onclick = clearSnapshot;
+    captureButton.onclick = captureScreen;
+    document.getElementById('capture-clear').onclick = clearCapture;
+    document.getElementById('stream-start').onclick = startStream;
+    document.getElementById('stream-stop').onclick = () => stopStream(true, 'stopped');
     document.getElementById('key-click').onclick = clickKey;
     document.getElementById('key-down').onclick = () => holdKey('key_down');
     document.getElementById('key-up').onclick = () => holdKey('key_up');
@@ -140,8 +193,8 @@ namespace Artel
     function connect() {
       ws = new WebSocket(wsUrl);
       ws.onopen = () => { status.textContent = 'connected'; scan(); };
-      ws.onclose = () => status.textContent = 'closed';
-      ws.onerror = () => status.textContent = 'error';
+      ws.onclose = () => { status.textContent = 'closed'; stopStream(false); };
+      ws.onerror = () => { status.textContent = 'error'; stopStream(false); };
       ws.onmessage = event => handleMessage(JSON.parse(event.data));
     }
 
@@ -164,21 +217,47 @@ namespace Artel
     }
 
     function sendAction(method, params) {
-      sendActions([[method, params]]);
+      return sendActions([[method, params]])[0];
     }
 
+    // Returns the id of every action sent, so a caller that has to recognise its own result —
+    // capture_screen does — can keep one. Undefined for a send that never left.
     function sendActions(steps) {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         status.textContent = 'connect first';
+        return [];
+      }
+
+      const envelopeId = actionId++;
+      const actions = steps.map(([method, params]) =>
+        ({ id: actionId++, jsonrpc: '2.0', method, params }));
+      ws.send(JSON.stringify({ type: 'ACTION', id: envelopeId, actions }));
+      return actions.map(action => action.id);
+    }
+
+    function captureScreen() {
+      const raw = captureTarget.value.trim();
+      const target = Number(raw);
+      if (raw !== '' && !Number.isInteger(target)) {
+        captureStatus.textContent = 'invalid target id';
         return;
       }
 
-      ws.send(JSON.stringify({
-        type: 'ACTION',
-        id: actionId++,
-        actions: steps.map(([method, params]) =>
-          ({ id: actionId++, jsonrpc: '2.0', method, params }))
-      }));
+      const id = sendAction('capture_screen', raw === '' ? [] : [target]);
+      if (id === undefined) return;
+
+      pendingCaptureId = id;
+      captureButton.disabled = true;
+      captureStatus.textContent = 'capturing…';
+    }
+
+    function clearCapture() {
+      pendingCaptureId = null;
+      captureButton.disabled = false;
+      captureImage.hidden = true;
+      captureImage.removeAttribute('src');
+      captureJson.textContent = '';
+      captureStatus.textContent = 'no capture yet';
     }
 
     function clickKey() {
@@ -240,6 +319,152 @@ namespace Artel
       log.textContent = JSON.stringify(message, null, 2);
       if (message.type === 'GAME_STATE') renderScene(message.scene);
       if (message.type === 'ALL_SCENES') renderAllScenes(message.scenes, message);
+      if (message.type === 'ACTION_RESULT') renderCapture(message.results);
+      if (message.type === 'WEBRTC_OFFER') acceptStreamOffer(message);
+      if (message.type === 'WEBRTC_ICE') acceptRemoteIce(message);
+      if (message.type === 'STREAM_STATE') renderStreamState(message);
+    }
+
+    function startStream() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        streamStatus.textContent = 'connect first';
+        return;
+      }
+
+      stopStream(true);
+      streamId = `test-page-${Date.now()}`;
+      pendingRemoteIce = [];
+      streamPeer = new RTCPeerConnection({ iceServers: [] });
+      streamPeer.ontrack = event => {
+        // SDK는 track을 특정 MediaStream에 묶지 않는다. 브라우저가 빈 streams 배열을 주면
+        // 수신 track으로 로컬 stream을 만들어야 협상 성공 뒤에도 video가 실제로 재생된다.
+        streamVideo.srcObject = event.streams[0] || new MediaStream([event.track]);
+      };
+      streamPeer.onicecandidate = event => {
+        if (!event.candidate || !streamId) return;
+        sendStreamMessage({
+          type: 'WEBRTC_ICE',
+          streamId,
+          candidate: event.candidate.toJSON()
+        });
+      };
+      streamPeer.onconnectionstatechange = () => {
+        if (!streamPeer) return;
+        if (streamPeer.connectionState === 'failed' || streamPeer.connectionState === 'closed') {
+          stopStream(true, 'failed');
+        }
+      };
+
+      sendStreamMessage({
+        type: 'STREAM_START',
+        streamId,
+        iceServers: [],
+        video: { maxWidth: 640, maxFramerate: 10 },
+        leaseSeconds: 30
+      });
+      streamRenewTimer = setInterval(() => {
+        if (streamId) sendStreamMessage({ type: 'STREAM_RENEW', streamId });
+      }, 10000);
+      streamStatus.textContent = 'starting';
+    }
+
+    async function acceptStreamOffer(message) {
+      if (!streamPeer || message.streamId !== streamId || !message.sdp) return;
+
+      const peer = streamPeer;
+      const offeredStreamId = streamId;
+      try {
+        await peer.setRemoteDescription({ type: 'offer', sdp: message.sdp });
+        if (peer !== streamPeer || offeredStreamId !== streamId) return;
+        for (const candidate of pendingRemoteIce) await peer.addIceCandidate(candidate);
+        pendingRemoteIce = [];
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        if (peer !== streamPeer || offeredStreamId !== streamId) return;
+        sendStreamMessage({ type: 'WEBRTC_ANSWER', streamId, sdp: answer.sdp });
+      } catch (error) {
+        streamStatus.textContent = `negotiation failed: ${error.message}`;
+        stopStream(true);
+      }
+    }
+
+    async function acceptRemoteIce(message) {
+      if (!streamPeer || message.streamId !== streamId || !message.candidate ||
+          !message.candidate.candidate) return;
+
+      try {
+        if (!streamPeer.remoteDescription) {
+          pendingRemoteIce.push(message.candidate);
+          return;
+        }
+        await streamPeer.addIceCandidate(message.candidate);
+      } catch (error) {
+        streamStatus.textContent = `ICE failed: ${error.message}`;
+      }
+    }
+
+    function renderStreamState(message) {
+      if (message.streamId !== streamId) return;
+      streamStatus.textContent = message.error ? `${message.state}: ${message.error}` : message.state;
+      if (message.state === 'FAILED' || message.state === 'STOPPED') stopStream(false);
+    }
+
+    function sendStreamMessage(message) {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+    }
+
+    function stopStream(notifySdk, finalStatus) {
+      const stoppedId = streamId;
+      streamId = null;
+      if (streamRenewTimer) clearInterval(streamRenewTimer);
+      streamRenewTimer = null;
+      pendingRemoteIce = [];
+      if (streamPeer) {
+        streamPeer.ontrack = null;
+        streamPeer.onicecandidate = null;
+        streamPeer.onconnectionstatechange = null;
+        streamPeer.close();
+      }
+      streamPeer = null;
+      streamVideo.srcObject = null;
+      if (notifySdk && stoppedId) {
+        sendStreamMessage({ type: 'STREAM_STOP', streamId: stoppedId });
+      }
+      if (finalStatus) streamStatus.textContent = finalStatus;
+    }
+
+    window.addEventListener('beforeunload', () => stopStream(true));
+
+    // Drawn beside the scene, never into it. The poller pushes a GAME_STATE within a second of
+    // any change and renderScene replaces that whole subtree, so a capture rendered there would
+    // disappear before it could be looked at. This one stays until the next capture or Clear.
+    function renderCapture(results) {
+      const result = (results || []).find(entry => entry.id === pendingCaptureId);
+      if (!result) return;
+
+      pendingCaptureId = null;
+      captureButton.disabled = false;
+
+      if (!result.success) {
+        // The upload is the half that needs a signed-in session, and it fails long after the
+        // screen was read. Saying which half failed is the difference between a rendering bug
+        // and a missing login.
+        captureStatus.textContent = result.error || 'capture failed';
+        captureJson.textContent = JSON.stringify(result, null, 2);
+        return;
+      }
+
+      const capture = result.returnValue || {};
+      const parts = [`${capture.width}×${capture.height}`];
+      if (capture.mimeType) parts.push(capture.mimeType);
+      if (capture.targetId != null) parts.push(`target #${capture.targetId}`);
+      if (capture.clipped) parts.push('clipped');
+      parts.push(new Date().toLocaleTimeString());
+
+      captureStatus.textContent = parts.join(' · ');
+      captureJson.textContent = JSON.stringify(capture, null, 2);
+      captureImage.src = capture.url;
+      captureImage.hidden = false;
     }
 
     function renderScene(scene) {

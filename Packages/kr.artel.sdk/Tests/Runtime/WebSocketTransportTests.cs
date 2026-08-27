@@ -461,6 +461,31 @@ namespace Artel.Tests.Transport
         }
 
         [Test]
+        public void TestPage_CapturesTheScreenAndKeepsTheImageBesideTheScene()
+        {
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"capture-screen\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("sendAction('capture_screen', raw === '' ? [] : [target])"));
+
+            // Blank means the whole screen; a block id crops to that element.
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"capture-target\""));
+
+            // capture_screen does not name itself in its result, so the sent action id is the
+            // only thing that tells this capture's result from every other action's.
+            Assert.That(ArtelTestPage.Html, Does.Contain("return actions.map(action => action.id)"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("entry.id === pendingCaptureId"));
+
+            // Same reason the pinned scan lives outside the live tree: a GAME_STATE lands within
+            // a second of any change and renderScene replaces everything it draws.
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"capture\""));
+            Assert.That(ArtelTestPage.Html, Does.Contain("captureImage.src = capture.url"));
+            Assert.That(ArtelTestPage.Html, Does.Contain("id=\"capture-clear\""));
+
+            // The upload needs a session and fails long after the screen was read. A blank panel
+            // would read as a capture that produced nothing.
+            Assert.That(ArtelTestPage.Html, Does.Contain("captureStatus.textContent = result.error || 'capture failed'"));
+        }
+
+        [Test]
         public void OverlayViewModel_StartsInNeedsLoginWithoutSession()
         {
             var viewModel = CreateViewModel();

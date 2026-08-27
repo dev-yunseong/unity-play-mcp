@@ -13,6 +13,7 @@ using Artel.Streaming;
 using Artel.Tracking;
 using Unity.WebRTC;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Artel
 {
@@ -47,7 +48,12 @@ namespace Artel
         /// </remarks>
         public static bool SendsGameState { get; set; } = false;
 
-        [SerializeField] private bool connectOnEnable;
+        /// <summary>
+        /// 첫 연결이 <c>Start</c> 에서 일어나는 이유는 <see cref="Start"/> 에 적었다. 이름이 그 자리를 말하도록
+        /// 바뀌었고, 씬에 직렬화된 값은 <c>FormerlySerializedAs</c> 가 넘겨받는다.
+        /// </summary>
+        [FormerlySerializedAs("connectOnEnable")]
+        [SerializeField] private bool connectOnStart;
         [SerializeField] private Server server = new Server();
 
         private IArtelWebSocketTransport webSocketTransport;
@@ -89,6 +95,9 @@ namespace Artel
 
         /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
         private bool ownsRuntime;
+
+        /// <summary>Separates the first connection, which is Start's, from a later re-enable.</summary>
+        private bool hasStarted;
 
         public string SdkId { get; private set; }
         public string GameVersion { get; private set; }
@@ -147,6 +156,30 @@ namespace Artel
             instance = this;
             transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
+
+            EnsureRuntime();
+        }
+
+        /// <summary>
+        /// Builds everything this manager owns, once.
+        /// </summary>
+        /// <remarks>
+        /// Reachable from <see cref="SetWebSocketTransport"/> as well as <see cref="Awake"/>
+        /// because Unity orders Awake and OnEnable between components arbitrarily.
+        /// <c>ArtelTestPageManager</c> installs its transport from its own <c>OnEnable</c>, which
+        /// can land before this manager's <c>Awake</c>; that used to throw a
+        /// <c>NullReferenceException</c> on <see cref="sceneStatePoller"/> partway through
+        /// installing the transport. The half-installed state was the damaging part: the field was
+        /// already assigned, so this manager then refused to connect to orchestration — while the
+        /// throw had skipped the test page's own server startup, leaving the game reachable from
+        /// nowhere.
+        /// </remarks>
+        private void EnsureRuntime()
+        {
+            if (ownsRuntime)
+            {
+                return;
+            }
 
             scanner = new SceneScanner();
             allSceneScanner = new AllSceneScanner(scanner);
@@ -215,7 +248,31 @@ namespace Artel
 
         private void OnEnable()
         {
-            if (connectOnEnable)
+            // Only a re-enable reaches this. The first connection is Start's, and until Start has
+            // run there is nothing here to repeat.
+            if (hasStarted && connectOnStart)
+            {
+                StartTransport();
+            }
+        }
+
+        /// <summary>
+        /// Opens the first connection.
+        /// </summary>
+        /// <remarks>
+        /// Not <c>OnEnable</c>: another component in the scene may install the transport this
+        /// manager should use — <c>ArtelTestPageManager</c> does, to serve its local page — and it
+        /// does so from its own <c>OnEnable</c>. Unity does not order those against each other, so
+        /// connecting from <c>OnEnable</c> made the winner of that race decide where the game
+        /// connected: win it and this manager opened its own socket to orchestration, after which
+        /// the test page stood down and was never served. The one ordering Unity does guarantee is
+        /// that every <c>OnEnable</c> precedes every <c>Start</c>, so this is the earliest point at
+        /// which an injected transport is certain to have arrived.
+        /// </remarks>
+        private void Start()
+        {
+            hasStarted = true;
+            if (connectOnStart)
             {
                 StartTransport();
             }
@@ -520,8 +577,37 @@ namespace Artel
             EndDiscovery();
         }
 
+        /// <summary>
+        /// Sends captures somewhere other than orchestration, until <see cref="RestoreCaptureUploader"/>.
+        /// </summary>
+        /// <remarks>
+        /// 전송을 건네받는 것과 같은 짝짓기다. 그리고 같은 컴포넌트가 쓴다 — 테스트 페이지는 오케스트레이션의
+        /// 티켓 엔드포인트를 못 쓴다. 그쪽은 실행 중인 QA 가 없는 인스턴스를 거절하고, 테스트 페이지에서 찍는
+        /// 캡처는 전부 그 경우다.
+        /// </remarks>
+        internal void SetCaptureUploader(ICaptureUploader uploader)
+        {
+            // 전송과 같은 이유로 여기서도 부른다: 설치하는 쪽이 이 매니저의 Awake 보다 먼저 돌 수 있다.
+            EnsureRuntime();
+            actionExecutor.SetCaptureUploader(uploader);
+        }
+
+        internal void RestoreCaptureUploader()
+        {
+            if (actionExecutor == null)
+            {
+                return;
+            }
+
+            actionExecutor.RestoreCaptureUploader();
+        }
+
         internal void SetWebSocketTransport(IArtelWebSocketTransport transport, bool takeOwnership)
         {
+            // The installer may run before this manager's own Awake, and what follows reads state
+            // that Awake builds.
+            EnsureRuntime();
+
             if (webSocketTransport != null)
             {
                 throw new InvalidOperationException("WebSocket transport is already configured.");
