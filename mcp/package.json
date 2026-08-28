@@ -1,0 +1,23 @@
+{
+  "name": "unity-play-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "unity-play-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && cp dist/src/*.js dist/",
+    "test": "node --test dist/test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.2"
+  }
+}

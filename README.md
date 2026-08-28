@@ -13,6 +13,19 @@ Packages/dev.yunseong.unityplaymcp
 Runtime scripts are under `Runtime/` and compiled through
 `Artel.Runtime.asmdef`.
 
+## MCP server
+
+`mcp/` is the stdio MCP server a coding agent talks to. It connects to the
+WebSocket server the Unity package opens at `ws://127.0.0.1:17311/ws`, folds the
+`PULSE` readings into the current scene state, and exposes the game's actions and
+screen capture as MCP tools.
+
+```bash
+cd mcp && npm install && npm run build && npm test
+```
+
+`mcp/README.md` has the client configuration and the environment variables.
+
 ## Sample
 
 `samples/WordVenture` is included as the sample Unity project. It references
