@@ -3,7 +3,7 @@
   "rootNamespace": "Artel.Tests.Protocol",
   "references": [
     "Artel.Runtime",
-    "Artel.Tracking.Fixtures",
+    "Artel.Input.Fixtures",
     "Unity.TextMeshPro",
     "Artel.Affordances.Scan"
   ],
@@ -14,8 +14,7 @@
   "allowUnsafeCode": false,
   "overrideReferences": true,
   "precompiledReferences": [
-    "Newtonsoft.Json.dll",
-    "websocket-sharp.dll"
+    "Newtonsoft.Json.dll"
   ],
   "autoReferenced": false,
   "defineConstraints": [],

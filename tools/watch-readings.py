@@ -6,9 +6,7 @@
 하는 것이 요점이다: 페이지가 도착한 것만으로 화면의 현재 상태를 보일 수 있으면 채널이 충분한
 것이고, 못 보이면 부족한 자리가 논쟁이 아니라 눈에 보인다.
 
-프로토타입 저장소에서 가져왔다. 거기서는 이것이 pulse 를 읽는 유일한 수단이었다. SDK 자신의
-테스트 페이지는 GAME_STATE 를 그리는데 그것은 다른 물음에 답하는 다른 채널이라, 한 화면으로
-합치지 않고 별개의 탭으로 둔다.
+프로토타입 저장소에서 가져왔다. 거기서는 이것이 pulse 를 읽는 유일한 수단이었다.
 
 성능 탭은 파일이 아니라 SDK 의 로컬 소켓을 직접 읽는다. 프레임 시간은 pulse 에 없고 앞으로도
 없을 것이다 — 그것은 게임이 아니라 프로세스에 관한 값이고 — 소켓이 이미 듣는 쪽에 그것을
@@ -30,7 +28,7 @@ DEFAULT_FILE = os.path.expanduser(
     "~/Library/Application Support/Team6203/WordVenture/artel-pulse.jsonl"
 )
 
-# ArtelTestPageManager 의 기본 websocketPort. 그 컴포넌트가 켜져 있을 때만 열려 있다.
+# ArtelManager 의 websocketPort. 그 컴포넌트가 씬에 있으면 언제나 열려 있다.
 #
 # 경로 /ws 가 붙는다. ArtelWebSocketServer 가 AddWebSocketService("/ws", ...) 로 거기에만
 # 서비스를 매단다. 루트로 붙으면 포트는 열려 있고 핸드셰이크만 조용히 거절당하므로, 게임이
@@ -392,7 +390,7 @@ function connectSocket() {
     mark("끊김. 5초 뒤 다시", true);
     setTimeout(connectSocket, 5000);
   };
-  socket.onerror = () => mark("오류 — 게임이 실행 중이고 ArtelTestPageManager 가 켜져 있어야 합니다", true);
+  socket.onerror = () => mark("오류 — 게임이 실행 중이고 ArtelManager 가 씬에 있어야 합니다", true);
 
   socket.onmessage = event => {
     let doc;

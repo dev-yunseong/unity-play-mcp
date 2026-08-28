@@ -204,23 +204,17 @@ namespace Artel.Tests
         // --- executor ---
 
         [Test]
-        public void CaptureScreen_FillsTheReturnValueWithWhereTheImageWent()
+        public void CaptureScreen_ReturnsTheImageBytesInline()
         {
+            var bytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
             var executor = ExecutorWith(
-                new FakeScreenCapturer(new CapturedImage { Bytes = new byte[8], Width = 1024, Height = 576 }),
-                new FakeCaptureUploader(new CaptureUpload
-                {
-                    CaptureId = "capture-1",
-                    Url = "https://storage.test/qa-captures/1/capture-1.jpg",
-                    ExpiresAt = "2026-07-28T13:00:00Z"
-                }));
+                new FakeScreenCapturer(new CapturedImage { Bytes = bytes, Width = 1024, Height = 576 }));
 
             var result = Run(executor, new List<object>());
 
             Assert.That(result.IsSuccess, Is.True);
             var returned = (CaptureResultDto)result.ReturnValue;
-            Assert.That(returned.CaptureId, Is.EqualTo("capture-1"));
-            Assert.That(returned.Url, Does.Contain("capture-1.jpg"));
+            Assert.That(returned.Data, Is.EqualTo(Convert.ToBase64String(bytes)));
             Assert.That(returned.MimeType, Is.EqualTo("image/jpeg"));
             Assert.That(returned.Width, Is.EqualTo(1024));
             Assert.That(returned.TargetId, Is.Null);
@@ -230,7 +224,7 @@ namespace Artel.Tests
         [Test]
         public void CaptureScreen_RefusesATargetIdTheSceneDoesNotHave()
         {
-            var executor = ExecutorWith(new FakeScreenCapturer(), new FakeCaptureUploader());
+            var executor = ExecutorWith(new FakeScreenCapturer());
 
             var result = Run(executor, new List<object> { 999999L });
 
@@ -242,32 +236,12 @@ namespace Artel.Tests
         public void CaptureScreen_ReportsWhyTheScreenCouldNotBeRead()
         {
             var executor = ExecutorWith(
-                new FakeScreenCapturer(CapturedImage.Failed("The game runs in batchmode and has no screen to capture.")),
-                new FakeCaptureUploader());
+                new FakeScreenCapturer(CapturedImage.Failed("The game runs in batchmode and has no screen to capture.")));
 
             var result = Run(executor, new List<object>());
 
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.Error, Does.Contain("batchmode"));
-        }
-
-        /// <summary>
-        /// A refused upload is a failed action, not a silent success. Whether to try again is the
-        /// agent's call with the scenario in hand, so nothing here retries.
-        /// </summary>
-        [Test]
-        public void CaptureScreen_FailsTheActionWhenTheUploadIsRefused()
-        {
-            var uploader = new FakeCaptureUploader(CaptureUpload.Failed("The capture upload was refused (HTTP 409)."));
-            var executor = ExecutorWith(
-                new FakeScreenCapturer(new CapturedImage { Bytes = new byte[8], Width = 8, Height = 8 }),
-                uploader);
-
-            var result = Run(executor, new List<object>());
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("409"));
-            Assert.That(uploader.Attempts, Is.EqualTo(1));
         }
 
         // --- wire shape ---
@@ -289,27 +263,25 @@ namespace Artel.Tests
         {
             var json = new NewtonsoftJsonCodec().Serialize(ActionResultDto.Success(3, new CaptureResultDto
             {
-                CaptureId = "capture-1",
-                Url = "https://storage.test/capture-1.png",
                 MimeType = "image/png",
                 Width = 120,
                 Height = 40,
                 TargetId = 7,
-                Clipped = true
+                Clipped = true,
+                Data = "AQIDBA=="
             }));
 
             Assert.That(json, Does.Contain("\"returnValue\""));
             Assert.That(json, Does.Contain("\"targetId\":7"));
             Assert.That(json, Does.Contain("\"clipped\":true"));
+            Assert.That(json, Does.Contain("\"data\":\"AQIDBA==\""));
         }
 
         // --- helpers ---
 
-        private static ActionExecutor ExecutorWith(IScreenCapturer capturer, ICaptureUploader uploader)
+        private static ActionExecutor ExecutorWith(IScreenCapturer capturer)
         {
-            var scanner = new SceneScanner();
-            scanner.Scan();
-            return new ActionExecutor(scanner, null, new PointerEventDispatcher(), capturer, uploader);
+            return new ActionExecutor(new TargetLookup(), null, new PointerEventDispatcher(), capturer);
         }
 
         private static ActionResultDto Run(ActionExecutor executor, List<object> parameters)
@@ -380,26 +352,5 @@ namespace Artel.Tests
             }
         }
 
-        private sealed class FakeCaptureUploader : ICaptureUploader
-        {
-            private readonly CaptureUpload upload;
-
-            public FakeCaptureUploader(CaptureUpload upload = default)
-            {
-                this.upload = upload;
-            }
-
-            public int Attempts { get; private set; }
-
-            public IEnumerator Upload(
-                CapturedImage image,
-                CaptureRequest request,
-                Action<CaptureUpload> completed)
-            {
-                Attempts++;
-                completed(upload);
-                yield break;
-            }
-        }
     }
 }

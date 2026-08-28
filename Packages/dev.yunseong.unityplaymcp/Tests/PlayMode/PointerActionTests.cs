@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Artel.Protocol.Dto;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -76,7 +75,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator KeyDown_HoldsTheKeyUntilKeyUp()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
 
             yield return RunBatch(manager, NewAction(1, "key_down", Params("LeftShift")));
             yield return null;
@@ -102,7 +101,7 @@ namespace Artel.Tests
         {
             // The whole reason drag and drop needs no action of its own: the queue runs these in
             // order, so a held button plus a move is already a drag.
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
             // After a frame, so the screen the coordinates are measured against is the final one.
             yield return null;
             var source = CreateDragTarget("drag source", UnityPointOf(GrabPoint));
@@ -140,7 +139,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator MouseDown_HeldButtonIsReleasedWhenTheConnectionStops()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
             yield return null;
             var source = CreateDragTarget("drag source", UnityPointOf(GrabPoint));
             yield return null;
@@ -171,7 +170,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator KeyDownMouse0_PressesTheButtonAndFiresThePointerHandlers()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
             yield return null;
             var target = CreateDragTarget("click target", UnityPointOf(GrabPoint));
             yield return null;
@@ -198,7 +197,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator MouseDown_IsVisibleToAGamePollingTheMouseKeyCode()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
 
             yield return RunBatch(manager, NewAction(1, "mouse_down", Params(0d)));
             yield return null;
@@ -216,7 +215,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator KeyClickMouse0_LetsGoAtTheEndOfTheDurationWithBothEdgesDispatched()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
             yield return null;
             var target = CreateDragTarget("click target", UnityPointOf(GrabPoint));
             yield return null;
@@ -240,7 +239,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator KeyClickMouse0_LetsGoEvenWhileGameTimeIsFrozen()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
 
             yield return RunBatch(
                 manager,
@@ -256,7 +255,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator MouseDownThenKeyDownMouse0_ReachesTheHandlerOnce()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
             yield return null;
             var target = CreateDragTarget("click target", UnityPointOf(GrabPoint));
             yield return null;
@@ -276,7 +275,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator KeyDownMouse1_DrivesTheRightButtonAndLeavesTheLeftAlone()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
 
             yield return RunBatch(manager, NewAction(1, "key_down", Params("Mouse1")));
             yield return null;
@@ -296,7 +295,7 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator KeyClick_OnANonMouseKeyStillExpiresOnItsOwn()
         {
-            var manager = CreateManager(new RecordingTransport());
+            var manager = CreateManager();
 
             yield return RunBatch(manager, NewAction(1, "key_click", Params("Space", 0.05d)));
             yield return null;
@@ -313,20 +312,17 @@ namespace Artel.Tests
         [UnityTest]
         public IEnumerator MoveMouse_RefusesCoordinatesItCannotRead()
         {
-            var transport = new RecordingTransport();
-            var manager = CreateManager(transport);
+            var executor = new ActionExecutor(
+                new TargetLookup(), null, new PointerEventDispatcher());
 
-            yield return RunBatch(
-                manager,
-                NewAction(1, "move_mouse", Params(10d)),
-                NewAction(2, "mouse_down", Params(9d)));
+            var moveResult = RunAction(executor, 1, "move_mouse", Params(10d));
+            var buttonResult = RunAction(executor, 2, "mouse_down", Params(9d));
 
-            // Not Sent[0]: a live manager also pushes GAME_STATE from its poller.
-            var results = transport.FirstActionResult()["results"];
-            Assert.That((bool)results[0]["success"], Is.False);
-            Assert.That((string)results[0]["error"], Does.Contain("move_mouse requires params [x, y]."));
-            Assert.That((bool)results[1]["success"], Is.False);
-            Assert.That((string)results[1]["error"], Does.Contain("mouse_down requires params"));
+            Assert.That(moveResult.IsSuccess, Is.False);
+            Assert.That(moveResult.Error, Does.Contain("move_mouse requires params [x, y]."));
+            Assert.That(buttonResult.IsSuccess, Is.False);
+            Assert.That(buttonResult.Error, Does.Contain("mouse_down requires params"));
+            yield break;
         }
 
         /// <summary>
@@ -368,20 +364,46 @@ namespace Artel.Tests
             yield return manager.StartCoroutine(routine);
         }
 
-        private ArtelManager CreateManager(RecordingTransport transport)
+        private ArtelManager CreateManager()
         {
             host = new GameObject("Artel pointer action test");
             var manager = host.AddComponent<ArtelManager>();
-            manager.SetWebSocketTransport(transport, false);
             return manager;
         }
 
+        private static ActionResultDto RunAction(
+            ActionExecutor executor, int id, string method, List<object> parameters)
+        {
+            ActionResultDto result = null;
+            Drain(executor.Execute(id, method, parameters, value => result = value));
+            return result;
+        }
+
         /// <summary>
-        /// Leaves the fixture's canvas as the only one answering pointer rays. The onboarding canvas
-        /// sits at sortingOrder short.MaxValue - 1 with a raycaster of its own, so while its panel is
-        /// up it takes every ray before the game sees one. A QA run only happens once registration
-        /// has dismissed it. It is built in the controller's Start, so this cannot run any earlier
-        /// than the first frame.
+        /// Runs an action to its end without the coroutine scheduler.
+        /// </summary>
+        /// <remarks>
+        /// The nested walk is the whole point. `Execute` hands the work to a second enumerator with
+        /// `yield return`, and a plain `MoveNext` loop only yields that enumerator rather than
+        /// running it — the action never completes, and the caller reads a null result instead of
+        /// the refusal it is asserting on.
+        /// </remarks>
+        private static void Drain(IEnumerator routine)
+        {
+            while (routine.MoveNext())
+            {
+                if (routine.Current is IEnumerator nested)
+                {
+                    Drain(nested);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Leaves the fixture's canvas as the only one answering pointer rays. A game's own canvas
+        /// may otherwise answer first and make the action reach an unrelated object. The manager
+        /// builds its runtime components in <c>Start</c>, so this cannot run any earlier than the
+        /// first frame.
         /// </summary>
         private void IsolateFixtureRaycaster()
         {
@@ -422,48 +444,5 @@ namespace Artel.Tests
             return targetObject.GetComponent<PointerFixtureBehaviour>();
         }
 
-        private sealed class RecordingTransport : IArtelWebSocketTransport
-        {
-            public List<string> Sent { get; } = new List<string>();
-
-            public bool IsConnected { get { return true; } }
-
-            public JObject FirstActionResult()
-            {
-                foreach (var text in Sent)
-                {
-                    var message = JObject.Parse(text);
-                    if ((string)message["type"] == "ACTION_RESULT")
-                    {
-                        return message;
-                    }
-                }
-
-                throw new AssertionException("No ACTION_RESULT was sent.");
-            }
-
-            public void Start()
-            {
-            }
-
-            public void Stop()
-            {
-            }
-
-            public bool TryDequeueMessage(out ArtelWebSocketMessage message)
-            {
-                message = null;
-                return false;
-            }
-
-            public void Send(string text)
-            {
-                Sent.Add(text);
-            }
-
-            public void Dispose()
-            {
-            }
-        }
     }
 }
