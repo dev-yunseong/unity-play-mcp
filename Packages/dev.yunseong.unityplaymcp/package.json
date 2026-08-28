@@ -1,8 +1,8 @@
 {
-  "name": "kr.artel.sdk",
+  "name": "dev.yunseong.unityplaymcp",
   "version": "0.1.0",
-  "displayName": "Artel SDK",
-  "description": "Unity runtime SDK for onboarding and remote scene interaction over WebSocket.",
+  "displayName": "Unity Play MCP",
+  "description": "Read the current Unity scene state, perform actions, and capture screenshots for coding agents.",
   "unity": "2022.3",
   "author": {
     "name": "Artel"
