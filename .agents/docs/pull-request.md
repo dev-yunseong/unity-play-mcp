@@ -6,7 +6,7 @@ PR should let reviewer understand intent, verify evidence, and identify risk wit
 
 ## Before Opening
 
-- Confirm acceptance criteria from Jira or the user request.
+- Confirm acceptance criteria from the GitHub Issue or the user request.
 - Update plan to reflect final implementation.
 - Review full diff against default branch.
 - Remove debug code and unrelated churn.
@@ -64,7 +64,7 @@ substitute a label that carries a different meaning.
 
 ## Rollback
 
-Jira: ARTEL-123 (omit when no Jira work item exists)
+Closes #123 (omit when no GitHub Issue exists)
 ```
 
 `Code Walkthrough` carries one entry per meaningful changed unit — module,

@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "jira": {
-      "command": "uvx",
-      "args": ["mcp-atlassian", "--env-file", ".jira.env"]
+    "unity-play": {
+      "command": "node",
+      "args": ["mcp/dist/index.js"]
     }
   }
 }
