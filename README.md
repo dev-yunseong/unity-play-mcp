@@ -1,13 +1,13 @@
-# artel-sdk
+# Unity Play MCP
 
-Artel SDK is packaged for Unity through Unity Package Manager.
+Unity Play MCP is packaged for Unity through Unity Package Manager.
 
 ## Package
 
 The Unity package lives at:
 
 ```text
-Packages/kr.artel.sdk
+Packages/dev.yunseong.unityplaymcp
 ```
 
 Runtime scripts are under `Runtime/` and compiled through
@@ -16,13 +16,18 @@ Runtime scripts are under `Runtime/` and compiled through
 ## Sample
 
 `samples/WordVenture` is included as the sample Unity project. It references
-the local SDK package with:
+the local package with:
 
 ```json
-"kr.artel.sdk": "file:../../../Packages/kr.artel.sdk"
+"dev.yunseong.unityplaymcp": "file:../../../Packages/dev.yunseong.unityplaymcp"
 ```
 
-Open `samples/WordVenture` in Unity to try SDK runtime components from a real
+That is the reference the sample needs after the rename, and it is not the one
+the submodule holds today — the sample still points at the old package id and
+path. `samples/WordVenture` is a separate repository, so the change has to be
+made there before the sample opens against this package.
+
+Open `samples/WordVenture` in Unity to try package runtime components from a real
 Unity project.
 
 ## Tests and CI
@@ -32,7 +37,7 @@ tests as checked out, so both local runs and CI assemble a throwaway Unity
 project first:
 
 ```bash
-.github/scripts/setup-unity-test-project.sh /tmp/artel-unity-test
+.github/scripts/setup-unity-test-project.sh /tmp/unity-play-mcp-test
 ```
 
 `.github/workflows/unity-tests.yml` runs EditMode and PlayMode against that
