@@ -44,7 +44,7 @@ namespace Artel.Diagnostics
         /// <summary>Hashing the DTO to decide whether the state actually changed.</summary>
         public static readonly ProfilerMarker SceneScanHash = new ProfilerMarker("Artel.SceneScan.Hash");
 
-        /// <summary>Reading members carried by <see cref="Tracking.ArtelStateAttribute"/>.</summary>
+        /// <summary>Measures member-reading work during a scene walk.</summary>
         public static readonly ProfilerMarker StateReadTagged = new ProfilerMarker("Artel.StateRead.Tagged");
 
         /// <summary>Reading and lowering the fields Unity itself would serialize.</summary>

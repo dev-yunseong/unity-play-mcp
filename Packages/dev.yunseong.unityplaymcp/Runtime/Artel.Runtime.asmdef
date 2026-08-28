@@ -3,9 +3,7 @@
   "rootNamespace": "Artel",
   "references": [
     "Unity.TextMeshPro",
-    "Unity.WebRTC",
     "UnityEngine.UI",
-    "UnityEngine.UnityWebRequestModule",
     "Artel.Affordances.Scan"
   ],
   "includePlatforms": [],

@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Artel.Protocol.Dto;
-using Artel.Tests.Tracking;
+using Artel.Tests.Fixtures;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -228,7 +228,7 @@ namespace Artel.Tests.Input
         public IEnumerator IlPostProcessor_ReroutesUnityAxisCallsToArtelInput()
         {
             var host = new GameObject("axis fixture");
-            var fixture = host.AddComponent<TrackedFixtureBehaviour>();
+            var fixture = host.AddComponent<InputFixtureBehaviour>();
             try
             {
                 Assert.That(
@@ -260,7 +260,7 @@ namespace Artel.Tests.Input
         private ActionResultDto ExecuteAction(int actionId, string method, List<object> parameters)
         {
             var executor = new ActionExecutor(
-                new SceneScanner(), cursorController, new PointerEventDispatcher());
+                new TargetLookup(), cursorController, new PointerEventDispatcher());
             ActionResultDto result = null;
             Drain(executor.Execute(actionId, method, parameters, value => result = value));
             return result;

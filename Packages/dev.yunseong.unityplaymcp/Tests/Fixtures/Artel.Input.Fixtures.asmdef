@@ -1,0 +1,16 @@
+{
+  "name": "Artel.Input.Fixtures",
+  "rootNamespace": "Artel.Tests.Fixtures",
+  "references": [
+    "Artel.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
