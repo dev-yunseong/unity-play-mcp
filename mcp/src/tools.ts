@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
 import { objectKey, type PulseObject, type PulseStore } from "./pulse.js";
+import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 
 type ToolContent =
   | { type: "text"; text: string }
@@ -130,11 +131,42 @@ function historyOf(
   return collected;
 }
 
+/// tree 가 실제로 펼친 마디에 앉은 객체들. 접힌 마디 아래는 세지 않는다 — 응답에 나오지도
+/// 않는 객체의 이력을 실을 이유가 없다.
+function objectsShownIn(nodes: readonly TreeNode[]): PulseObject[] {
+  const found: PulseObject[] = [];
+  for (const node of nodes) {
+    if (node.object !== undefined) {
+      found.push(node.object);
+    }
+    if (node.children !== undefined) {
+      found.push(...objectsShownIn(node.children));
+    }
+  }
+  return found;
+}
+
+/// 한 객체의 멤버들이 마지막으로 움직인 `reading`.
+function latestReadingOf(store: PulseStore, scene: string) {
+  return (object: PulseObject): number | undefined => {
+    let latest: number | undefined;
+    for (const series of store.getObjectHistory(objectKey(object, scene)).values()) {
+      const last = series[series.length - 1];
+      if (last !== undefined && (latest === undefined || last.reading > latest)) {
+        latest = last.reading;
+      }
+    }
+    return latest;
+  };
+}
+
 function stateResponse(
   store: PulseStore,
   selector?: string,
   includeInactive = false,
   includeHistory = false,
+  root?: string,
+  depth?: number,
 ): ToolResponse {
   const state = store.getState();
   if (state === undefined || state === null) {
@@ -166,6 +198,35 @@ function stateResponse(
   };
   const active = filterObjects(record.active);
   const deactive = filterObjects(record.deactive);
+  const scene = String(record.scene ?? "");
+
+  // `root` 도 `depth` 도 없으면 지금까지와 똑같은 평평한 응답이다. 기존 호출이 갑자기 다른
+  // 모양을 받지 않게 한다.
+  if (root !== undefined || depth !== undefined) {
+    const considered = includeInactive ? [...active, ...deactive] : active;
+    const tree = foldIntoTree(
+      considered as PulseObject[],
+      latestReadingOf(store, scene),
+      root,
+      depth ?? UNLIMITED_DEPTH,
+    );
+    // `statics` 는 어느 객체에도 매달리지 않으므로 tree 로는 표현되지 않는다. 빼면 이 모드에서만
+    // 사라지고, 양이 적어 뺄 이유도 없다. `changed` 는 반대다 — 분주한 씬에서 길고, 마디마다
+    // 붙는 `lastChangedReading` 이 같은 물음에 tree 모양으로 답한다.
+    return text(JSON.stringify({
+      reading: record.reading,
+      frame: record.frame,
+      scene: record.scene,
+      ...(root === undefined ? {} : { root }),
+      statics: record.statics ?? [],
+      gone: filterGone(record.gone),
+      tree,
+      ...(includeHistory
+        ? { history: historyOf(store, objectsShownIn(tree), scene) }
+        : {}),
+    }, null, 2));
+  }
+
   const response = {
     reading: record.reading,
     frame: record.frame,
@@ -180,7 +241,7 @@ function stateResponse(
           history: historyOf(
             store,
             includeInactive ? [...active, ...deactive] : active,
-            String(record.scene ?? ""),
+            scene,
           ),
         }
       : {}),
@@ -215,16 +276,18 @@ function findCapture(results: ActionResult[]): CapturePayload | undefined {
 
 export function registerTools(server: McpServer, connection: UnityConnection, store: PulseStore): void {
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. Set includeHistory to see how each member's value moved over its last readings.",
+    description: "Read the latest folded Unity scene state. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
       includeHistory: z.boolean().optional(),
+      root: z.string().min(1).optional(),
+      depth: z.number().int().positive().optional(),
     },
-  }, async ({ selector, includeInactive, includeHistory }) => {
+  }, async ({ selector, includeInactive, includeHistory, root, depth }) => {
     try {
       await connection.ensureConnected();
-      return stateResponse(store, selector, includeInactive, includeHistory);
+      return stateResponse(store, selector, includeInactive, includeHistory, root, depth);
     } catch (error) {
       return {
         ...text(`Scene state is unavailable: ${errorMessage(error)}`),

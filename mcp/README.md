@@ -22,5 +22,14 @@ value moved over its last ten changes — the response carries the readings and 
 frames they were taken on, so a value that went up and back down inside one second
 is still visible.
 
+Pass `root` or `depth` to read the scene as a hierarchy instead of a flat list.
+`root` is a path prefix and `depth` counts levels down from it. A node deeper
+than `depth` comes back collapsed, carrying how many objects sit beneath it and
+the reading its subtree last moved on — compare that number against the one you
+saw last to decide whether opening it is worth it. The tree is built by splitting
+each object's `path` on `/`, so a GameObject whose own name contains a slash
+gains an extra level. Tree mode leaves out `changed`; every node's
+`lastChangedReading` answers the same question in the shape of the tree.
+
 `capture_screen` returns the image directly as an MCP image content block. The remaining tools send input, time, reset, and reading
 actions to Unity. `perform_actions` sends a sequence in one game-side batch.
