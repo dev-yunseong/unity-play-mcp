@@ -72,11 +72,12 @@ asks for end-to-end development.
    ```
 
    ```text
-   <type>/<issue title with spaces replaced by hyphens>-<issue number>
+   <type label without the type: prefix>/<issue number>
    ```
 
-   For example, `chore/configure-github-issue-workflow-69`. Korean characters
-   stay as they appear in the title.
+   For example, issue #69 carrying `type:chore` gets `chore/69`. The label and
+   the number are the whole name — no title, no other text. Drop the `type:`
+   prefix: a colon is not legal in a Git ref name.
 
    The issue number in the branch name is what ties branch, commits, and PR back
    to the issue, so never create the branch before the issue exists. Keep one

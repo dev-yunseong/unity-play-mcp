@@ -18,7 +18,7 @@ description: >
 
 - Read the GitHub Issue if its number or URL is provided. Otherwise use the user request as source of truth.
 - When a GitHub Issue exists, set its assignee explicitly with `gh issue edit --add-assignee <login>`, assign the owning milestone, add the matching `type:<feat|fix|chore|docs|refactor|infra>` label, and add `status:in-progress` as soon as work starts. Never infer ownership from the branch or PR author.
-- Create exactly one branch for the issue from `origin/develop`, named `<type>/<title-with-hyphens>-<issue number>`. Record the start date in the issue body or a comment as `YYYY-MM-DD` in `Asia/Seoul`.
+- Create exactly one branch for the issue from `origin/develop`, named `<type>/<issue number>` — the type label without its `type:` prefix, then the issue number. Record the start date in the issue body or a comment as `YYYY-MM-DD` in `Asia/Seoul`.
 - Read the affected source files first. Use Glob/Grep if the scope is unclear.
 - Identify the current module boundaries before proposing edits.
 - Look for signs that the target file is already doing too many jobs.
