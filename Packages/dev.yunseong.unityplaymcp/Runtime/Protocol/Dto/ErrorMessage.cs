@@ -10,7 +10,7 @@ namespace Artel.Protocol.Dto
         [JsonProperty("id")]
         public long Id { get; set; }
 
-        [JsonProperty("error")]
-        public string Error { get; set; }
+        [JsonProperty("message")]
+        public string Message { get; set; }
     }
 }

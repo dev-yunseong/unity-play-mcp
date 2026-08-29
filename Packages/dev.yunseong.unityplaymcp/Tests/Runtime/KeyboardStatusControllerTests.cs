@@ -46,7 +46,7 @@ namespace Artel.Tests.Input
                 // 대비 4.5:1을 넘지 못한다.
                 Assert.That(
                     panel.Find("Brand Accent").GetComponent<Image>().color,
-                    Is.EqualTo((Color)ArtelLogoGraphic.CoralDark));
+                    Is.EqualTo((Color)KeyboardStatusController.DarkAccentColor));
                 Assert.That(panel.Find("Separator"), Is.Not.Null);
 
                 PlayerPrefs.SetInt("Artel.DarkTheme", 0);
@@ -57,7 +57,7 @@ namespace Artel.Tests.Input
                 Assert.That(panel.GetComponent<Image>().color, Is.EqualTo((Color)KeyboardStatusController.LightPanelColor));
                 Assert.That(
                     panel.Find("Brand Accent").GetComponent<Image>().color,
-                    Is.EqualTo((Color)ArtelLogoGraphic.Coral));
+                    Is.EqualTo((Color)KeyboardStatusController.LightAccentColor));
             }
             finally
             {

@@ -31,8 +31,7 @@ namespace Artel.CodeGen
 
         /// <summary>
         /// 대상 어셈블리가 런타임을 실제로 참조할 때만 위버를 만든다. 참조가 없으면 null.
-        /// 이유는 <see cref="ActionMethodWeaver.TryCreate"/>와 같다 — 컴파일러 참조 목록과
-        /// IL 메타데이터 참조 목록이 다르다.
+        /// 컴파일러 참조 목록과 IL 메타데이터 참조 목록이 다르므로 실제 runtime 참조를 확인한다.
         /// </summary>
         public static InputMethodWeaver TryCreate(ModuleDefinition module)
         {

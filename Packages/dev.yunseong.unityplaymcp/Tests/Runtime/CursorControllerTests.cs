@@ -54,8 +54,8 @@ namespace Artel.Tests
                     .GetComponent<Image>().sprite.texture;
                 var pixels = texture.GetPixels32();
 
-                Assert.That(pixels, Has.Some.EqualTo(ArtelLogoGraphic.CoralDark));
-                Assert.That(pixels, Has.Some.EqualTo(ArtelLogoGraphic.Ink));
+                Assert.That(pixels, Has.Some.EqualTo(KeyboardStatusController.DarkAccentColor));
+                Assert.That(pixels, Has.Some.EqualTo(KeyboardStatusController.DarkForegroundColor));
 
                 PlayerPrefs.SetInt("Artel.DarkTheme", 0);
                 typeof(CursorController)
@@ -63,8 +63,8 @@ namespace Artel.Tests
                     .Invoke(controller, null);
 
                 var lightPixels = texture.GetPixels32();
-                Assert.That(lightPixels, Has.Some.EqualTo(ArtelLogoGraphic.Coral));
-                Assert.That(lightPixels, Has.Some.EqualTo(ArtelLogoGraphic.Charcoal));
+                Assert.That(lightPixels, Has.Some.EqualTo(KeyboardStatusController.LightAccentColor));
+                Assert.That(lightPixels, Has.Some.EqualTo(KeyboardStatusController.LightForegroundColor));
             }
             finally
             {
@@ -92,9 +92,8 @@ namespace Artel.Tests
                     .Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor")
                     .gameObject.activeSelf;
             });
-            var scanner = new SceneScanner();
-            scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
+            var targetLookup = new TargetLookup();
+            var executor = new ActionExecutor(targetLookup, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             var execution = executor.Execute(
@@ -117,9 +116,8 @@ namespace Artel.Tests
             button.interactable = false;
             var clicked = false;
             button.onClick.AddListener(() => clicked = true);
-            var scanner = new SceneScanner();
-            scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
+            var targetLookup = new TargetLookup();
+            var executor = new ActionExecutor(targetLookup, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             Drain(executor.Execute(
@@ -146,9 +144,8 @@ namespace Artel.Tests
             var field = targetObject.GetComponent<InputField>();
             field.text = "before";
             field.interactable = false;
-            var scanner = new SceneScanner();
-            scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
+            var targetLookup = new TargetLookup();
+            var executor = new ActionExecutor(targetLookup, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             Drain(executor.Execute(
@@ -176,9 +173,8 @@ namespace Artel.Tests
                 typeof(TMP_InputField));
             var field = targetObject.GetComponent<TMP_InputField>();
             field.interactable = false;
-            var scanner = new SceneScanner();
-            scanner.Scan();
-            var executor = new ActionExecutor(scanner, controller, new PointerEventDispatcher());
+            var targetLookup = new TargetLookup();
+            var executor = new ActionExecutor(targetLookup, controller, new PointerEventDispatcher());
 
             ActionResultDto result = null;
             Drain(executor.Execute(

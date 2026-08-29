@@ -116,7 +116,6 @@ namespace Artel.Tests
         {
             host = new GameObject("Artel mouse message test");
             var manager = host.AddComponent<ArtelManager>();
-            manager.SetWebSocketTransport(new SilentTransport(), false);
             return manager;
         }
 
@@ -170,31 +169,5 @@ namespace Artel.Tests
             yield return manager.StartCoroutine(routine);
         }
 
-        private sealed class SilentTransport : IArtelWebSocketTransport
-        {
-            public bool IsConnected { get { return true; } }
-
-            public void Start()
-            {
-            }
-
-            public void Stop()
-            {
-            }
-
-            public bool TryDequeueMessage(out ArtelWebSocketMessage message)
-            {
-                message = null;
-                return false;
-            }
-
-            public void Send(string text)
-            {
-            }
-
-            public void Dispose()
-            {
-            }
-        }
     }
 }
