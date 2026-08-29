@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
-import type { PulseStore } from "./pulse.js";
+import { objectKey, type PulseObject, type PulseStore } from "./pulse.js";
 
 type ToolContent =
   | { type: "text"; text: string }
@@ -102,30 +102,88 @@ async function dispatchOne(
   return dispatchActions(connection, [{ method, params }]);
 }
 
-function stateResponse(store: PulseStore, selector?: string, includeInactive = false): ToolResponse {
+/// 이력 map 의 내부 키 — `component.on \0 member` 또는 `component.on \0 member \0 among` —
+/// 를 읽는 쪽이 보게 될 이름으로 바꾼다.
+function historyLabel(path: string): string {
+  const [on, member, among] = path.split("\u0000");
+  const named = `${on ?? ""}.${member ?? ""}`;
+  return among === undefined ? named : `${named}#${among}`;
+}
+
+function historyOf(
+  store: PulseStore,
+  objects: readonly unknown[],
+  scene: string,
+): Record<string, Record<string, unknown>> {
+  const collected: Record<string, Record<string, unknown>> = {};
+  for (const item of objects) {
+    if (typeof item !== "object" || item === null) continue;
+    const key = objectKey(item as PulseObject, scene);
+    const series = store.getObjectHistory(key);
+    if (series.size === 0) continue;
+    const named: Record<string, unknown> = {};
+    for (const [path, readings] of series) {
+      named[historyLabel(path)] = readings;
+    }
+    collected[key] = named;
+  }
+  return collected;
+}
+
+function stateResponse(
+  store: PulseStore,
+  selector?: string,
+  includeInactive = false,
+  includeHistory = false,
+): ToolResponse {
   const state = store.getState();
   if (state === undefined || state === null) {
     return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
   }
 
   const record = state as unknown as Record<string, unknown>;
+  const matches = (candidate: string): boolean =>
+    selector === undefined || candidate.includes(selector);
   const filterObjects = (value: unknown): unknown[] => {
     if (!Array.isArray(value)) return [];
     if (selector === undefined) return value;
     return value.filter((item) => {
       if (typeof item !== "object" || item === null) return false;
-      const candidate = String((item as Record<string, unknown>).selector ?? "");
-      return candidate.includes(selector);
+      return matches(String((item as Record<string, unknown>).selector ?? ""));
     });
   };
+  // 파괴된 것은 `{ object, goneAtReading }` 이라 객체 자체와 모양이 다르다. selector 는 그
+  // 안쪽 객체에 걸어야 한다.
+  const filterGone = (value: unknown): unknown[] => {
+    if (!Array.isArray(value)) return [];
+    if (selector === undefined) return value;
+    return value.filter((item) => {
+      if (typeof item !== "object" || item === null) return false;
+      const inner = (item as Record<string, unknown>).object;
+      if (typeof inner !== "object" || inner === null) return false;
+      return matches(String((inner as Record<string, unknown>).selector ?? ""));
+    });
+  };
+  const active = filterObjects(record.active);
+  const deactive = filterObjects(record.deactive);
   const response = {
     reading: record.reading,
     frame: record.frame,
     scene: record.scene,
     changed: record.changed ?? [],
     statics: record.statics ?? [],
-    active: filterObjects(record.active),
-    ...(includeInactive ? { deactive: filterObjects(record.deactive) } : {}),
+    active,
+    ...(includeInactive ? { deactive } : {}),
+    gone: filterGone(record.gone),
+    ...(includeHistory
+      ? {
+          history: historyOf(
+            store,
+            includeInactive ? [...active, ...deactive] : active,
+            String(record.scene ?? ""),
+          ),
+        }
+      : {}),
   };
   return text(JSON.stringify(response, null, 2));
 }
@@ -157,15 +215,16 @@ function findCapture(results: ActionResult[]): CapturePayload | undefined {
 
 export function registerTools(server: McpServer, connection: UnityConnection, store: PulseStore): void {
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state.",
+    description: "Read the latest folded Unity scene state. Set includeHistory to see how each member's value moved over its last readings.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
+      includeHistory: z.boolean().optional(),
     },
-  }, async ({ selector, includeInactive }) => {
+  }, async ({ selector, includeInactive, includeHistory }) => {
     try {
       await connection.ensureConnected();
-      return stateResponse(store, selector, includeInactive);
+      return stateResponse(store, selector, includeInactive, includeHistory);
     } catch (error) {
       return {
         ...text(`Scene state is unavailable: ${errorMessage(error)}`),
