@@ -28,9 +28,5 @@ obj/
 # Agent tooling
 .agents/settings.local.json
 
-# Local-only Jira credentials for the MCP server
-.jira.env
-.notion.env
-
 # Python
 __pycache__/

@@ -1,6 +1,6 @@
 ---
 name: writing-plan
-description: Generate a work plan markdown file under .plan/general/ with strict naming conventions. Use when asked to "write a plan" or when starting any non-trivial change. Optionally links plans to Jira.
+description: Generate a work plan markdown file under .plan/general/ with strict naming conventions. Use when asked to "write a plan" or when starting any non-trivial change. Optionally links plans to a GitHub Issue.
 ---
 
 # writing-plan Skill
@@ -13,7 +13,7 @@ Use this skill when:
 
 ## Inputs (ask if missing)
 - **title** (required): Short human-readable title for the plan.
-- **jira** (optional): Jira key or work item URL.
+- **issue** (optional): GitHub Issue number or URL.
 
 ## Output rules (MUST)
 
@@ -33,14 +33,14 @@ Use this skill when:
    - If target exists, append suffix: `-2`, `-3`, etc. (e.g., `...-slug-2.md`)
 3. **Create File:** `.plan/general/<YYYY-MM-DD>-<slug>.md`
 
-4. **Jira linkage:** Jira metadata is optional and does not affect the file path. Do not create or require a GitHub Issue.
+4. **GitHub Issue linkage:** GitHub Issue metadata is optional and does not affect the file path. Do not create or require a GitHub Issue.
 
 ## Plan content (MUST)
 1. **Load template:** Read `assets/PLAN_TEMPLATE.md`.
 2. **Replace placeholders:**
    - `{{DATE}}` → Current date (YYYY-MM-DD)
    - `{{TITLE}}` → User provided title (Keep original language here)
-   - `{{JIRA_OR_NONE}}` → Jira key or URL, or string "None"
+   - `{{ISSUE_OR_NONE}}` → GitHub Issue number or URL, or string "None"
 3. **Fill sections:** Do not delete headers. Add initial thoughts if context is available.
 
 ## Return format (in chat)

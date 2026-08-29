@@ -10,14 +10,14 @@ description: >
 
 1. Read `./.agents/PRIORITY.md`. Find the first open (no ✓), ready (deps all ✓) work item top-to-bottom.
 2. Read `./.agents/handoffs/LATEST.md` for prior context.
-3. Read the Jira details recorded in the priority row or linked context. Do not query or create GitHub Issues.
+3. Read the GitHub Issue details recorded in the priority row or linked context with `gh issue view`. Do not create a duplicate GitHub Issue.
 4. Before starting implementation, update the selected work item row in `./.agents/PRIORITY.md` to show it is being developed by the active agent identity:
    - preserve the table structure
    - preserve any existing done marker formatting
    - append ` (in progress by <agent_id>)` to the work item title if no in-progress marker is already present
    - use the CLI program and model name as `<agent_id>`, for example `codex:gpt-5.4`
-5. **Scope check**: if the work item has 4+ independent concerns, propose Jira work item splits, add the proposed boundaries to the priority doc, and stop.
-6. Invoke `developer` agent with: Jira key or user request, full context, relevant `CLAUDE.md` context, and handoff decisions.
+5. **Scope check**: if the work item has 4+ independent concerns, propose GitHub Issue splits, add the proposed boundaries to the priority doc, and stop.
+6. Invoke `developer` agent with: GitHub Issue number or user request, full context, relevant `CLAUDE.md` context, and handoff decisions.
 
 ## Rules
 

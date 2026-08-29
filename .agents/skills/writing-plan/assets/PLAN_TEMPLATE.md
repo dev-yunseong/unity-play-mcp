@@ -1,7 +1,7 @@
 # {{DATE}} — {{TITLE}}
 
 - Date: {{DATE}}
-- Jira: {{JIRA_OR_NONE}}
+- GitHub Issue: {{ISSUE_OR_NONE}}
 - Status: Draft
 
 ## Goal

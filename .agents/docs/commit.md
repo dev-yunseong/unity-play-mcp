@@ -28,6 +28,7 @@ Allowed types:
 - `chore`: maintenance outside product behavior
 - `docs`: documentation-only change
 - `fix`: defect correction
+- `infra`: infrastructure change
 
 ## Rules
 
@@ -35,7 +36,7 @@ Allowed types:
 - Write the change summary after `<type>: ` in Korean.
 - Do not end subject with a period.
 - Describe why in body when motivation is not obvious.
-- Reference Jira in footer only when repository automation requires it.
+- Reference the GitHub Issue in the footer as `Refs: #123`.
 - Do not mix unrelated behavior, formatting, and refactoring.
 - Do not commit secrets, generated noise, or local-only configuration.
 
@@ -49,5 +50,5 @@ fix: 새로고침 중 기존 캐시 값 유지
 Concurrent refreshes previously cleared readable values. Keep stale data
 until replacement succeeds so callers retain deterministic fallback behavior.
 
-Jira: ARTEL-123
+Refs: #123
 ```

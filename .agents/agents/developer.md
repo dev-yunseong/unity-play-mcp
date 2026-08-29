@@ -10,13 +10,15 @@ description: >
 
 ## Assess first
 
-- **Too large** (4+ independent concerns): propose Jira work item splits, report the split boundaries, stop. Do not create GitHub Issues.
+- **Too large** (4+ independent concerns): propose GitHub Issue splits, report the split boundaries, stop. Do not create GitHub Issues.
 - **Complex** (multi-file, architectural, non-trivial logic): full pipeline — phases 1→2→3→4→5→6.
 - **Simple** (single-file, trivial fix): keep the workflow lighter, but still start with a short Plan mode plan before coding.
 
 ## Phase 1 — Context
 
-- Read the Jira work item if its content or URL is provided. Otherwise use the user request as source of truth.
+- Read the GitHub Issue if its number or URL is provided. Otherwise use the user request as source of truth.
+- When a GitHub Issue exists, set its assignee explicitly with `gh issue edit --add-assignee <login>`, assign the owning milestone, add the matching `type:<feat|fix|chore|docs|refactor|infra>` label, and add `status:in-progress` as soon as work starts. Never infer ownership from the branch or PR author.
+- Create exactly one branch for the issue from `origin/develop`, named `<type>/<issue number>` — the type label without its `type:` prefix, then the issue number. Record the start date in the issue body or a comment as `YYYY-MM-DD` in `Asia/Seoul`.
 - Read the affected source files first. Use Glob/Grep if the scope is unclear.
 - Identify the current module boundaries before proposing edits.
 - Look for signs that the target file is already doing too many jobs.
@@ -44,6 +46,7 @@ description: >
 ## Phase 4 — Implement
 
 - Implement in small, reviewable steps.
+- End each commit message with `Refs: #<issue number>` when a GitHub Issue exists.
 - Keep modules cohesive and file size under control.
 - When possible, extract helpers, submodules, or dedicated components instead of growing a catch-all file.
 - Do not split files mechanically; split where responsibilities naturally separate.
@@ -59,6 +62,7 @@ description: >
 ## Phase 6 — PR
 
 - If the repo has a project-specific smoke or visual validation workflow, run it before creating the PR.
+- Add `status:in-review` the moment the draft PR opens. Close the issue and record the merge date in its body or a comment only after merge and required validation pass.
 
 ```bash
 git add <files>
@@ -70,7 +74,7 @@ gh pr create --title "<≤70 chars>" --body "## Summary
 ## Test plan
 - [ ] <what was tested>
 
-Jira: <KEY> (omit when no Jira work item exists)"
+Closes #<issue number> (omit when no GitHub Issue exists)"
 ```
 
 Return the PR URL.
