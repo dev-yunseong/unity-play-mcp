@@ -4,7 +4,7 @@ Fill this document during project initialization. Agents must verify commands ag
 
 ## Overview
 
-- Product: artel-sdk
+- Product: Unity Play MCP
 - Primary users: TODO
 - Core domain: TODO
 - Runtime environment: TODO
@@ -14,7 +14,7 @@ Fill this document during project initialization. Agents must verify commands ag
 - Entry points: TODO
 - Main modules: TODO
 - Dependency direction: TODO
-- External systems: GitHub repository `project-artel/artel-sdk`; Notion workspace via the `ntn` CLI; Jira project `ARTEL` via the `mcp-atlassian` MCP server
+- External systems: GitHub repository `dev-yunseong/unity-play-mcp`; Notion workspace via the `ntn` CLI; Jira project `ARTEL` via the `mcp-atlassian` MCP server
 - Persistent data: TODO
 
 ## Commands
@@ -37,7 +37,7 @@ Fill this document during project initialization. Agents must verify commands ag
 
 The repository root is not a Unity project — the only one is the `samples/WordVenture`
 submodule, and its `Packages/manifest.json` has no `testables` entry, so the Test Runner
-does not discover `Packages/kr.artel.sdk/Tests` there. Tests run against a throwaway
+does not discover `Packages/dev.yunseong.unityplaymcp/Tests` there. Tests run against a throwaway
 project that declares the package as a testable.
 
 `.github/scripts/setup-unity-test-project.sh <dest>` assembles that project, and CI runs
@@ -45,22 +45,22 @@ the same script, so a local run and a CI run test the same thing. It copies
 `.github/unity-test-project/` (the pinned `ProjectSettings/ProjectVersion.txt` and the
 `Packages/manifest.json` carrying the package's own dependencies, `com.unity.test-framework`,
 every `com.unity.modules.*` the runtime touches — `physics` is required, because
-`VirtualMouseMessenger` uses `RaycastHit` — and `"testables": ["kr.artel.sdk"]`), embeds
-`Packages/kr.artel.sdk` under the project's `Packages/`, and creates an empty `Assets/`.
+`VirtualMouseMessenger` uses `RaycastHit` — and `"testables": ["dev.yunseong.unityplaymcp"]`), embeds
+`Packages/dev.yunseong.unityplaymcp` under the project's `Packages/`, and creates an empty `Assets/`.
 The package is embedded rather than referenced with `file:` so the manifest stays
 location-independent. An existing `Library/` in the destination is left in place, so
 re-running against the same directory keeps the import cache warm.
 
 ```bash
-.github/scripts/setup-unity-test-project.sh /tmp/artel-unity-test
+.github/scripts/setup-unity-test-project.sh /tmp/unity-play-mcp-test
 
 /Applications/Unity/Hub/Editor/2022.3.34f1/Unity.app/Contents/MacOS/Unity \
   -batchmode -nographics -runTests -testPlatform EditMode \
-  -projectPath /tmp/artel-unity-test \
-  -testResults /tmp/artel-unity-test/results.xml \
-  -logFile /tmp/artel-unity-test/unity.log
+  -projectPath /tmp/unity-play-mcp-test \
+  -testResults /tmp/unity-play-mcp-test/results.xml \
+  -logFile /tmp/unity-play-mcp-test/unity.log
 
-python3 .github/scripts/summarize-test-results.py /tmp/artel-unity-test/results.xml EditMode
+python3 .github/scripts/summarize-test-results.py /tmp/unity-play-mcp-test/results.xml EditMode
 ```
 
 Swap `-testPlatform EditMode` for `PlayMode` to run the other suite. The play-mode assembly
