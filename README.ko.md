@@ -75,7 +75,7 @@ tool을 호출하기 전에 Play Mode를 시작합니다. Unity는 `ws://127.0.0
 - “game screen을 capture해줘.”
 - “Start button을 눌러줘.”
 
-“Unity 켜져 있어?”라고 물으면 agent가 `get_unity_status`를 부릅니다. 게임에 닿는지, 판독이 시작됐는지, 마지막 판독이 언제 왔는지 답합니다. 다른 tool도 Unity에 닿지 못하면 socket 오류 대신 게임이 돌고 있지 않으니 Play Mode를 시작하라고 답합니다.
+“Unity 켜져 있어?”라고 물으면 agent가 `get_unity_status`를 부릅니다. 게임에 닿는지, pulse가 시작됐는지, 마지막 pulse가 언제 왔는지 답합니다. 다른 tool도 Unity에 닿지 못하면 socket 오류 대신 게임이 돌고 있지 않으니 Play Mode를 시작하라고 답합니다.
 
 MCP server는 agent가 연결할 때 짧은 사용 안내를 함께 넘깁니다. tool들이 어떤 관계인지 매번 설명하지 않아도 됩니다. 안내에는 Unity가 Play Mode여야 한다는 것, 첫 `get_scene_state` 전에 `start_readings`를 부른다는 것, `click`과 `enter_text`가 쓰는 instance id는 `get_scene_state`가 알려준다는 것이 담깁니다.
 

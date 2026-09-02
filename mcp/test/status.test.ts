@@ -96,7 +96,7 @@ test("the store remembers when a reading arrived, even one that changed nothing"
   store.fold(frame);
   assert.equal(store.getLastReadingAt(), 5_000);
 
-  // 같은 판독 번호가 다시 와도 상태는 안 바뀌지만, 도착했다는 사실은 게임이 살아 있다는 증거다.
+  // 같은 reading 번호가 다시 와도 상태는 안 바뀌지만, 도착했다는 사실은 게임이 살아 있다는 증거다.
   clock = 6_000;
   store.fold(frame);
   assert.equal(store.getLastReadingAt(), 6_000);

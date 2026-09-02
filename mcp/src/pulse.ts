@@ -346,13 +346,13 @@ export class PulseStore {
   private diagnostics: PulseDiagnostics = {};
   private lastReadingAt?: number;
 
-  /// 시계를 밖에서 받는 이유는 test 가 "판독이 얼마나 오래되었는지" 를 실제 시간을 기다리지 않고
+  /// 시계를 밖에서 받는 이유는 test 가 "pulse 가 얼마나 오래되었는지" 를 실제 시간을 기다리지 않고
   /// 확인하기 위해서다.
   constructor(private readonly now: () => number = Date.now) {}
 
   fold(frame: GamePush): boolean {
     if (frame.type === "PULSE") {
-      // 도착했다는 사실 자체가 게임이 돌고 있다는 증거다. 값이 하나도 안 바뀐 판독도 마찬가지다.
+      // 도착했다는 사실 자체가 게임이 돌고 있다는 증거다. 값이 하나도 안 바뀐 pulse 도 마찬가지다.
       this.lastReadingAt = this.now();
       const previous = this.pulseState;
       this.pulseState = foldInternal(previous, frame);
@@ -389,7 +389,7 @@ export class PulseStore {
     return this.diagnostics;
   }
 
-  /// 마지막 판독이 도착한 시각. 아직 하나도 안 왔으면 `undefined`.
+  /// 마지막 pulse 가 도착한 시각. 아직 하나도 안 왔으면 `undefined`.
   getLastReadingAt(): number | undefined {
     return this.lastReadingAt;
   }

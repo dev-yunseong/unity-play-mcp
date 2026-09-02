@@ -120,7 +120,7 @@ export interface UnityStatus {
 
 /// status tool 이 돌려줄 문장.
 ///
-/// 순수 함수인 이유는 이 문장이 계약이기 때문이다. 연결됨과 안 됨, 판독이 시작됨과 안 됨의 네 경우가
+/// 순수 함수인 이유는 이 문장이 계약이기 때문이다. 연결됨과 안 됨, pulse 가 시작됨과 안 됨의 네 경우가
 /// 서로 다른 말을 해야 하고, 그것을 실제 소켓 없이 확인할 수 있어야 한다.
 export function describeStatus(status: UnityStatus): string {
   if (!status.connected) {
