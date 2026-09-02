@@ -4,13 +4,13 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     public sealed class KeyboardStatusController : MonoBehaviour
     {
         private const int OverlaySortingOrder = short.MaxValue - 2;
-        private const string DarkThemePlayerPrefsKey = ArtelOwnedPlayerPrefs.DarkTheme;
-        // artel-home tokens.css의 bg.surface. 게임 화면 위에 뜨므로 알파를 남겨 두되
+        private const string DarkThemePlayerPrefsKey = OwnedPlayerPrefs.DarkTheme;
+        // 게임 화면 위에 뜨므로 알파를 남겨 두되
         // 글자 대비를 지킬 만큼은 불투명해야 한다.
         internal static readonly Color32 DarkPanelColor = new Color32(0x1A, 0x1D, 0x24, 0xF5);
         internal static readonly Color32 LightPanelColor = new Color32(0xFD, 0xFB, 0xF7, 0xF5);
@@ -56,7 +56,7 @@ namespace Artel
             pressedKeys.Clear();
             foreach (var key in keyboardKeys)
             {
-                if (ArtelInput.GetKey(key))
+                if (VirtualInput.GetKey(key))
                 {
                     pressedKeys.Add(key);
                 }
@@ -65,7 +65,7 @@ namespace Artel
             heldMouseButtons.Clear();
             for (var button = 0; button < VirtualMouseState.ButtonCount; button++)
             {
-                if (ArtelInput.IsMouseButtonHeld(button))
+                if (VirtualInput.IsMouseButtonHeld(button))
                 {
                     heldMouseButtons.Add(button);
                 }
@@ -157,7 +157,7 @@ namespace Artel
         private void CreateGui()
         {
             canvasObject = new GameObject(
-                "Artel Keyboard Status Canvas",
+                "Unity Play MCP Keyboard Status Canvas",
                 typeof(RectTransform),
                 typeof(Canvas),
                 typeof(CanvasScaler));
@@ -254,7 +254,7 @@ namespace Artel
             }
 
             var formattedPointer = FormatPointer(
-                ArtelInput.HasVirtualMousePosition, ArtelInput.mousePosition, heldMouseButtons);
+                VirtualInput.HasVirtualMousePosition, VirtualInput.mousePosition, heldMouseButtons);
             if (displayedPointer != formattedPointer)
             {
                 displayedPointer = formattedPointer;

@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Artel.Tests.Input
+namespace UnityPlayMcp.Tests.Input
 {
     public sealed class VirtualMouseStateTests
     {

@@ -1,6 +1,6 @@
 using global::UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// Where the agent's pointer is and which of its buttons are down. Unlike a key press, a button

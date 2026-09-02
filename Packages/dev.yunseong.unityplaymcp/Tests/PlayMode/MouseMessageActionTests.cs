@@ -1,12 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol.Dto;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// <c>OnMouse</c> 계열까지 닿는지를 본다. EventSystem 이 아니라 콜라이더와 카메라를 통하는
@@ -31,7 +31,7 @@ namespace Artel.Tests
         [SetUp]
         public void SetUp()
         {
-            foreach (var stale in Object.FindObjectsOfType<ArtelManager>(true))
+            foreach (var stale in Object.FindObjectsOfType<UnityPlayMcpHost>(true))
             {
                 Object.DestroyImmediate(stale.gameObject);
             }
@@ -40,7 +40,7 @@ namespace Artel.Tests
         [TearDown]
         public void TearDown()
         {
-            ArtelInput.ReleaseAllVirtualInput();
+            VirtualInput.ReleaseAllVirtualInput();
 
             foreach (var alive in new[] { targetObject, cameraObject, host })
             {
@@ -109,13 +109,13 @@ namespace Artel.Tests
 
             Assert.That(target.Messages, Is.Empty);
             // 폴링하는 쪽에는 그래도 닿는다. 눌린 것 자체는 사실이다.
-            Assert.That(ArtelInput.GetMouseButton(0), Is.True);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.True);
         }
 
-        private ArtelManager CreateManager()
+        private UnityPlayMcpHost CreateManager()
         {
-            host = new GameObject("Artel mouse message test");
-            var manager = host.AddComponent<ArtelManager>();
+            host = new GameObject("Unity Play MCP mouse message test");
+            var manager = host.AddComponent<UnityPlayMcpHost>();
             return manager;
         }
 
@@ -155,14 +155,14 @@ namespace Artel.Tests
             return new ActionRequestDto { Id = id, Method = method, Parameters = parameters };
         }
 
-        private static IEnumerator RunBatch(ArtelManager manager, params ActionRequestDto[] actions)
+        private static IEnumerator RunBatch(UnityPlayMcpHost manager, params ActionRequestDto[] actions)
         {
-            var request = new ArtelRequestDto
+            var request = new AgentRequestDto
             {
                 Type = "ACTION",
                 Actions = new List<ActionRequestDto>(actions)
             };
-            var routine = (IEnumerator)typeof(ArtelManager)
+            var routine = (IEnumerator)typeof(UnityPlayMcpHost)
                 .GetMethod("ExecuteActionRequest", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(manager, new object[] { request });
 

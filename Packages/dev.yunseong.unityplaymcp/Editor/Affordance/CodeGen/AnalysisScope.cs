@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>그 타입이 무엇으로 밝혀졌는가.</summary>
     internal enum TypeVerdict

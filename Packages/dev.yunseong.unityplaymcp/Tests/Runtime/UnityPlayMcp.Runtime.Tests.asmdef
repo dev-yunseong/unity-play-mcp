@@ -1,11 +1,11 @@
 {
-  "name": "Artel.Runtime.Tests",
-  "rootNamespace": "Artel.Tests.Protocol",
+  "name": "UnityPlayMcp.Runtime.Tests",
+  "rootNamespace": "UnityPlayMcp.Tests.Protocol",
   "references": [
-    "Artel.Runtime",
-    "Artel.Input.Fixtures",
+    "UnityPlayMcp.Runtime",
+    "UnityPlayMcp.Input.Fixtures",
     "Unity.TextMeshPro",
-    "Artel.Affordances.Scan"
+    "UnityPlayMcp.Affordances.Scan"
   ],
   "includePlatforms": [
     "Editor"

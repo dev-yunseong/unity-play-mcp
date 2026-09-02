@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol.Dto;
 using NUnit.Framework;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     public sealed class ReadingsActionTests
     {

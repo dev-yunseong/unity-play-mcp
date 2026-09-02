@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 방문한 모든 씬을 통틀어, 여태 본 모든 것.

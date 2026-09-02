@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>문서를 쓰기에 딱 필요한 만큼의 JSON. 읽는 쪽은 없다.</summary>
     /// <remarks>

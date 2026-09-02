@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 에디터가 집어 갈 수 있는 자리에 survey 를 남긴다.
@@ -20,7 +20,7 @@ namespace Artel.Affordances.CodeGen
     /// </remarks>
     internal static class ScopeReport
     {
-        internal const string ReportDirectory = "Library/ArtelScope";
+        internal const string ReportDirectory = "Library/UnityPlayMcpScope";
 
         internal static bool TryWrite(string assemblyName, string message)
         {

@@ -1,4 +1,4 @@
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 한 집계 구간의 프로세스 CPU·메모리 사용량.

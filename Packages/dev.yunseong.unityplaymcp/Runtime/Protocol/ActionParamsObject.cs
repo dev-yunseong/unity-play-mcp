@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
-namespace Artel.Protocol
+namespace UnityPlayMcp.Protocol
 {
     /// <summary>
     /// 액션 params 안의 options 오브젝트를 필드 사전으로 읽는다.

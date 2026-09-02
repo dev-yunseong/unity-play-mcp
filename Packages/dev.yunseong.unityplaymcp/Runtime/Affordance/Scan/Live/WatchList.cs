@@ -5,7 +5,7 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Text;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>게임이 도는 동안 읽어 달라고 근거가 청하는 멤버 하나.</summary>
     internal sealed class Watched
@@ -74,7 +74,7 @@ namespace Artel.Affordances.Live
     /// </remarks>
     internal static class WatchList
     {
-        private const string ResourceName = "kr.artel.affordance.watch";
+        private const string ResourceName = "dev.yunseong.unityplaymcp.affordance.watch";
 
         private static List<Watched> _resolved;
         private static List<string> _animatorNames;
@@ -103,7 +103,7 @@ namespace Artel.Affordances.Live
         /// <remarks>
         /// 이름만 나르던 자리다. 그때는 씬의 키 다섯이 대등하게 실려, 어느 것이 무엇을 하는지 읽는 쪽이 알
         /// 길이 없었다 — 실제로 Map 씬의 QA 가 그래서 전투에 진입하지 못했다. 근거는 `Return` 이 씬을
-        /// 바꾼다는 것을 알고 있었고, 그 앎이 여기서 버려지고 있었다(ARTEL-539).
+        /// 바꾼다는 것을 알고 있었고, 그 앎이 여기서 버려지고 있었다.
         ///
         /// <see cref="Does"/> 가 비어 있는 것은 "아무 일도 안 한다" 가 아니라 "분석이 못 읽었다" 이다.
         /// 그 둘은 읽는 쪽의 다음 수가 다르므로 방출에서도 갈라 쓴다.
@@ -391,7 +391,7 @@ namespace Artel.Affordances.Live
         /// <remarks>
         /// 배열이 평평한 이유는 <see cref="Entries"/> 에 있다. 그것은 항목의 끝을 첫 <c>}</c> 로 찾으므로
         /// — 괄호를 셀 수 없다, 필드가 제 대괄호를 나르는 제네릭 타입 이름을 쥔다 — 키를 객체로 만들면
-        /// 항목이 첫 키에서 잘린다. 실제로 그렇게 만들었다가 키가 통째로 사라졌다(ARTEL-539).
+        /// 항목이 첫 키에서 잘린다. 실제로 그렇게 만들었다가 키가 통째로 사라졌다.
         ///
         /// 구분자가 없는 항목은 옛 형식이다. 그때는 이름만 실렸고, 그 리소스로 만든 빌드도 무엇을 누를 수
         /// 있는지는 그대로 말할 수 있어야 한다.

@@ -1,7 +1,7 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 살아 있는 값이 무언가를 결정하는 멤버. 되읽을 수 있을 만큼 정확히 이름 붙인 것.

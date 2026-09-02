@@ -1,7 +1,7 @@
 using System.Text;
 using UnityEngine;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 객체를 그것이 앉은 자리로 이름 붙인다.

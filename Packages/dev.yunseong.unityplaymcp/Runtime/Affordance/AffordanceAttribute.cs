@@ -1,6 +1,6 @@
 using System;
 
-namespace Artel.Affordances
+namespace UnityPlayMcp.Affordances
 {
     /// <summary>
     /// 타입을 자신의 근거에 연결한다. 근거는 같은 어셈블리의 리소스 안에 있다.

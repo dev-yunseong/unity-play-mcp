@@ -1,4 +1,4 @@
-namespace Artel.Serialization
+namespace UnityPlayMcp.Serialization
 {
     internal interface IJsonCodec
     {

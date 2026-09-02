@@ -1,15 +1,15 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Capture;
-using Artel.Protocol.Dto;
-using Artel.Serialization;
+using UnityPlayMcp.Capture;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Serialization;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// The decisions in `capture_screen`, exercised without a framebuffer.

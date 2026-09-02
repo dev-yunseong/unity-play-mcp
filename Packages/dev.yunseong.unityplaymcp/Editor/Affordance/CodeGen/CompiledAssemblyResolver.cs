@@ -4,7 +4,7 @@ using System.IO;
 using Mono.Cecil;
 using Unity.CompilationPipeline.Common.ILPostProcessing;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 게임 어셈블리가 무엇에 대고 컴파일됐는지를 찾아낸다.

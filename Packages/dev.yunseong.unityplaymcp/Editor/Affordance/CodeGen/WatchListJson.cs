@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 어셈블리의 근거가 누군가에게 보라고 청하는 것의 전부. 한 번에 쓴다.
@@ -373,7 +373,7 @@ namespace Artel.Affordances.CodeGen
         /// 사라졌다.
         ///
         /// 그래서 구분자를 쓴다. <c>\u0001</c> 은 식별자에도 씬 이름에도 나타날 수 없고 JSON 에서
-        /// 이스케이프된다. 판독으로 나갈 때 <see cref="Artel.Affordances.Live.WatchList"/> 가 다시 가른다.
+        /// 이스케이프된다. 판독으로 나갈 때 <see cref="UnityPlayMcp.Affordances.Live.WatchList"/> 가 다시 가른다.
         /// </remarks>
         private static void Keyed(
             StringBuilder text, SortedDictionary<string, SortedSet<string>> keys)

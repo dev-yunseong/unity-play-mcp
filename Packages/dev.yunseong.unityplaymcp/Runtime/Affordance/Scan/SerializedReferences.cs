@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>컴포넌트의 인스펙터 필드가 무엇을 가리키는가.</summary>
     internal struct Reference

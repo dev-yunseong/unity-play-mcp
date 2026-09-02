@@ -1,16 +1,16 @@
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Protocol.Dto;
-using Artel.Tests.Fixtures;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Tests.Fixtures;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Artel.Tests.Input
+namespace UnityPlayMcp.Tests.Input
 {
     public sealed class VirtualAxisStateTests
     {
-        private const string MissingAxis = "__artel_no_such_axis__";
+        private const string MissingAxis = "__unity_play_mcp_no_such_axis__";
 
         private GameObject cursorObject;
         private CursorController cursorController;
@@ -25,7 +25,7 @@ namespace Artel.Tests.Input
         [TearDown]
         public void TearDown()
         {
-            ArtelInput.ResetVirtualKeyboard();
+            VirtualInput.ResetVirtualKeyboard();
             Object.DestroyImmediate(cursorObject);
         }
 
@@ -225,7 +225,7 @@ namespace Artel.Tests.Input
         }
 
         [UnityTest]
-        public IEnumerator IlPostProcessor_ReroutesUnityAxisCallsToArtelInput()
+        public IEnumerator IlPostProcessor_ReroutesUnityAxisCallsToVirtualInput()
         {
             var host = new GameObject("axis fixture");
             var fixture = host.AddComponent<InputFixtureBehaviour>();

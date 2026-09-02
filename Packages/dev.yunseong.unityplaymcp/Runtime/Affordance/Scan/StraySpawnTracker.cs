@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// Records every root object alive before a scene is visited, so the ones that visit leaves
@@ -108,7 +108,7 @@ namespace Artel.Affordances.Scan
             // not count it. Moving a throwaway object into it is the only way to read the handle
             // back, and it doubles as a way to make the scene exist at all — it does not until
             // something is put there.
-            var probe = new GameObject("Artel DontDestroyOnLoad Probe");
+            var probe = new GameObject("Unity Play MCP DontDestroyOnLoad Probe");
             Object.DontDestroyOnLoad(probe);
             var resolved = probe.scene;
             Object.DestroyImmediate(probe);

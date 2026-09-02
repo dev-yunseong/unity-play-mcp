@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Artel.Protocol.Dto
+namespace UnityPlayMcp.Protocol.Dto
 {
     /// <summary>
     /// 세션의 하드웨어·렌더링·빌드 컨텍스트. 연결마다 한 번 올린다.

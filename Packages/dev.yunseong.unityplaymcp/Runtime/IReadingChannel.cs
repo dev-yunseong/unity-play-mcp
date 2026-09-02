@@ -1,4 +1,4 @@
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// 실행을 모는 쪽을 위해 라이브 판독을 켜고 끄는 일.

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// Records the uGUI pointer events it receives, in the order they arrive. The order is the

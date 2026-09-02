@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// Codex 의 <c>~/.codex/config.toml</c>. server 하나가 <c>[mcp_servers.&lt;name&gt;]</c> table 하나다.

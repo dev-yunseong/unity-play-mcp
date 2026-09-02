@@ -1,4 +1,4 @@
-namespace Artel.Protocol
+namespace UnityPlayMcp.Protocol
 {
     /// <summary>
     /// 성능 보고가 싣는 지표군의 와이어 이름.

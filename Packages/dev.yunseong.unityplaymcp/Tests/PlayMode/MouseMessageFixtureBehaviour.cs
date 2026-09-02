@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// 엔진이 커서 아래 오브젝트에 보내는 <c>OnMouse</c> 계열 메시지를 도착한 순서대로 적는다.

@@ -1,8 +1,8 @@
-using Artel.Diagnostics;
-using Artel.Protocol.Mapping;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Mapping;
 using NUnit.Framework;
 
-namespace Artel.Tests.Diagnostics
+namespace UnityPlayMcp.Tests.Diagnostics
 {
     public sealed class FrameTimesMapperTests
     {

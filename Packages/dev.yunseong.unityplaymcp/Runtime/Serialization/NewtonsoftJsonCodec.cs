@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Artel.Serialization
+namespace UnityPlayMcp.Serialization
 {
     internal sealed class NewtonsoftJsonCodec : IJsonCodec
     {

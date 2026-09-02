@@ -6,7 +6,7 @@
 using UnityEditor;
 #endif
 
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// Game view Stats 창과 같은 렌더 통계를 읽는다.

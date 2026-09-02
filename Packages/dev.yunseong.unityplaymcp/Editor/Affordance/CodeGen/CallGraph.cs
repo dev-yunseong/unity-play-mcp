@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 진입점들이 이 어셈블리 안에서 닿을 수 있는 모든 것.

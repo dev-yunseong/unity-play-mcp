@@ -1,4 +1,4 @@
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 설정을 어느 자리에 쓸지. Unity project 하나에만 적용할지, 이 계정의 모든 project 에 적용할지.

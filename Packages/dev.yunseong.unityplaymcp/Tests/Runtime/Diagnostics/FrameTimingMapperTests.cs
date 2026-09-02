@@ -1,10 +1,10 @@
-using Artel.Diagnostics;
-using Artel.Protocol.Dto;
-using Artel.Protocol.Mapping;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Protocol.Mapping;
 using Newtonsoft.Json;
 using NUnit.Framework;
 
-namespace Artel.Tests.Diagnostics
+namespace UnityPlayMcp.Tests.Diagnostics
 {
     public sealed class FrameTimingMapperTests
     {

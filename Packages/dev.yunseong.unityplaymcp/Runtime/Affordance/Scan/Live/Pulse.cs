@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>바뀐 판독이 가는 자리.</summary>
     /// <remarks>
@@ -138,7 +138,7 @@ namespace Artel.Affordances.Live
                 return false;
             }
 
-            var carrier = new GameObject("Artel Pulse") { hideFlags = HideFlags.HideAndDontSave };
+            var carrier = new GameObject("Unity Play MCP Pulse") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(carrier);
 
             _beating = carrier.AddComponent<Pulse>();
@@ -215,7 +215,7 @@ namespace Artel.Affordances.Live
                     // 것에 대한 변경을 쥐게 된다.
                     _lost = true;
                     _pending.Clear();
-                    Debug.LogWarning("[Artel] A reading could not be delivered: " + exception.Message);
+                    Debug.LogWarning("[Unity Play MCP] A reading could not be delivered: " + exception.Message);
                     return;
                 }
 
@@ -243,7 +243,7 @@ namespace Artel.Affordances.Live
             {
                 // 나쁜 판독 하나는 건너뛸 판독이지 감시를 멈출 이유가 아니다. 던지는 필드는 이미 문서 안에서 읽지 못한 것으로
                 // 보고된다. 이것은 걷기 자체가 무너진 경우이고, 씬이 헐리는 중이면 그런 일이 생길 수 있다.
-                Debug.LogWarning("[Artel] A reading could not be taken: " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] A reading could not be taken: " + exception.Message);
                 return;
             }
 

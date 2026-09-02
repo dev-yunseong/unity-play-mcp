@@ -1,4 +1,4 @@
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 한 시점의 Game view 렌더 통계.

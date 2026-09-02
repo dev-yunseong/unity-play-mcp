@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 설정 파일을 읽고 쓴다. 이 둘 말고 다른 파일 시스템 관심사를 여기 두지 않는다.

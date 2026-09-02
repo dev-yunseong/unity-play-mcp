@@ -5,14 +5,14 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 주소에 사는 씬들에 대해 순회에 일러 준다.
     /// </summary>
     /// <remarks>
     /// 이 어셈블리는 프로젝트에 Addressables 가 있을 때만 컴파일된다. asmdef 이 패키지 자신의 존재로부터
-    /// <c>ARTEL_ADDRESSABLES</c> 를 켜고 그것을 요구하므로, 그 패키지가 없는 프로젝트는 전에 빌드하던 것을 그대로 빌드하고
+    /// <c>UNITY_PLAY_MCP_ADDRESSABLES</c> 를 켜고 그것을 요구하므로, 그 패키지가 없는 프로젝트는 전에 빌드하던 것을 그대로 빌드하고
     /// 이 파일은 컴파일러가 보기에 존재하지 않는다. 어딘가의 <c>#if</c> 가 아니라 제 어셈블리인 이유 전체가 그것이다.
     ///
     /// 디스크가 아니라 카탈로그에 묻는다. 빌드된 플레이어에는 애셋 데이터베이스도 씬 폴더도 없다. 그것이 가진 것은 게임 자신이
@@ -83,7 +83,7 @@ namespace Artel.Affordances.Scan
 
                 if (waited > Patience)
                 {
-                    Debug.LogWarning("[Artel] " + address + " did not finish loading in " +
+                    Debug.LogWarning("[Unity Play MCP] " + address + " did not finish loading in " +
                                      Patience + "s. Moving on.");
                     yield break;
                 }

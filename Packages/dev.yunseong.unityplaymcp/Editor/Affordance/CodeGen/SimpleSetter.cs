@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 접근자가 필드 하나를 건드리는 것 말고는 아무것도 하지 않는 프로퍼티.

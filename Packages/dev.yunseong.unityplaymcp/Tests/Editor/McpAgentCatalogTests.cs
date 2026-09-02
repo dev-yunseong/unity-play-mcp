@@ -1,11 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
-using Artel.McpConfig.Editor;
+using UnityPlayMcp.McpConfig.Editor;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
-namespace Artel.Tests.McpConfig
+namespace UnityPlayMcp.Tests.McpConfig
 {
     /// <remarks>
     /// 네 파일이 어느 scope 에서 어디에 있고 어떤 형식인지가 이 기능의 계약 그 자체다. 형식 변환만

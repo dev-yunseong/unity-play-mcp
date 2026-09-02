@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Mono.Cecil;
 
-namespace Artel.CodeGen
+namespace UnityPlayMcp.CodeGen
 {
     internal sealed class CompiledAssemblyResolver : IAssemblyResolver
     {

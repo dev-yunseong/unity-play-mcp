@@ -1,13 +1,13 @@
 using global::UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// <c>KeyCode.Mouse0</c> 은 Unity 에서 마우스 왼쪽 버튼 그 자체다. 키로 온 요청과 버튼으로 온
     /// 요청이 같은 것을 가리킨다는 사실을 여기 한 곳에만 적는다.
     /// </summary>
     /// <remarks>
-    /// 읽는 쪽(<see cref="ArtelInput"/>)과 미는 쪽(<c>ActionExecutor</c>)이 각자 대응표를 들면
+    /// 읽는 쪽(<see cref="VirtualInput"/>)과 미는 쪽(<c>ActionExecutor</c>)이 각자 대응표를 들면
     /// 언젠가 한쪽만 고쳐져 갈라진다. 그 갈라짐이 곧 "눌렀는데 아무 일도 안 일어난다" 라서,
     /// 대응은 함수 하나로만 존재한다.
     /// </remarks>

@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Artel.Protocol.Dto
+namespace UnityPlayMcp.Protocol.Dto
 {
-    internal sealed class ArtelRequestDto
+    internal sealed class AgentRequestDto
     {
         [JsonProperty("type")]
         public string Type { get; set; }

@@ -1,11 +1,11 @@
 using System.Text;
-using Artel.Affordances.Scan;
+using UnityPlayMcp.Affordances.Scan;
 using NUnit.Framework;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// <c>createdBy</c> 가 프리팹을 정체로 지목하는지, 걷기가 버린 것을 적는지 검증한다(ARTEL-459).
+    /// <c>createdBy</c> 가 프리팹을 정체로 지목하는지, 걷기가 버린 것을 적는지 검증한다.
     ///
     /// 이 표가 틀리면 조용히 틀린다. <c>createdBy</c> 가 비면 소비자는 죽은 코드로 읽고, 폐기
     /// 판정은 되돌려 보는 사람이 없다. 실제로 <c>SpellObj</c> 가 한 번 그렇게 오판됐다.

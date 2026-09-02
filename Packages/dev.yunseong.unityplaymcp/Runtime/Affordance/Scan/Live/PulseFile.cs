@@ -2,7 +2,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
     /// 바뀐 판독마다 한 줄씩 쓴다. 소켓이 전혀 없어도 판독을 지켜볼 수 있도록.
@@ -21,7 +21,7 @@ namespace Artel.Affordances.Live
     /// </remarks>
     public sealed class PulseFile : IPulseSink, System.IDisposable
     {
-        private const string FileName = "artel-pulse.jsonl";
+        private const string FileName = "unity-play-mcp-pulse.jsonl";
 
         /// <summary>판독이 쓰이는 자리.</summary>
         public static string Path => System.IO.Path.Combine(Application.persistentDataPath, FileName);
@@ -56,7 +56,7 @@ namespace Artel.Affordances.Live
             }
             catch (System.Exception exception)
             {
-                Debug.LogWarning("[Artel] Could not open " + Path + ": " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] Could not open " + Path + ": " + exception.Message);
                 return null;
             }
         }

@@ -1,4 +1,4 @@
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 한 프레임의 CPU·GPU 분해 판독값.

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Artel.Affordances.Scan;
+using UnityPlayMcp.Affordances.Scan;
 using UnityEngine;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
     /// 테스트가 작용할 수 있는 객체인지 — 리포트의 규칙을, 초당 열 번 묻는다.

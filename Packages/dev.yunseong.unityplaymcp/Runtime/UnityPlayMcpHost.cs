@@ -1,16 +1,16 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Capture;
-using Artel.Diagnostics;
-using Artel.Protocol.Dto;
-using Artel.Protocol.Mapping;
-using Artel.Serialization;
+using UnityPlayMcp.Capture;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Protocol.Mapping;
+using UnityPlayMcp.Serialization;
 using UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
-    public sealed class ArtelManager : MonoBehaviour, IReadingChannel
+    public sealed class UnityPlayMcpHost : MonoBehaviour, IReadingChannel
     {
         private const float PerformanceReportIntervalSeconds = 1f;
         private const string BindAddress = "127.0.0.1";
@@ -21,9 +21,9 @@ namespace Artel
         /// each time because the check runs in Awake, before anything else can
         /// register it.
         /// </summary>
-        private static ArtelManager instance;
+        private static UnityPlayMcpHost instance;
 
-        private IArtelWebSocketTransport webSocketTransport;
+        private IAgentTransport webSocketTransport;
         private ActionExecutor actionExecutor;
         private CursorController cursorController;
         private PointerEventDispatcher pointerEvents;
@@ -44,7 +44,7 @@ namespace Artel
         /// <summary>서버가 열린 동안 되돌려 줄 host game의 원래 설정.</summary>
         private bool hostRunInBackground;
         private long nextMessageId = 1;
-        private readonly Queue<ArtelRequestDto> actionRequests = new Queue<ArtelRequestDto>();
+        private readonly Queue<AgentRequestDto> actionRequests = new Queue<AgentRequestDto>();
         private bool processingActions;
 
         /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
@@ -82,7 +82,7 @@ namespace Artel
                 return;
             }
 
-            new GameObject("Artel").AddComponent<ArtelManager>();
+            new GameObject("Unity Play MCP").AddComponent<UnityPlayMcpHost>();
         }
 #endif
 
@@ -190,11 +190,11 @@ namespace Artel
 
         private void Update()
         {
-            using (ArtelProfilerMarkers.ManagerUpdate.Auto())
+            using (ProfilerMarkers.HostUpdate.Auto())
             {
                 RecordFrameTime();
 
-                ArtelInput.AdvanceFrame();
+                VirtualInput.AdvanceFrame();
 
                 if (webSocketTransport == null)
                 {
@@ -204,7 +204,7 @@ namespace Artel
 
                 NoticeNewConnection();
 
-                using (ArtelProfilerMarkers.ManagerHandleMessage.Auto())
+                using (ProfilerMarkers.HostHandleMessage.Auto())
                 {
                     while (webSocketTransport.TryDequeueMessage(out var message))
                     {
@@ -212,7 +212,7 @@ namespace Artel
                     }
                 }
 
-                using (ArtelProfilerMarkers.ManagerPerformanceReport.Auto())
+                using (ProfilerMarkers.HostPerformanceReport.Auto())
                 {
                     SendPerformanceReport();
                 }
@@ -231,7 +231,7 @@ namespace Artel
         {
             if (webSocketTransport == null)
             {
-                webSocketTransport = new ArtelWebSocketServer(BindAddress, WebSocketPort);
+                webSocketTransport = new AgentWebSocketServer(BindAddress, WebSocketPort);
 
                 // This is the host game's own Player Setting, and the package ships inside the
                 // game build — so it is held for exactly as long as this server, and put back in
@@ -255,7 +255,7 @@ namespace Artel
 
             webSocketTransport.Start();
             BeginDiscovery();
-            Debug.Log("[Artel] WebSocket server started at ws://127.0.0.1:17311/ws.");
+            Debug.Log("[Unity Play MCP] WebSocket server started at ws://127.0.0.1:17311/ws.");
         }
 
         /// <summary>
@@ -350,7 +350,7 @@ namespace Artel
             // The connection this was taken for is gone, so the host game gets its setting back.
             Application.runInBackground = hostRunInBackground;
 
-            Debug.Log("[Artel] WebSocket transport stopped.");
+            Debug.Log("[Unity Play MCP] WebSocket transport stopped.");
         }
 
         /// <summary>
@@ -360,14 +360,14 @@ namespace Artel
         private void ReleaseAgentInput()
         {
             pointerEvents.ReleaseAll();
-            ArtelInput.ReleaseAllVirtualInput();
+            VirtualInput.ReleaseAllVirtualInput();
         }
 
-        private void HandleMessage(ArtelWebSocketMessage message)
+        private void HandleMessage(AgentMessage message)
         {
             try
             {
-                var request = jsonCodec.Deserialize<ArtelRequestDto>(message.Text);
+                var request = jsonCodec.Deserialize<AgentRequestDto>(message.Text);
                 if (request == null)
                 {
                     throw new InvalidOperationException("Message body is empty.");
@@ -387,7 +387,7 @@ namespace Artel
             }
         }
 
-        private void EnqueueAction(ArtelRequestDto request)
+        private void EnqueueAction(AgentRequestDto request)
         {
             actionRequests.Enqueue(request);
             if (!processingActions)
@@ -407,7 +407,7 @@ namespace Artel
             processingActions = false;
         }
 
-        private IEnumerator ExecuteActionRequest(ArtelRequestDto request)
+        private IEnumerator ExecuteActionRequest(AgentRequestDto request)
         {
             var results = new List<ActionResultDto>();
 
@@ -436,7 +436,7 @@ namespace Artel
                 RequestId = request.Id,
                 // 여기서 읽는다. 배치를 받은 자리가 아니라 마지막 액션이 끝난 자리다 — 커서 활강처럼
                 // 여러 프레임에 걸치는 액션이 있고, 그때 둘이 갈린다. 기다리는 쪽이 궁금한 것은 배치가
-                // 끝난 뒤의 화면이므로 끝난 프레임이라야 답이 된다(ARTEL-620).
+                // 끝난 뒤의 화면이므로 끝난 프레임이라야 답이 된다.
                 Frame = Time.frameCount,
                 Results = results
             };
@@ -564,7 +564,7 @@ namespace Artel
 
             warnedFrameTimingUnavailable = true;
             Debug.LogWarning(
-                "[Artel] Frame timing data is unavailable, so CPU/GPU breakdown is left out of the " +
+                "[Unity Play MCP] Frame timing data is unavailable, so CPU/GPU breakdown is left out of the " +
                 "performance report. Enable Project Settings > Player > Frame Timing Stats to collect it.");
         }
 
@@ -596,7 +596,7 @@ namespace Artel
             return 1f / 60f;
         }
 
-        private void SendError(ArtelWebSocketMessage request, string error)
+        private void SendError(AgentMessage request, string error)
         {
             var message = new ErrorMessage
             {

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// Unity Play MCP가 <c>PlayerPrefs</c>에 쓰는 theme 키를 남기고 저장소를 비운다.
@@ -8,10 +8,10 @@ namespace Artel
     /// <remarks>
     /// <c>reset_game</c>의 <c>clearPlayerPrefs</c>가 이 메서드의 유일한 소비자다.
     /// </remarks>
-    internal static class ArtelOwnedPlayerPrefs
+    internal static class OwnedPlayerPrefs
     {
         /// <summary>커서와 키보드 표시가 공유하는 theme switch.</summary>
-        public const string DarkTheme = "Artel.DarkTheme";
+        public const string DarkTheme = "UnityPlayMcp.DarkTheme";
 
         /// <summary>
         /// SDK 자신의 키만 남기고 <c>PlayerPrefs</c> 를 비운다.
@@ -35,7 +35,7 @@ namespace Artel
         ///
         /// 코루틴이 아니라 동기 메서드인 것도 의도다. 담아 두기와 되쓰기 사이에 프레임
         /// 경계가 생기면 안 된다 — <c>CursorController.Update</c> 와
-        /// <c>KeyboardStatusController.Update</c> 는 매 프레임 <c>Artel.DarkTheme</c> 을 읽으므로,
+        /// <c>KeyboardStatusController.Update</c> 는 매 프레임 <c>UnityPlayMcp.DarkTheme</c> 을 읽으므로,
         /// 그 틈에 오버레이가 다크로 번쩍이고 GUI 캔버스를 두 번 다시 만든다.
         /// </remarks>
         public static void DeleteAllExceptOwn()

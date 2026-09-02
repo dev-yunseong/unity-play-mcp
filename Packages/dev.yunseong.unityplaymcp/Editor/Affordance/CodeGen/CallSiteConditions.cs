@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Mono.Cecil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 한 메서드가 다른 메서드를 부르기 위해 무엇이 참이어야 했는가.

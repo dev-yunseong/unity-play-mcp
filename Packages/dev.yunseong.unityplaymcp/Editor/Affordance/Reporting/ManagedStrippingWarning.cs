@@ -3,7 +3,7 @@ using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
-namespace Artel.Affordances.Editor
+namespace UnityPlayMcp.Affordances.Editor
 {
     /// <summary>
     /// discovery 가 살아남지 못할 빌드라면 빌드 전에 그렇다고 말한다.
@@ -33,7 +33,7 @@ namespace Artel.Affordances.Editor
             // 대신 끄는 스위치를 더는 내놓지 않는다. 그런 것이 이제 없고, 존재하지 않는 메뉴의 이름을 대면 누군가 그것을 찾으러
             // 가게 된다. 레벨을 낮추는 것이 유일한 답이고, 아무것도 보고하지 않는 빌드는 어느 쪽이든 그렇다고 말할 값이 있다.
             Debug.LogWarning(
-                "[Artel] Managed stripping is set to High, which removes this package from the " +
+                "[Unity Play MCP] Managed stripping is set to High, which removes this package from the " +
                 "build. The game will run and write no report. Lower the stripping level to keep " +
                 "it, or expect no readings from this build.");
         }

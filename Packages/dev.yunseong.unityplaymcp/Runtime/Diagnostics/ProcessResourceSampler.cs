@@ -2,13 +2,13 @@
 // System.Diagnostics.Process가 런타임에 PlatformNotSupportedException을 던지거나 0만 돌려주므로,
 // 실물 리더를 아예 컴파일에서 잘라 낸다.
 #if UNITY_EDITOR || ((UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX) && DEVELOPMENT_BUILD)
-#define ARTEL_PROCESS_RESOURCES_SUPPORTED
+#define UNITY_PLAY_MCP_PROCESS_RESOURCES_SUPPORTED
 #endif
 
 using System;
 using System.Diagnostics;
 
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 프로세스 CPU·메모리의 원시 판독값. OS와 GC를 직접 읽는 지점을 여기 하나로 모아,
@@ -64,7 +64,7 @@ namespace Artel.Diagnostics
         /// </summary>
         public static ProcessResourceSampler CreateForCurrentPlatform()
         {
-#if ARTEL_PROCESS_RESOURCES_SUPPORTED
+#if UNITY_PLAY_MCP_PROCESS_RESOURCES_SUPPORTED
             return new ProcessResourceSampler(new CurrentProcessResourceReader());
 #else
             return null;
@@ -149,7 +149,7 @@ namespace Artel.Diagnostics
             return used > PercentScale ? PercentScale : (float)used;
         }
 
-#if ARTEL_PROCESS_RESOURCES_SUPPORTED
+#if UNITY_PLAY_MCP_PROCESS_RESOURCES_SUPPORTED
         /// <summary>
         /// 실제 OS·GC 판독. <see cref="ProcessResourceSampler"/>가 이 타입을 직접 알지 않도록
         /// 인터페이스 뒤에 둔다.

@@ -1,6 +1,6 @@
 using global::UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// Calls the <c>OnMouse*</c> handlers the engine would call, for the agent's pointer instead of

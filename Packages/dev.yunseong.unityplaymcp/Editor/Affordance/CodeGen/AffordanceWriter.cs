@@ -6,7 +6,7 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Unity.CompilationPipeline.Common.ILPostProcessing;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 찾아낸 것을 게임 자신의 타입 위에 굽는다.
@@ -23,8 +23,8 @@ namespace Artel.Affordances.CodeGen
     /// </remarks>
     internal static class AffordanceWriter
     {
-        private const string RuntimeAssembly = "Artel.Affordances.Runtime";
-        private const string AttributeType = "Artel.Affordances.AffordanceAttribute";
+        private const string RuntimeAssembly = "UnityPlayMcp.Affordances.Runtime";
+        private const string AttributeType = "UnityPlayMcp.Affordances.AffordanceAttribute";
 
         private const int MaxPayloadCharacters = 32768;
 

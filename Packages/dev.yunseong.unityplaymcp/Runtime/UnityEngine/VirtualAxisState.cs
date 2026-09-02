@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// The axis values the agent is holding, keyed by Input Manager axis name. The legacy Input

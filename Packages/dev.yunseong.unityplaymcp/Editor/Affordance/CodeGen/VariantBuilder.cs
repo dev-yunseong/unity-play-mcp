@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 그래프로 만든 메서드를 입력·선행조건·결과로 바꾼다.
@@ -30,7 +30,7 @@ namespace Artel.Affordances.CodeGen
         /// 잃었을 것이고, 조용히 잃었을 것이다: 분석은 여전히 끝나고, 여전히 리포트를 쓰고, 그저 키를 한
         /// 번도 언급하지 않는다.
         /// </remarks>
-        private const string ProxiedInputType = "Artel.ArtelInput";
+        private const string ProxiedInputType = "UnityPlayMcp.VirtualInput";
 
         private const byte Unvisited = 0;
         private const byte Computing = 1;

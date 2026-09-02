@@ -1,8 +1,8 @@
-using Artel.Protocol;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol;
+using UnityPlayMcp.Protocol.Dto;
 using UnityEngine;
 
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// Unity 정적 API에서 디바이스·런타임 컨텍스트를 읽는다.

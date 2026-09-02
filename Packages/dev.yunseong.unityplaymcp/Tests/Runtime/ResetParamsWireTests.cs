@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using Artel.Capture;
-using Artel.Protocol.Dto;
-using Artel.Serialization;
+using UnityPlayMcp.Capture;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Serialization;
 using NUnit.Framework;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// 실제 wire 를 지나온 options 오브젝트를 리더가 읽는지 본다.
@@ -103,7 +103,7 @@ namespace Artel.Tests
 
         private static List<object> ReadFirstActionParameters(string json)
         {
-            var request = Codec.Deserialize<ArtelRequestDto>(json);
+            var request = Codec.Deserialize<AgentRequestDto>(json);
             Assert.That(request, Is.Not.Null);
             Assert.That(request.Actions, Is.Not.Empty);
             return request.Actions[0].Parameters;

@@ -1,8 +1,8 @@
 {
-  "name": "Artel.Input.Fixtures",
-  "rootNamespace": "Artel.Tests.Fixtures",
+  "name": "UnityPlayMcp.Input.Fixtures",
+  "rootNamespace": "UnityPlayMcp.Tests.Fixtures",
   "references": [
-    "Artel.Runtime"
+    "UnityPlayMcp.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

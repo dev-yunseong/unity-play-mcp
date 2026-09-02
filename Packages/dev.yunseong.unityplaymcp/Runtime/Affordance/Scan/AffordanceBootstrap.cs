@@ -3,7 +3,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 씬에 아무것도 놓지 않고 스캔을 시작한다.
@@ -20,7 +20,7 @@ namespace Artel.Affordances.Scan
     /// </remarks>
     public static class AffordanceBootstrap
     {
-        private const string FileName = "artel-affordances.json";
+        private const string FileName = "unity-play-mcp-affordances.json";
 
         /// <summary>리포트가 쓰이는 자리.</summary>
         public static string ReportPath => Path.Combine(Application.persistentDataPath, FileName);
@@ -63,11 +63,11 @@ namespace Artel.Affordances.Scan
             // 놓치게 된다.
             CaptureNow();
 
-            Debug.Log("[Artel] Discovery is following scene loads. The report is written to " + ReportPath);
+            Debug.Log("[Unity Play MCP] Discovery is following scene loads. The report is written to " + ReportPath);
             return true;
 #else
             // 출시된 빌드는 씬을 읽을 이유가 없고, 그렇다고 말하는 편이 호출자가 왜 아무것도 오지 않는지 궁금해하는 것보다 낫다.
-            Debug.Log("[Artel] Discovery does not run in a release build.");
+            Debug.Log("[Unity Play MCP] Discovery does not run in a release build.");
             return false;
 #endif
         }
@@ -106,7 +106,7 @@ namespace Artel.Affordances.Scan
             }
             catch (Exception exception)
             {
-                Debug.LogWarning("[Artel] Reading " + scene.name + " failed: " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] Reading " + scene.name + " failed: " + exception.Message);
             }
         }
 
@@ -128,7 +128,7 @@ namespace Artel.Affordances.Scan
         {
             if (!Application.isPlaying)
             {
-                Debug.LogWarning("[Artel] A walk needs play mode: scenes are loaded as the game loads them.");
+                Debug.LogWarning("[Unity Play MCP] A walk needs play mode: scenes are loaded as the game loads them.");
                 return false;
             }
 
@@ -160,7 +160,7 @@ namespace Artel.Affordances.Scan
         {
             if (!Application.isPlaying)
             {
-                Debug.LogWarning("[Artel] Watching needs play mode: nothing holds a value until the game runs.");
+                Debug.LogWarning("[Unity Play MCP] Watching needs play mode: nothing holds a value until the game runs.");
                 return false;
             }
 
@@ -188,7 +188,7 @@ namespace Artel.Affordances.Scan
 
             _ours = ours;
 
-            Debug.Log("[Artel] Watching " + Live.WatchList.All().Count + " members named by the evidence" +
+            Debug.Log("[Unity Play MCP] Watching " + Live.WatchList.All().Count + " members named by the evidence" +
                       (sink == null ? ". Readings go to " + Live.PulseFile.Path : "."));
             return true;
         }
@@ -260,7 +260,7 @@ namespace Artel.Affordances.Scan
             {
                 // 리포트 때문에 게임을 무너뜨리는 일은 결코 없다. discovery 는 곁가지 활동이고, 읽기 전용이거나 꽉 찬 디스크는
                 // 게임의 문제가 아니다.
-                Debug.LogWarning("[Artel] Could not write " + ReportPath + ": " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] Could not write " + ReportPath + ": " + exception.Message);
                 return null;
             }
         }

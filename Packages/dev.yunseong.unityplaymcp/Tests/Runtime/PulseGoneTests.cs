@@ -1,11 +1,11 @@
 using System.Collections.Generic;
-using Artel.Affordances.Live;
+using UnityPlayMcp.Affordances.Live;
 using NUnit.Framework;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 판독이 사라진 객체를 말하는지, 그리고 <b>안 걸은 것을 사라졌다고 말하지 않는지</b> 검증한다(ARTEL-651).
+    /// 판독이 사라진 객체를 말하는지, 그리고 <b>안 걸은 것을 사라졌다고 말하지 않는지</b> 검증한다.
     ///
     /// 뒤쪽이 이 규칙의 어려운 절반이다. 파괴를 말하는 것은 쉽고, 한도에 걸려 걷지 못한 것을 사라졌다고 하지
     /// 않는 것이 어렵다 — 거기서 틀리면 읽는 쪽이 살아 있는 객체를 지우고, 그것은 아무도 되돌려 주지 않는다.

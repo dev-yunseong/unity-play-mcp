@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>명령어에서 값과 이름을 되읽어 내는 일.</summary>
     internal static class IlReading

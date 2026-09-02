@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>인스펙터가 부르라고 들은 메서드 하나와, 그것이 무엇에 매달려 있는지.</summary>
     internal struct PersistentCall

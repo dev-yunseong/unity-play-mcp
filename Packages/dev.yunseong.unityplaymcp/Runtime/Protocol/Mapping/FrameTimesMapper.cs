@@ -1,7 +1,7 @@
-using Artel.Diagnostics;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Dto;
 
-namespace Artel.Protocol.Mapping
+namespace UnityPlayMcp.Protocol.Mapping
 {
     /// <summary>
     /// 프레임 분포를 전송용 DTO로 옮긴다. 초를 밀리초로 바꾸는 지점이 여기 한 곳뿐이도록

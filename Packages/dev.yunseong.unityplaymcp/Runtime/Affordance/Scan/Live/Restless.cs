@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
     /// 연속적인 값이 실제로 어디론가 가기 전까지는 가만히 있게 한다.

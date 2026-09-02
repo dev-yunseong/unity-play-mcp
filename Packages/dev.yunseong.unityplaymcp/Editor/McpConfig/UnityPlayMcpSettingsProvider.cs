@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using Artel.Affordances.Live;
+using UnityPlayMcp.Affordances.Live;
 using UnityEditor;
 using UnityEngine;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// <c>Edit &gt; Project Settings &gt; Unity Play MCP</c>. agent 네 곳의 설정 파일에 이 저장소의 MCP server 를

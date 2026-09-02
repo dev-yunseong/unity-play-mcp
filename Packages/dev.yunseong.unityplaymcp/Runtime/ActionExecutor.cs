@@ -2,13 +2,13 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using Artel.Affordances.Scan;
-using Artel.Capture;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Affordances.Scan;
+using UnityPlayMcp.Capture;
+using UnityPlayMcp.Protocol.Dto;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     internal sealed class ActionExecutor
     {
@@ -59,10 +59,10 @@ namespace Artel
             // Moving onto a target keeps the reported pointer under the drawn cursor, but stays a
             // silent move: firing hover events out of button_click would change what an existing
             // caller does to the game. Only move_mouse claims the pointer outright.
-            cursorMoved = ArtelInput.MoveMouse;
+            cursorMoved = VirtualInput.MoveMouse;
             pointerMoved = position =>
             {
-                ArtelInput.MoveMouse(position);
+                VirtualInput.MoveMouse(position);
                 pointerEvents.MoveTo(position);
             };
         }
@@ -271,12 +271,12 @@ namespace Artel
         {
             if (press)
             {
-                ArtelInput.PressMouseButton(button);
+                VirtualInput.PressMouseButton(button);
                 pointerEvents.Press(button);
             }
             else
             {
-                ArtelInput.ReleaseMouseButton(button);
+                VirtualInput.ReleaseMouseButton(button);
                 pointerEvents.Release(button);
             }
         }
@@ -301,11 +301,11 @@ namespace Artel
 
             if (press)
             {
-                ArtelInput.PressKey(key);
+                VirtualInput.PressKey(key);
             }
             else
             {
-                ArtelInput.ReleaseKey(key);
+                VirtualInput.ReleaseKey(key);
             }
 
             return ActionResultDto.Success(actionId);
@@ -375,7 +375,7 @@ namespace Artel
         /// 씬이 예전 것을 살려 두었던 바로 그 싱글턴 가드를 통해 자기 것을 새로 만든다.
         ///
         /// 씬 상태는 언제나 사라진다. <c>PlayerPrefs</c> 는 <c>clearPlayerPrefs</c> 가 그렇게
-        /// 말할 때만 사라지고, 그때도 SDK 자신의 <c>Artel.*</c> 항목은 지우기 앞뒤로 꺼냈다가
+        /// 말할 때만 사라지고, 그때도 SDK 자신의 <c>UnityPlayMcp.*</c> 항목은 지우기 앞뒤로 꺼냈다가
         /// 되쓴다 — 그러지 않으면 리셋을 시킨 서버로부터 이 세션이 스스로 로그아웃한다.
         /// 정적 필드와 디스크의 파일은 어느 쪽으로도 사라지지 않는다.
         ///
@@ -409,14 +409,14 @@ namespace Artel
             // reload they would hand the fresh scene a frozen clock and a press it never saw begin.
             RestoreTimeScale();
             pointerEvents.ReleaseAll();
-            ArtelInput.ReleaseAllVirtualInput();
+            VirtualInput.ReleaseAllVirtualInput();
 
             // 리로드보다 먼저 지운다. 게임이 세이브 데이터를 처음 읽는 자리는 시작 씬의
             // Awake/Start 이므로, 로드한 뒤에 지우면 구조적으로 한 프레임 늦어 이미 읽힌
             // 진행도를 남긴 채 Success 를 돌려주게 된다. 사이에 yield 를 두지 않는다.
             if (request.ClearPlayerPrefs)
             {
-                ArtelOwnedPlayerPrefs.DeleteAllExceptOwn();
+                OwnedPlayerPrefs.DeleteAllExceptOwn();
             }
 
             DoomPersistentObjects();
@@ -475,7 +475,7 @@ namespace Artel
             var dropped = new List<string>();
             foreach (var root in StraySpawnTracker.DontDestroyOnLoadScene().GetRootGameObjects())
             {
-                if (root.GetComponentInChildren<ArtelManager>(true) != null)
+                if (root.GetComponentInChildren<UnityPlayMcpHost>(true) != null)
                 {
                     continue;
                 }
@@ -488,7 +488,7 @@ namespace Artel
             {
                 // Named, because a game whose bootstrap lives outside the start scene loses these
                 // for good — the one way reset_game can leave it worse off than it found it.
-                Debug.Log("[Artel] reset_game dropped persistent object(s): " +
+                Debug.Log("[Unity Play MCP] reset_game dropped persistent object(s): " +
                           string.Join(", ", dropped));
             }
         }
@@ -595,7 +595,7 @@ namespace Artel
 
             if (!MouseButtonKeyCode.TryGetButton(key, out var button))
             {
-                ArtelInput.ClickKey(key, durationSeconds);
+                VirtualInput.ClickKey(key, durationSeconds);
                 completed(ActionResultDto.Success(actionId));
                 yield break;
             }
@@ -626,7 +626,7 @@ namespace Artel
                 return ActionResultDto.Failure(actionId, error);
             }
 
-            ArtelInput.SetAxis(axisName, value);
+            VirtualInput.SetAxis(axisName, value);
             return ActionResultDto.Success(actionId);
         }
 
@@ -652,11 +652,11 @@ namespace Artel
 
             if (pressed)
             {
-                ArtelInput.SetAxis(axisName, 1f);
+                VirtualInput.SetAxis(axisName, 1f);
             }
             else
             {
-                ArtelInput.ReleaseAxis(axisName);
+                VirtualInput.ReleaseAxis(axisName);
             }
 
             return ActionResultDto.Success(actionId);

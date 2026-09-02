@@ -1,16 +1,14 @@
 {
-  "name": "Artel.Affordances.Scan",
-  "rootNamespace": "Artel.Affordances.Scan",
-  "references": [
-    "Artel.Affordances.Runtime"
-  ],
+  "name": "UnityPlayMcp.Affordances.Runtime",
+  "rootNamespace": "UnityPlayMcp.Affordances",
+  "references": [],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],
-  "autoReferenced": false,
+  "autoReferenced": true,
   "defineConstraints": [],
   "versionDefines": [],
-  "noEngineReferences": false
+  "noEngineReferences": true
 }

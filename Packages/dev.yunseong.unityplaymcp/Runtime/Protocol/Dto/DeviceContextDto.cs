@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Artel.Protocol.Dto
+namespace UnityPlayMcp.Protocol.Dto
 {
     /// <summary>
     /// 성능 수치를 읽을 때 필요한 세션 고정 컨텍스트.

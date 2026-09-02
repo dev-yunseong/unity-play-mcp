@@ -1,12 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Protocol.Dto;
-using Artel.Tests.Fixtures;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Tests.Fixtures;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Artel.Tests.Input
+namespace UnityPlayMcp.Tests.Input
 {
     public sealed class VirtualKeyboardStateTests
     {
@@ -23,7 +23,7 @@ namespace Artel.Tests.Input
         [TearDown]
         public void TearDown()
         {
-            ArtelInput.ResetVirtualKeyboard();
+            VirtualInput.ResetVirtualKeyboard();
             Object.DestroyImmediate(cursorObject);
         }
 
@@ -125,7 +125,7 @@ namespace Artel.Tests.Input
         }
 
         [UnityTest]
-        public IEnumerator IlPostProcessor_ReroutesUnityInputCallsToArtelInput()
+        public IEnumerator IlPostProcessor_ReroutesUnityInputCallsToVirtualInput()
         {
             var host = new GameObject("input fixture");
             var fixture = host.AddComponent<InputFixtureBehaviour>();

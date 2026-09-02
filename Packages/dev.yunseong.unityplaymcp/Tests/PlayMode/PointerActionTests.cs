@@ -2,14 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol.Dto;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// The pointer actions end to end, on a live manager. These cannot be edit-mode tests: the
@@ -31,7 +31,7 @@ namespace Artel.Tests
             // A manager survives scene loads by design, so one left alive anywhere — by the project's
             // own scene, or by a test that ran before this one — makes the manager built below a
             // duplicate. Awake destroys duplicates, and a destroyed manager drives nothing.
-            foreach (var stale in Object.FindObjectsOfType<ArtelManager>(true))
+            foreach (var stale in Object.FindObjectsOfType<UnityPlayMcpHost>(true))
             {
                 Object.DestroyImmediate(stale.gameObject);
             }
@@ -42,7 +42,7 @@ namespace Artel.Tests
         {
             // 가상 입력은 정적이라 테스트 사이를 넘어간다. 버튼을 쥔 채 끝난 테스트가 다음 테스트의
             // 첫 줄을 참으로 만들어 두면, 실패는 엉뚱한 곳에서 난다.
-            ArtelInput.ReleaseAllVirtualInput();
+            VirtualInput.ReleaseAllVirtualInput();
 
             foreach (var alive in new[] { canvasObject, eventSystemObject, host })
             {
@@ -62,7 +62,7 @@ namespace Artel.Tests
 
             yield return controller.MoveTo(new Vector2(320f, 180f), reported.Add);
 
-            var cursor = host.transform.Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor");
+            var cursor = host.transform.Find("Unity Play MCP Virtual Cursor Canvas/Unity Play MCP Virtual Cursor");
             Assert.That(cursor, Is.Not.Null);
             Assert.That(cursor.position.x, Is.EqualTo(320f).Within(0.01f));
             Assert.That(cursor.position.y, Is.EqualTo(180f).Within(0.01f));
@@ -80,20 +80,20 @@ namespace Artel.Tests
             yield return RunBatch(manager, NewAction(1, "key_down", Params("LeftShift")));
             yield return null;
 
-            Assert.That(ArtelInput.GetKey(KeyCode.LeftShift), Is.True);
+            Assert.That(VirtualInput.GetKey(KeyCode.LeftShift), Is.True);
 
             yield return null;
             yield return null;
 
             // No duration was given, so only the release below can end it.
-            Assert.That(ArtelInput.GetKey(KeyCode.LeftShift), Is.True);
+            Assert.That(VirtualInput.GetKey(KeyCode.LeftShift), Is.True);
 
             yield return RunBatch(manager, NewAction(2, "key_up", Params("LeftShift")));
             yield return null;
 
             // Only that the hold ended. Which frame reports GetKeyUp is pinned deterministically by
             // VirtualKeyboardStateTests; here the batch coroutine's own frames make it unknowable.
-            Assert.That(ArtelInput.GetKey(KeyCode.LeftShift), Is.False);
+            Assert.That(VirtualInput.GetKey(KeyCode.LeftShift), Is.False);
         }
 
         [UnityTest]
@@ -114,7 +114,7 @@ namespace Artel.Tests
             // Ahead of the drag, so a coordinate that landed nowhere reads as a coordinate problem
             // rather than as a drag that silently produced no events.
             Assert.That(
-                (Vector2)ArtelInput.mousePosition,
+                (Vector2)VirtualInput.mousePosition,
                 Is.EqualTo(UnityPointOf(GrabPoint)),
                 "move_mouse did not land the pointer on the drag source");
 
@@ -152,7 +152,7 @@ namespace Artel.Tests
                 NewAction(3, "move_mouse", Coordinates(DropPoint)));
             yield return null;
 
-            Assert.That(ArtelInput.GetMouseButton(0), Is.True);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.True);
             Assert.That(source.Events, Does.Contain("beginDrag"));
 
             manager.StopTransport();
@@ -160,7 +160,7 @@ namespace Artel.Tests
 
             // A run that ends mid-drag must not leave the game waiting for an end that never comes.
             Assert.That(source.Events, Does.Contain("endDrag"));
-            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
         }
 
         /// <summary>
@@ -182,15 +182,15 @@ namespace Artel.Tests
                 NewAction(2, "key_down", Params("Mouse0")));
             yield return null;
 
-            Assert.That(ArtelInput.GetMouseButton(0), Is.True, "key_down did not press the button");
-            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.True);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.True, "key_down did not press the button");
+            Assert.That(VirtualInput.GetKey(KeyCode.Mouse0), Is.True);
             Assert.That(target.Events, Is.EqualTo(new[] { "down" }));
 
             yield return RunBatch(manager, NewAction(3, "key_up", Params("Mouse0")));
             yield return null;
 
-            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
-            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.False);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
+            Assert.That(VirtualInput.GetKey(KeyCode.Mouse0), Is.False);
             Assert.That(target.Events, Is.EqualTo(new[] { "down", "up", "click" }));
         }
 
@@ -204,12 +204,12 @@ namespace Artel.Tests
 
             // 반대 방향. 이것이 없으면 Input.GetKey(KeyCode.Mouse0) 으로 클릭을 읽는 게임은
             // mouse_down 으로 들어온 클릭을 보지 못한다.
-            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.True);
+            Assert.That(VirtualInput.GetKey(KeyCode.Mouse0), Is.True);
 
             yield return RunBatch(manager, NewAction(2, "mouse_up", Params(0d)));
             yield return null;
 
-            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.False);
+            Assert.That(VirtualInput.GetKey(KeyCode.Mouse0), Is.False);
         }
 
         [UnityTest]
@@ -229,7 +229,7 @@ namespace Artel.Tests
 
             // 만료를 상태에 맡기면 놓이는 순간을 아무도 몰라 up 과 click 이 빠진다.
             Assert.That(target.Events, Is.EqualTo(new[] { "down", "up", "click" }));
-            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
         }
 
         /// <summary>
@@ -248,7 +248,7 @@ namespace Artel.Tests
                 NewAction(3, "resume_time", new List<object>()));
             yield return null;
 
-            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
             Assert.That(Time.timeScale, Is.EqualTo(1f).Within(0.001f));
         }
 
@@ -280,13 +280,13 @@ namespace Artel.Tests
             yield return RunBatch(manager, NewAction(1, "key_down", Params("Mouse1")));
             yield return null;
 
-            Assert.That(ArtelInput.GetMouseButton(1), Is.True);
-            Assert.That(ArtelInput.GetKey(KeyCode.Mouse1), Is.True);
-            Assert.That(ArtelInput.GetMouseButton(0), Is.False);
-            Assert.That(ArtelInput.GetKey(KeyCode.Mouse0), Is.False);
+            Assert.That(VirtualInput.GetMouseButton(1), Is.True);
+            Assert.That(VirtualInput.GetKey(KeyCode.Mouse1), Is.True);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
+            Assert.That(VirtualInput.GetKey(KeyCode.Mouse0), Is.False);
 
             // Unity 의 anyKey 는 마우스 버튼도 센다.
-            Assert.That(ArtelInput.anyKey, Is.True);
+            Assert.That(VirtualInput.anyKey, Is.True);
         }
 
         /// <summary>
@@ -300,13 +300,13 @@ namespace Artel.Tests
             yield return RunBatch(manager, NewAction(1, "key_click", Params("Space", 0.05d)));
             yield return null;
 
-            Assert.That(ArtelInput.GetKey(KeyCode.Space), Is.True);
-            Assert.That(ArtelInput.GetMouseButton(0), Is.False, "a keyboard key must not press a button");
+            Assert.That(VirtualInput.GetKey(KeyCode.Space), Is.True);
+            Assert.That(VirtualInput.GetMouseButton(0), Is.False, "a keyboard key must not press a button");
 
             yield return new WaitForSecondsRealtime(0.1f);
             yield return null;
 
-            Assert.That(ArtelInput.GetKey(KeyCode.Space), Is.False);
+            Assert.That(VirtualInput.GetKey(KeyCode.Space), Is.False);
         }
 
         [UnityTest]
@@ -350,24 +350,24 @@ namespace Artel.Tests
             return new ActionRequestDto { Id = id, Method = method, Parameters = parameters };
         }
 
-        private static IEnumerator RunBatch(ArtelManager manager, params ActionRequestDto[] actions)
+        private static IEnumerator RunBatch(UnityPlayMcpHost manager, params ActionRequestDto[] actions)
         {
-            var request = new ArtelRequestDto
+            var request = new AgentRequestDto
             {
                 Type = "ACTION",
                 Actions = new List<ActionRequestDto>(actions)
             };
-            var routine = (IEnumerator)typeof(ArtelManager)
+            var routine = (IEnumerator)typeof(UnityPlayMcpHost)
                 .GetMethod("ExecuteActionRequest", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(manager, new object[] { request });
 
             yield return manager.StartCoroutine(routine);
         }
 
-        private ArtelManager CreateManager()
+        private UnityPlayMcpHost CreateManager()
         {
-            host = new GameObject("Artel pointer action test");
-            var manager = host.AddComponent<ArtelManager>();
+            host = new GameObject("Unity Play MCP pointer action test");
+            var manager = host.AddComponent<UnityPlayMcpHost>();
             return manager;
         }
 

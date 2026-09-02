@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
-using Artel.Affordances.Scan;
+using UnityPlayMcp.Affordances.Scan;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
     /// 감시 대상 멤버가 지금 쥐고 있는 것을, 리포트가 그것들을 부르는 방식으로 쓴다.
@@ -564,7 +564,7 @@ namespace Artel.Affordances.Live
 
             moved |= Offered(text, transform, ledger, identity);
 
-            // 컴포넌트별로 묶어 낸다. `on` 을 멤버마다 되풀이하지 않는다(ARTEL-540).
+            // 컴포넌트별로 묶어 낸다. `on` 을 멤버마다 되풀이하지 않는다.
             text.Append(",\"by\":[");
 
             var written = 0;
@@ -1221,7 +1221,7 @@ namespace Artel.Affordances.Live
         /// </summary>
         /// <remarks>
         /// <c>clicks</c> 와 같은 모양(객체 배열)으로 맞춘다. 이름만 나르던 시절에는 씬의 키 다섯이
-        /// 대등하게 실려 읽는 쪽이 어느 것을 눌러야 할지 알 수 없었다(ARTEL-539).
+        /// 대등하게 실려 읽는 쪽이 어느 것을 눌러야 할지 알 수 없었다.
         ///
         /// 하는 일을 모르는 키는 <c>does</c> 를 아예 쓰지 않는다. 빈 배열은 "아무 일도 안 한다" 로 읽히는데
         /// 실제로는 "분석이 못 읽었다" 이고, 그 둘은 다음 수가 다르다.

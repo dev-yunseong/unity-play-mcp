@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 설정 파일에 써 넣을 MCP server 하나를 어떻게 실행하는지.

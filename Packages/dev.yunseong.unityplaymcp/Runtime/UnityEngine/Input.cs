@@ -1,9 +1,9 @@
 using System;
 using global::UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
-    public static class ArtelInput
+    public static class VirtualInput
     {
         private static readonly VirtualKeyboardState VirtualKeyboard = new VirtualKeyboardState();
         private static readonly VirtualMouseState VirtualMouse = new VirtualMouseState();

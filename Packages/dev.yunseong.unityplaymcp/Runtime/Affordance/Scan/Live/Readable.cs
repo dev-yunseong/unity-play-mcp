@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
     /// 근거가 청한 것 너머로, 컴포넌트에서 되읽을 수 있는 모든 것.
@@ -40,7 +40,7 @@ namespace Artel.Affordances.Live
         /// </remarks>
         private static readonly string[] NotTheGames =
         {
-            "UnityEngine", "UnityEditor", "Unity", "Artel", "System", "mscorlib", "netstandard",
+            "UnityEngine", "UnityEditor", "Unity", "UnityPlayMcp", "System", "mscorlib", "netstandard",
             "nunit", "Newtonsoft", "Mono", "TMPro"
         };
 

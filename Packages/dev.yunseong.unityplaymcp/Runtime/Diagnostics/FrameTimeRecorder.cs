@@ -1,6 +1,6 @@
 using System;
 
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 프레임타임을 링버퍼에 모으고, 요청받은 시점에 분포로 접는다.
@@ -10,7 +10,7 @@ namespace Artel.Diagnostics
     /// 여러 번 보내거나 구간을 통째로 버리게 된다.
     ///
     /// Unity API를 직접 읽지 않고 값으로 받아 에디터 없이 테스트할 수 있게 두고, 구동은
-    /// 호출자(<c>ArtelManager.Update</c>)가 맡는다.
+    /// 호출자(<c>UnityPlayMcpHost.Update</c>)가 맡는다.
     ///
     /// 매 프레임 도는 자리라 <see cref="Record"/>는 힙 할당을 하지 않는다. 샘플 버퍼와 정렬용
     /// 스크래치를 생성자에서 한 번만 잡고 계속 재사용한다.

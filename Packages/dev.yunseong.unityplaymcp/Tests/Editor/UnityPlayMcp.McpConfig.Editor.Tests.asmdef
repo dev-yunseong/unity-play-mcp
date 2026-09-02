@@ -1,12 +1,13 @@
 {
-  "name": "Artel.Runtime.PlayModeTests",
-  "rootNamespace": "Artel.Tests.PlayMode",
+  "name": "UnityPlayMcp.McpConfig.Editor.Tests",
+  "rootNamespace": "UnityPlayMcp.Tests.McpConfig",
   "references": [
-    "Artel.Runtime",
-    "Artel.Affordances.Scan",
-    "Unity.TextMeshPro"
+    "UnityPlayMcp.Affordances.Scan",
+    "UnityPlayMcp.McpConfig.Editor"
   ],
-  "includePlatforms": [],
+  "includePlatforms": [
+    "Editor"
+  ],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": true,

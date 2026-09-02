@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 판독이 기존 연결로 나가는 모양을 고정한다 (ARTEL-399).
+    /// 판독이 기존 연결로 나가는 모양을 고정한다.
     /// </summary>
     /// <remarks>
     /// 단언 대상이 "보냈는가"가 아니라 <em>무엇을 보냈는가</em>인 이유는, 이 문자열을 읽는
@@ -15,7 +15,7 @@ namespace Artel.Tests
     /// </remarks>
     public sealed class WebSocketPulseSinkTests
     {
-        private sealed class FakeTransport : IArtelWebSocketTransport
+        private sealed class FakeTransport : IAgentTransport
         {
             internal readonly List<string> Sent = new List<string>();
             internal bool Connected = true;
@@ -26,7 +26,7 @@ namespace Artel.Tests
 
             public void Stop() { }
 
-            public bool TryDequeueMessage(out ArtelWebSocketMessage message)
+            public bool TryDequeueMessage(out AgentMessage message)
             {
                 message = null;
                 return false;
@@ -111,7 +111,7 @@ namespace Artel.Tests
             // 매니저가 전송을 갈아끼운다. 한 번 잡아 두면 사라진 소켓에 계속 쓰게 된다.
             var first = new FakeTransport();
             var second = new FakeTransport();
-            var current = (IArtelWebSocketTransport)first;
+            var current = (IAgentTransport)first;
             var sink = new WebSocketPulseSink(() => current, () => 1L);
 
             sink.Send(Reading);

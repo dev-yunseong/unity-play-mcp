@@ -1,8 +1,8 @@
-using Artel.Affordances.Live;
+using UnityPlayMcp.Affordances.Live;
 using NUnit.Framework;
 using UnityEditor;
 
-namespace Artel.Tests.McpConfig
+namespace UnityPlayMcp.Tests.McpConfig
 {
     /// <remarks>
     /// <c>EditorPrefs</c> 는 한 기계의 모든 Unity project 가 함께 쓴다. project 경로로 key 를 가르지 않으면

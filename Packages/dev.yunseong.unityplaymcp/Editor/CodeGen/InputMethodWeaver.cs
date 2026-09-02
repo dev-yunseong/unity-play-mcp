@@ -2,11 +2,11 @@ using System.Collections.Generic;
 using System.Linq;
 using Mono.Cecil;
 
-namespace Artel.CodeGen
+namespace UnityPlayMcp.CodeGen
 {
     internal sealed class InputMethodWeaver
     {
-        private const string RuntimeAssemblyName = "Artel.Runtime";
+        private const string RuntimeAssemblyName = "UnityPlayMcp.Runtime";
         private const string UnityInputTypeName = "UnityEngine.Input";
         private static readonly HashSet<string> SupportedMethodNames = new HashSet<string>
         {
@@ -45,7 +45,7 @@ namespace Artel.CodeGen
         {
             this.module = module;
             var runtimeModule = module.AssemblyResolver.Resolve(runtimeReference).MainModule;
-            var proxyType = runtimeModule.GetType("Artel.ArtelInput");
+            var proxyType = runtimeModule.GetType("UnityPlayMcp.VirtualInput");
 
             proxyMethods = proxyType.Methods
                 .Where(method => SupportedMethodNames.Contains(method.Name))

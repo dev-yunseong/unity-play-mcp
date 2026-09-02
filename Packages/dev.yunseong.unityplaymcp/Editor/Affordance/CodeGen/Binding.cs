@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Mono.Cecil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 피호출자가 제 말로 하는 것이, 그것을 부른 자리에서는 무엇이라 불리는가.

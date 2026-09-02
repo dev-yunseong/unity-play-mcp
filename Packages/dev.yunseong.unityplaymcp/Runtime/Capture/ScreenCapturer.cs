@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
-using Artel.Diagnostics;
+using UnityPlayMcp.Diagnostics;
 using UnityEngine;
 
-namespace Artel.Capture
+namespace UnityPlayMcp.Capture
 {
     /// <summary>
     /// Captures the composited screen, including Screen Space Overlay UI.
@@ -81,7 +81,7 @@ namespace Artel.Capture
 
                 // Only the synchronous work is wrapped. A marker spanning the end-of-frame wait
                 // above would report the idle time as capture cost.
-                using (ArtelProfilerMarkers.CaptureReadback.Auto())
+                using (ProfilerMarkers.CaptureReadback.Auto())
                 {
                     readback = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false);
                     RenderTexture.active = scaled;
@@ -90,7 +90,7 @@ namespace Artel.Capture
                 }
 
                 byte[] bytes;
-                using (ArtelProfilerMarkers.CaptureEncode.Auto())
+                using (ProfilerMarkers.CaptureEncode.Auto())
                 {
                     bytes = request.UsePng
                         ? readback.EncodeToPNG()

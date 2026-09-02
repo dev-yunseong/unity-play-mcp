@@ -1,7 +1,7 @@
 using System;
-using Artel.Affordances.Live;
+using UnityPlayMcp.Affordances.Live;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// 판독을 이미 열려 있는 /ws/sdk 연결에 얹는다.
@@ -17,11 +17,11 @@ namespace Artel
     /// </remarks>
     internal sealed class WebSocketPulseSink : IPulseSink
     {
-        private readonly Func<IArtelWebSocketTransport> currentTransport;
+        private readonly Func<IAgentTransport> currentTransport;
         private readonly Func<long> nextMessageId;
 
         public WebSocketPulseSink(
-            Func<IArtelWebSocketTransport> currentTransport, Func<long> nextMessageId)
+            Func<IAgentTransport> currentTransport, Func<long> nextMessageId)
         {
             this.currentTransport = currentTransport
                 ?? throw new ArgumentNullException(nameof(currentTransport));
@@ -50,7 +50,7 @@ namespace Artel
             if (transport == null || !transport.IsConnected)
             {
                 throw new InvalidOperationException(
-                    "The Artel connection is not open, so this reading cannot be sent.");
+                    "The Unity Play MCP connection is not open, so this reading cannot be sent.");
             }
 
             transport.Send(Framed(document));

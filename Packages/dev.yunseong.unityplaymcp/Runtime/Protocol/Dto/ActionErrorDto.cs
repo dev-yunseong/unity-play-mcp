@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Artel.Protocol.Dto
+namespace UnityPlayMcp.Protocol.Dto
 {
     public sealed class ActionErrorDto
     {

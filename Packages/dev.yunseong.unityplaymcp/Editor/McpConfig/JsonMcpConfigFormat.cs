@@ -3,7 +3,7 @@ using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// server 목록을 object 하나에 담는 JSON 설정 파일. Claude Code, Cursor, VS Code 가 여기 해당한다.

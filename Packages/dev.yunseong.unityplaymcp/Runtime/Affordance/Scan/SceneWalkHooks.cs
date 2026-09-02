@@ -1,13 +1,13 @@
 using System;
 using System.Collections;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 순회가 씬 하나를 읽어 낸 자리에서 바깥이 끼어들 수 있는 유일한 지점.
     /// </summary>
     /// <remarks>
-    /// 이 어셈블리는 <c>Artel.Runtime</c> 을 참조하지 않는다 — 참조는 반대 방향 하나뿐이다. 그래서 근거 문서를 올리는 쪽이
+    /// 이 어셈블리는 <c>UnityPlayMcp.Runtime</c> 을 참조하지 않는다 — 참조는 반대 방향 하나뿐이다. 그래서 근거 문서를 올리는 쪽이
     /// 씬마다 무언가를 하려면 순회가 그 자리를 열어 주는 수밖에 없다. 순회가 저쪽을 알게 만들면 참조가 양방향이 되고,
     /// 스캔만 쓰려는 프로젝트가 업로드 코드까지 함께 들여야 한다.
     ///
@@ -43,7 +43,7 @@ namespace Artel.Affordances.Scan
             {
                 // 코루틴을 만드는 도중의 실패는 여기서 잡을 수 있다. 도는 도중의 실패는 구독자 몫이다.
                 UnityEngine.Debug.LogWarning(
-                    "[Artel] A scene-read hook threw before it started and was skipped: " + exception.Message);
+                    "[Unity Play MCP] A scene-read hook threw before it started and was skipped: " + exception.Message);
                 return null;
             }
         }

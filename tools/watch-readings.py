@@ -12,7 +12,7 @@
 없을 것이다 — 그것은 게임이 아니라 프로세스에 관한 값이고 — 소켓이 이미 듣는 쪽에 그것을
 나르고 있다.
 
-    tools/watch-readings.py [--port 8770] [--file <path to artel-pulse.jsonl>]
+    tools/watch-readings.py [--port 8770] [--file <path to unity-play-mcp-pulse.jsonl>]
                             [--socket ws://127.0.0.1:17311]
 
 그리고 http://localhost:8770 을 열고 에디터에서 게임을 플레이한다.
@@ -25,19 +25,19 @@ import os
 import socketserver
 
 DEFAULT_FILE = os.path.expanduser(
-    "~/Library/Application Support/Team6203/WordVenture/artel-pulse.jsonl"
+    "~/Library/Application Support/Team6203/WordVenture/unity-play-mcp-pulse.jsonl"
 )
 
-# ArtelManager 의 websocketPort. 그 컴포넌트가 씬에 있으면 언제나 열려 있다.
+# UnityPlayMcpHost 의 websocketPort. 그 컴포넌트가 씬에 있으면 언제나 열려 있다.
 #
-# 경로 /ws 가 붙는다. ArtelWebSocketServer 가 AddWebSocketService("/ws", ...) 로 거기에만
+# 경로 /ws 가 붙는다. AgentWebSocketServer 가 AddWebSocketService("/ws", ...) 로 거기에만
 # 서비스를 매단다. 루트로 붙으면 포트는 열려 있고 핸드셰이크만 조용히 거절당하므로, 게임이
 # 돌고 있는데도 버튼이 살아나지 않는 모습이 된다.
 DEFAULT_SOCKET = "ws://127.0.0.1:17311/ws"
 
 PAGE = """<!doctype html>
 <meta charset="utf-8">
-<title>Artel — live readings</title>
+<title>Unity Play MCP — live readings</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 16px; }
@@ -88,7 +88,7 @@ PAGE = """<!doctype html>
                 border: 1px solid rgba(128,128,128,.4); background: transparent; }
   .bar button:disabled { opacity: .4; cursor: default; }
 </style>
-<h1>Artel — live readings</h1>
+<h1>Unity Play MCP — live readings</h1>
 <div class="bar">
   <span>씬 <b id="scene">—</b></span>
   <span>판독 <b id="reading">—</b></span>
@@ -390,7 +390,7 @@ function connectSocket() {
     mark("끊김. 5초 뒤 다시", true);
     setTimeout(connectSocket, 5000);
   };
-  socket.onerror = () => mark("오류 — 게임이 실행 중이고 ArtelManager 가 씬에 있어야 합니다", true);
+  socket.onerror = () => mark("오류 — 게임이 실행 중이고 UnityPlayMcpHost 가 씬에 있어야 합니다", true);
 
   socket.onmessage = event => {
     let doc;

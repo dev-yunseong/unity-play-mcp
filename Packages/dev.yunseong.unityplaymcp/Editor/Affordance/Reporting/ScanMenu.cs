@@ -1,11 +1,11 @@
 using System;
 using System.IO;
-using Artel.Affordances.Scan;
+using UnityPlayMcp.Affordances.Scan;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace Artel.Affordances.Editor
+namespace UnityPlayMcp.Affordances.Editor
 {
     /// <summary>
     /// 손으로 스캔을 청한다.
@@ -20,22 +20,22 @@ namespace Artel.Affordances.Editor
     /// </remarks>
     internal static class ScanMenu
     {
-        [MenuItem("Artel/Scan Loaded Scenes", false, 0)]
+        [MenuItem("Unity Play MCP/Scan Loaded Scenes", false, 0)]
         private static void Capture()
         {
             var path = AffordanceBootstrap.CaptureNow();
 
             if (path == null)
             {
-                Debug.LogWarning("[Artel] The report could not be written. See the warning above.");
+                Debug.LogWarning("[Unity Play MCP] The report could not be written. See the warning above.");
                 return;
             }
 
             Warn();
-            Debug.Log("[Artel] " + AffordanceReport.SceneCount + " scenes in the report: " + path);
+            Debug.Log("[Unity Play MCP] " + AffordanceReport.SceneCount + " scenes in the report: " + path);
         }
 
-        [MenuItem("Artel/Walk All Build Scenes", false, 1)]
+        [MenuItem("Unity Play MCP/Walk All Build Scenes", false, 1)]
         private static void Walk()
         {
             if (!AffordanceBootstrap.WalkAllScenes())
@@ -43,7 +43,7 @@ namespace Artel.Affordances.Editor
                 return;
             }
 
-            Debug.Log("[Artel] Walking every scene in Build Settings. " +
+            Debug.Log("[Unity Play MCP] Walking every scene in Build Settings. " +
                       "The game in progress is discarded and the starting scene is restored at the end.");
         }
 
@@ -59,13 +59,13 @@ namespace Artel.Affordances.Editor
         /// 아니라 작성된 자리표시자를 보여 준다. 그것이 하나하나 플레이하지 않고 모든 화면에 닿는 값이고, 발견되도록 두는
         /// 대신 경고에 적어 둔다.
         /// </remarks>
-        [MenuItem("Artel/Read Every Scene In The Project", false, 2)]
+        [MenuItem("Unity Play MCP/Read Every Scene In The Project", false, 2)]
         private static void ReadAll()
         {
             if (Application.isPlaying)
             {
-                Debug.LogWarning("[Artel] Not during play — this opens scenes in the editor, " +
-                                 "which would end the run. Use Artel / Walk All Build Scenes instead.");
+                Debug.LogWarning("[Unity Play MCP] Not during play — this opens scenes in the editor, " +
+                                 "which would end the run. Use Unity Play MCP / Walk All Build Scenes instead.");
                 return;
             }
 
@@ -98,7 +98,7 @@ namespace Artel.Affordances.Editor
                 }
                 catch (Exception exception)
                 {
-                    Debug.LogWarning("[Artel] " + path + " would not open: " + exception.Message);
+                    Debug.LogWarning("[Unity Play MCP] " + path + " would not open: " + exception.Message);
                 }
             }
 
@@ -108,7 +108,7 @@ namespace Artel.Affordances.Editor
             }
 
             Warn();
-            Debug.Log("[Artel] " + read + " scenes read: " + AffordanceBootstrap.Save());
+            Debug.Log("[Unity Play MCP] " + read + " scenes read: " + AffordanceBootstrap.Save());
         }
 
         /// <summary>
@@ -122,13 +122,13 @@ namespace Artel.Affordances.Editor
         /// 플레이 모드에서만이고, 조용히 무시하는 대신 그렇다고 말한다: 게임이 돌기 전까지 아무것도 값을 쥐고 있지 않고,
         /// 멈춘 에디터에 대고 켠 채널은 씬의 저장된 상태를 테스터가 보고 있는 것인 양 보고하게 된다.
         /// </remarks>
-        [MenuItem("Artel/Watch Live State", false, 10)]
+        [MenuItem("Unity Play MCP/Watch Live State", false, 10)]
         private static void Watch()
         {
             if (AffordanceBootstrap.Watching)
             {
                 AffordanceBootstrap.StopWatching();
-                Debug.Log("[Artel] Stopped watching.");
+                Debug.Log("[Unity Play MCP] Stopped watching.");
                 return;
             }
 
@@ -137,45 +137,45 @@ namespace Artel.Affordances.Editor
                 return;
             }
 
-            Debug.Log("[Artel] Watching. Readings go to " + Artel.Affordances.Live.PulseFile.Path);
+            Debug.Log("[Unity Play MCP] Watching. Readings go to " + UnityPlayMcp.Affordances.Live.PulseFile.Path);
         }
 
-        [MenuItem("Artel/Watch Live State", true)]
+        [MenuItem("Unity Play MCP/Watch Live State", true)]
         private static bool CanWatch()
         {
-            Menu.SetChecked("Artel/Watch Live State", AffordanceBootstrap.Watching);
+            Menu.SetChecked("Unity Play MCP/Watch Live State", AffordanceBootstrap.Watching);
             return Application.isPlaying;
         }
 
-        [MenuItem("Artel/Reveal Readings", false, 22)]
+        [MenuItem("Unity Play MCP/Reveal Readings", false, 22)]
         private static void RevealReadings()
         {
-            var path = Artel.Affordances.Live.PulseFile.Path;
+            var path = UnityPlayMcp.Affordances.Live.PulseFile.Path;
 
             if (!File.Exists(path))
             {
-                Debug.LogWarning("[Artel] No readings yet. Enter play mode and run Artel / Watch Live State.");
+                Debug.LogWarning("[Unity Play MCP] No readings yet. Enter play mode and run Unity Play MCP / Watch Live State.");
                 return;
             }
 
             EditorUtility.RevealInFinder(path);
         }
 
-        [MenuItem("Artel/Forget Everything Scanned", false, 20)]
+        [MenuItem("Unity Play MCP/Forget Everything Scanned", false, 20)]
         private static void Forget()
         {
             AffordanceBootstrap.Forget();
-            Debug.Log("[Artel] The report is empty again. It fills back up as scenes load.");
+            Debug.Log("[Unity Play MCP] The report is empty again. It fills back up as scenes load.");
         }
 
-        [MenuItem("Artel/Reveal Report", false, 21)]
+        [MenuItem("Unity Play MCP/Reveal Report", false, 21)]
         private static void Reveal()
         {
             var path = AffordanceBootstrap.ReportPath;
 
             if (!File.Exists(path))
             {
-                Debug.LogWarning("[Artel] Nothing written yet. Enter play mode, or run Artel / Scan Loaded Scenes.");
+                Debug.LogWarning("[Unity Play MCP] Nothing written yet. Enter play mode, or run Unity Play MCP / Scan Loaded Scenes.");
                 return;
             }
 
@@ -187,7 +187,7 @@ namespace Artel.Affordances.Editor
             if (!Application.isPlaying)
             {
                 Debug.LogWarning(
-                    "[Artel] Scanned outside play mode. Fields read as their saved values, " +
+                    "[Unity Play MCP] Scanned outside play mode. Fields read as their saved values, " +
                     "not as what the game sets during Awake and Start.");
             }
         }

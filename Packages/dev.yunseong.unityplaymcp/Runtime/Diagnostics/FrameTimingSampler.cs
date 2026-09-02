@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 프레임 타이밍의 원시 판독. Unity의 <c>FrameTimingManager</c>를 부르는 지점을 여기 하나로

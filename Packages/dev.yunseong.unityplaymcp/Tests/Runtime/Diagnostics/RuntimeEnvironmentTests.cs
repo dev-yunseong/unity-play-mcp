@@ -1,12 +1,12 @@
 using System;
 using System.Reflection;
-using Artel.Diagnostics;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Dto;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Artel.Tests.Diagnostics
+namespace UnityPlayMcp.Tests.Diagnostics
 {
     /// <summary>
     /// 실제 하드웨어 값을 단정하면 실행 기기마다 결과가 갈린다. 그래서 어느 환경에서나

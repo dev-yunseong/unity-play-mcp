@@ -13,7 +13,7 @@ tools/watch-readings.py
 세 탭이고, 출처가 둘입니다.
 
 ```
-판독   artel-pulse.jsonl 을 1초마다 다시 읽는다        파일
+판독   unity-play-mcp-pulse.jsonl 을 1초마다 다시 읽는다        파일
 원문   같은 것을, 접지 않고 그대로                      파일
 성능   SDK 의 로컬 소켓에 직접 붙는다                   ws://127.0.0.1:17311/ws
 ```
@@ -46,12 +46,12 @@ tools/watch-readings.py
 
 **성능** 탭이 파일이 아니라 소켓을 읽는 이유는 프레임 시간이 pulse 에 없고 앞으로도 없을
 것이기 때문입니다. 그것은 게임이 아니라 게임을 돌리는 프로세스에 관한 값이고, 소켓이 이미
-듣는 쪽에 나르고 있습니다. `ArtelManager` 가 씬에 있으면 소켓은 언제나 열려 있습니다.
+듣는 쪽에 나르고 있습니다. `UnityPlayMcpHost` 가 씬에 있으면 소켓은 언제나 열려 있습니다.
 
 ### 인자
 
 ```
---file    artel-pulse.jsonl 경로. 기본값은 WordVenture 의 persistentDataPath
+--file    unity-play-mcp-pulse.jsonl 경로. 기본값은 WordVenture 의 persistentDataPath
 --socket  SDK 로컬 소켓. 기본 ws://127.0.0.1:17311/ws
           경로 /ws 가 필요하다. 루트로는 포트가 열려 있어도 501 로 거절된다
 --port    이 페이지를 낼 포트. 기본 8770

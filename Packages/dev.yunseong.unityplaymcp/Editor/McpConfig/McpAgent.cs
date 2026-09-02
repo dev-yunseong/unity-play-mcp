@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 설정을 써 넣을 수 있는 coding agent 한 곳: 화면에 보일 이름, 설정 파일 자리, 그 파일의 형식.

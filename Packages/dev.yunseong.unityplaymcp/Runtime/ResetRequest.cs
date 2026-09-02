@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using Artel.Protocol;
+using UnityPlayMcp.Protocol;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// 한 번의 <c>reset_game</c> 호출이 요구하는 것. JSON-RPC params 를 읽은 뒤의 모양이다.

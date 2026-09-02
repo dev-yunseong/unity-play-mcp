@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Artel.Protocol.Dto
+namespace UnityPlayMcp.Protocol.Dto
 {
     /// <summary>
     /// 주기적으로 올리는 런타임 성능 보고.

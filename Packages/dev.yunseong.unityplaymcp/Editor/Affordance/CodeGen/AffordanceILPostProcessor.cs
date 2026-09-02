@@ -7,7 +7,7 @@ using Mono.Cecil.Cil;
 using Unity.CompilationPipeline.Common.Diagnostics;
 using Unity.CompilationPipeline.Common.ILPostProcessing;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 게임의 컴파일된 코드를 읽어, 그 behaviour 들이 무엇을 듣고 무엇을 바꾸는지 기록한다.
@@ -53,18 +53,18 @@ namespace Artel.Affordances.CodeGen
         /// auto-reference 는 Unity 의 미리 정의된 어셈블리에만 닿는다 — 코드를 assembly definition 으로 쪼갠 게임은
         /// 통째로 지나쳐지고, 그런 프로젝트야말로 이것을 가장 원할 만한 곳이다.
         ///
-        /// <c>Artel.Affordances</c> 가 아니라 <c>Artel</c> 이다: 그 아래의 모든 것이 이 벤더의 것이고, 프로젝트가 함께
+        /// <c>UnityPlayMcp.Affordances</c> 가 아니라 <c>UnityPlayMcp</c> 이다: 그 아래의 모든 것이 이 벤더의 것이고, 프로젝트가 함께
         /// 설치했을 수 있는 형제 SDK 도 거기 든다. 샘플 프로젝트에서 실측하니 그 SDK 자신의 컴포넌트 둘이 2.5MB 짜리
         /// 리포트 중 2MB 를 차지했다 — 도구에 대한 근거인데, 그것은 아무도 명세를 원하는 대상이 아니다.
         ///
-        /// 맞추기는 이름 경계에서 일어나므로 <c>Artel</c> 은 <c>Artel.Tracking</c> 을 덮고 그저 그 글자로 시작하기만
+        /// 맞추기는 이름 경계에서 일어나므로 <c>UnityPlayMcp</c> 는 <c>UnityPlayMcp.Tracking</c> 을 덮고 그저 그 글자로 시작하기만
         /// 하는 것은 건드리지 않는다. 넓은 접두어의 대가는, 제 어셈블리를 그렇게 이름 지은 게임이 **조용히**
         /// 지나쳐진다는 것이다 — <see cref="WillProcess"/> 에서 결정된 거절은 스스로를 보고할 자리가 없고, 빌드
         /// 종류에 대한 물음을 이것보다 나중에 묻는 것도 같은 이유다.
         /// </remarks>
         private static readonly string[] SkippedPrefixes =
         {
-            "Artel", "Unity.Artel",
+            "UnityPlayMcp", "Unity.UnityPlayMcp",
             "UnityEngine", "UnityEditor", "Unity", "System", "mscorlib", "netstandard",
             "nunit", "Newtonsoft", "Mono"
         };
@@ -645,7 +645,7 @@ namespace Artel.Affordances.CodeGen
             diagnostics.Add(new DiagnosticMessage
             {
                 DiagnosticType = DiagnosticType.Warning,
-                MessageData = "[Artel] " + message
+                MessageData = "[Unity Play MCP] " + message
             });
         }
 

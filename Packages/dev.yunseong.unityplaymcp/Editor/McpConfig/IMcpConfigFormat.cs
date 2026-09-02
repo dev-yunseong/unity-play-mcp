@@ -1,4 +1,4 @@
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// agent 설정 파일의 텍스트를 받아 텍스트를 돌려준다.
