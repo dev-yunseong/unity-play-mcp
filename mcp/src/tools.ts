@@ -18,41 +18,112 @@ export interface ToolResponse {
 
 let nextActionId = 1;
 
-const targetIdSchema = z.number().int();
-const mouseButtonSchema = z.number().int().min(0).max(2);
-const keySchema = z.string().min(1);
-const captureOptionsSchema = z.object({
-  maxEdge: z.number().int().positive().optional(),
-  padding: z.number().int().nonnegative().optional(),
-}).strict();
-const rawActionSchema = z.union([
-  z.object({ method: z.literal("button_click"), params: z.tuple([targetIdSchema]) }).strict(),
-  z.object({ method: z.literal("enter_text"), params: z.tuple([targetIdSchema, z.string()]) }).strict(),
-  z.object({ method: z.literal("move_mouse"), params: z.tuple([z.number(), z.number()]) }).strict(),
-  z.object({ method: z.literal("mouse_down"), params: z.tuple([mouseButtonSchema]) }).strict(),
-  z.object({ method: z.literal("mouse_up"), params: z.tuple([mouseButtonSchema]) }).strict(),
-  z.object({ method: z.literal("key_click"), params: z.tuple([keySchema, z.number().positive()]) }).strict(),
-  z.object({ method: z.literal("key_down"), params: z.tuple([keySchema]) }).strict(),
-  z.object({ method: z.literal("key_up"), params: z.tuple([keySchema]) }).strict(),
-  z.object({ method: z.literal("set_axis"), params: z.tuple([z.string().min(1), z.number()]) }).strict(),
-  z.object({ method: z.literal("set_button"), params: z.tuple([z.string().min(1), z.boolean()]) }).strict(),
-  z.object({ method: z.literal("pause_time"), params: z.tuple([]) }).strict(),
-  z.object({ method: z.literal("resume_time"), params: z.tuple([]) }).strict(),
-  z.object({
-    method: z.literal("reset_game"),
-    params: z.tuple([z.object({ clearPlayerPrefs: z.boolean() }).strict()]),
-  }).strict(),
-  z.object({ method: z.literal("start_readings"), params: z.tuple([]) }).strict(),
-  z.object({ method: z.literal("stop_readings"), params: z.tuple([]) }).strict(),
+/// 값 제약을 부르는 곳마다 새 schema 로 만든다.
+///
+/// 하나를 만들어 여러 곳에서 나눠 쓰면 zod-to-json-schema 가 두 번째부터 `$ref` 로 적는다. 그
+/// `$ref` 는 처음 나온 자리를 가리키는 JSON pointer 라서, 다른 union 가지를 가리키게 되고 가지
+/// 순서가 바뀌면 조용히 다른 곳을 가리킨다. 매번 새로 만들면 schema 가 스스로 완결된다.
+const targetIdSchema = () => z.number().int();
+const mouseButtonSchema = () => z.number().int().min(0).max(2);
+const keySchema = () => z.string().min(1);
+const inputNameSchema = () => z.string().min(1);
+const maxEdgeSchema = () => z.number().int().positive();
+const paddingSchema = () => z.number().int().nonnegative();
+
+/// `perform_actions` 가 받는 action 하나.
+///
+/// Unity 로 나가는 wire 형식은 `{ method, params: [...] }` 의 위치 인자지만, 입력은 이름 있는
+/// field 로 받는다. `z.tuple` 은 draft-07 의 배열형 `items` 로 변환되고, draft 2020-12 는 위치별
+/// schema 를 `prefixItems` 로만 받으므로 Anthropic API 가 tool 목록 전체를 400 으로 거절한다.
+/// `params` 배열은 `toWireAction` 이 만든다.
+export const performActionSchema = z.discriminatedUnion("method", [
+  z.object({ method: z.literal("button_click"), targetId: targetIdSchema() }).strict(),
+  z.object({ method: z.literal("enter_text"), targetId: targetIdSchema(), text: z.string() }).strict(),
+  z.object({ method: z.literal("move_mouse"), x: z.number(), y: z.number() }).strict(),
+  z.object({ method: z.literal("mouse_down"), button: mouseButtonSchema() }).strict(),
+  z.object({ method: z.literal("mouse_up"), button: mouseButtonSchema() }).strict(),
+  z.object({ method: z.literal("key_click"), key: keySchema(), seconds: z.number().positive() }).strict(),
+  z.object({ method: z.literal("key_down"), key: keySchema() }).strict(),
+  z.object({ method: z.literal("key_up"), key: keySchema() }).strict(),
+  z.object({ method: z.literal("set_axis"), name: inputNameSchema(), value: z.number() }).strict(),
+  z.object({ method: z.literal("set_button"), name: inputNameSchema(), pressed: z.boolean() }).strict(),
+  z.object({ method: z.literal("pause_time") }).strict(),
+  z.object({ method: z.literal("resume_time") }).strict(),
+  z.object({ method: z.literal("reset_game"), clearPlayerPrefs: z.boolean() }).strict(),
+  z.object({ method: z.literal("start_readings") }).strict(),
+  z.object({ method: z.literal("stop_readings") }).strict(),
   z.object({
     method: z.literal("capture_screen"),
-    params: z.union([
-      z.tuple([]),
-      z.tuple([targetIdSchema]),
-      z.tuple([targetIdSchema, captureOptionsSchema]),
-    ]),
+    targetId: targetIdSchema().optional(),
+    maxEdge: maxEdgeSchema().optional(),
+    padding: paddingSchema().optional(),
   }).strict(),
-]);
+]).superRefine((action, ctx) => {
+  // `maxEdge` 와 `padding` 은 잘라낼 대상을 두고 하는 말이라 `targetId` 없이는 뜻이 없다.
+  // capture_screen tool 이 같은 조합을 거절하는 것과 같은 규칙이다.
+  if (action.method !== "capture_screen") return;
+  if (action.targetId !== undefined) return;
+  if (action.maxEdge === undefined && action.padding === undefined) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["targetId"],
+    message: "capture_screen requires targetId when maxEdge or padding is set.",
+  });
+});
+
+export type PerformAction = z.infer<typeof performActionSchema>;
+
+interface CaptureScreenArguments {
+  targetId?: number;
+  maxEdge?: number;
+  padding?: number;
+}
+
+/// `capture_screen` 이 Unity 로 보내는 `params` 배열. 대상이 없으면 빈 배열, 옵션이 없으면
+/// `[targetId]`, 있으면 `[targetId, options]` 세 경우뿐이다.
+function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
+  if (capture.targetId === undefined) return [];
+  const options = {
+    ...(capture.maxEdge === undefined ? {} : { maxEdge: capture.maxEdge }),
+    ...(capture.padding === undefined ? {} : { padding: capture.padding }),
+  };
+  return Object.keys(options).length === 0 ? [capture.targetId] : [capture.targetId, options];
+}
+
+/// 이름 있는 field 를 Unity 가 받는 위치 인자 배열로 되돌린다.
+///
+/// 배열의 순서와 값은 Unity 쪽 protocol 이라 바꿀 수 없다. 이 함수가 그 계약이 적힌 유일한 자리다.
+export function toWireAction(action: PerformAction): { method: string; params: unknown[] } {
+  switch (action.method) {
+    case "button_click":
+      return { method: action.method, params: [action.targetId] };
+    case "enter_text":
+      return { method: action.method, params: [action.targetId, action.text] };
+    case "move_mouse":
+      return { method: action.method, params: [action.x, action.y] };
+    case "mouse_down":
+    case "mouse_up":
+      return { method: action.method, params: [action.button] };
+    case "key_click":
+      return { method: action.method, params: [action.key, action.seconds] };
+    case "key_down":
+    case "key_up":
+      return { method: action.method, params: [action.key] };
+    case "set_axis":
+      return { method: action.method, params: [action.name, action.value] };
+    case "set_button":
+      return { method: action.method, params: [action.name, action.pressed] };
+    case "reset_game":
+      return { method: action.method, params: [{ clearPlayerPrefs: action.clearPlayerPrefs }] };
+    case "capture_screen":
+      return { method: action.method, params: captureScreenParams(action) };
+    case "pause_time":
+    case "resume_time":
+    case "start_readings":
+    case "stop_readings":
+      return { method: action.method, params: [] };
+  }
+}
 
 function text(textValue: string): ToolResponse {
   return { content: [{ type: "text", text: textValue }] };
@@ -378,18 +449,15 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   server.registerTool("capture_screen", {
     description: "Capture the whole game screen or one target as a PNG.",
     inputSchema: {
-      targetId: z.number().int().optional(),
-      maxEdge: z.number().int().positive().optional(),
-      padding: z.number().int().nonnegative().optional(),
+      targetId: targetIdSchema().optional(),
+      maxEdge: maxEdgeSchema().optional(),
+      padding: paddingSchema().optional(),
     },
   }, async ({ targetId, maxEdge, padding }) => {
-    const optionsSpecified = maxEdge !== undefined || padding !== undefined;
-    if (optionsSpecified && targetId === undefined) {
+    if (targetId === undefined && (maxEdge !== undefined || padding !== undefined)) {
       return { ...text("capture_screen requires targetId when maxEdge or padding is set."), isError: true };
     }
-    const params = targetId === undefined ? [] : optionsSpecified
-      ? [targetId, { ...(maxEdge === undefined ? {} : { maxEdge }), ...(padding === undefined ? {} : { padding }) }]
-      : [targetId];
+    const params = captureScreenParams({ targetId, maxEdge, padding });
     try {
       const requests: ActionRequest[] = [{ id: nextActionId++, method: "capture_screen", params }];
       const results = await connection.sendActions(requests);
@@ -411,12 +479,12 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
 
   server.registerTool("click", {
     description: "Click a Unity target by instance id.",
-    inputSchema: { targetId: targetIdSchema },
+    inputSchema: { targetId: targetIdSchema() },
   }, async ({ targetId }) => dispatchOne(connection, "button_click", [targetId]));
 
   server.registerTool("enter_text", {
     description: "Enter text into a Unity target by instance id.",
-    inputSchema: { targetId: targetIdSchema, text: z.string() },
+    inputSchema: { targetId: targetIdSchema(), text: z.string() },
   }, async ({ targetId, text: value }) => dispatchOne(connection, "enter_text", [targetId, value]));
 
   server.registerTool("move_mouse", {
@@ -426,7 +494,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
 
   server.registerTool("mouse_button", {
     description: "Click, hold, or release a virtual mouse button.",
-    inputSchema: { button: mouseButtonSchema, action: z.enum(["click", "down", "up"]) },
+    inputSchema: { button: mouseButtonSchema(), action: z.enum(["click", "down", "up"]) },
   }, async ({ button, action }) => dispatchActions(connection, action === "click"
     ? [{ method: "mouse_down", params: [button] }, { method: "mouse_up", params: [button] }]
     : [{ method: action === "down" ? "mouse_down" : "mouse_up", params: [button] }]));
@@ -434,7 +502,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   server.registerTool("press_key", {
     description: "Click, hold, or release a Unity KeyCode key.",
     inputSchema: {
-      key: keySchema,
+      key: keySchema(),
       action: z.enum(["click", "down", "up"]),
       seconds: z.number().positive().optional(),
     },
@@ -448,12 +516,12 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
 
   server.registerTool("set_axis", {
     description: "Set a virtual Unity input axis.",
-    inputSchema: { name: z.string().min(1), value: z.number() },
+    inputSchema: { name: inputNameSchema(), value: z.number() },
   }, async ({ name, value }) => dispatchOne(connection, "set_axis", [name, value]));
 
   server.registerTool("set_button", {
     description: "Set a virtual Unity input button state.",
-    inputSchema: { name: z.string().min(1), pressed: z.boolean() },
+    inputSchema: { name: inputNameSchema(), pressed: z.boolean() },
   }, async ({ name, pressed }) => dispatchOne(connection, "set_button", [name, pressed]));
 
   const noInput = {};
@@ -471,10 +539,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     async () => dispatchOne(connection, "stop_readings", []));
 
   server.registerTool("perform_actions", {
-    description: "Send a raw action sequence to Unity in one frame-aligned batch.",
-    inputSchema: { actions: z.array(rawActionSchema).min(1) },
-  }, async ({ actions }) => dispatchActions(connection, actions.map((action) => ({
-    method: action.method,
-    params: [...action.params],
-  }))));
+    description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}.",
+    inputSchema: { actions: z.array(performActionSchema).min(1) },
+  }, async ({ actions }) => dispatchActions(connection, actions.map(toWireAction)));
 }
