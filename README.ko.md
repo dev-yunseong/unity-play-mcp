@@ -16,8 +16,10 @@ Unity Play MCP를 사용하면 coding agent가 실행 중인 Unity game의 현�
 Unity에서 **Window > Package Manager**를 열고 **Add package from git URL**을 선택한 뒤 다음 URL을 입력합니다.
 
 ```text
-https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp
+https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#latest
 ```
+
+`latest` tag는 가장 최근에 성공한 GitHub release를 가리킵니다. Unity Package Manager가 이전 version을 cache에서 계속 사용하면 **Update**를 누르거나 package를 제거한 뒤 다시 추가합니다.
 
 특정 release를 설치하려면 package path 뒤에 tag를 붙입니다.
 

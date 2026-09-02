@@ -16,8 +16,10 @@ Unity Play MCP lets a coding agent read the current Unity scene, perform player 
 In Unity, open **Window > Package Manager**, select **Add package from git URL**, and enter:
 
 ```text
-https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp
+https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#latest
 ```
+
+The `latest` tag follows the latest successful GitHub release. If Unity Package Manager keeps an older cached version, select **Update** or remove and add the package again.
 
 To install a specific release, append its tag after the package path:
 
