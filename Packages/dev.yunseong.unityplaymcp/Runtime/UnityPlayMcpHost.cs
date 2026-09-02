@@ -74,8 +74,13 @@ namespace UnityPlayMcp
         /// loads so a manager the scene does carry — with its configured server —
         /// keeps the spot.
         /// </summary>
+        /// <remarks>
+        /// test 가 부를 수 있도록 <c>internal</c> 이다. hook 이 남긴 오브젝트를 나중에 관찰하는 test 는
+        /// play mode 당 한 번만 도는 hook 때문에 다른 fixture 보다 먼저 돌아야 하고, 그 순서는 fixture
+        /// 이름의 알파벳 순이라 이름을 바꾸는 것만으로 조용히 깨진다. 직접 부르면 순서와 무관해진다.
+        /// </remarks>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void SpawnInDevelopmentBuilds()
+        internal static void SpawnInDevelopmentBuilds()
         {
             if (instance != null)
             {
