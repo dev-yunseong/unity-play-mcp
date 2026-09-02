@@ -6,6 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { UnityConnection } from "./connection.js";
 import { serverInstructions } from "./instructions.js";
+import { registerPrompts } from "./prompts.js";
 import { PulseStore } from "./pulse.js";
 import { registerTools } from "./tools.js";
 
@@ -21,6 +22,7 @@ const server = new McpServer(
 );
 
 registerTools(server, connection, pulseStore);
+registerPrompts(server);
 await server.connect(new StdioServerTransport());
 
 function parseTimeout(rawValue: string | undefined): number {

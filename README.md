@@ -77,6 +77,19 @@ Useful first requests include:
 
 The MCP server hands the agent a short set of instructions when the agent connects, so you do not have to explain how the tools fit together. It states that Unity must be in Play Mode, that `start_readings` comes before the first `get_scene_state`, and that `click` and `enter_text` take the instance id reported by `get_scene_state`.
 
+## Ready-made requests
+
+The MCP server registers four prompts. In an agent that surfaces them, they appear as commands you pick rather than sentences you type; Claude Code lists them as `/unity-play:<name>`.
+
+| Prompt | What it does | Arguments |
+| --- | --- | --- |
+| `inspect_scene` | Reads the scene and reports what is on it and which objects can be acted on. | `selector` (optional) |
+| `review_screen` | Captures the game screen and reviews layout, readability, and anything that looks wrong. | `focus` (optional) |
+| `run_steps` | Performs a described sequence of player actions and reports the first step that diverged. | `steps`, `expectation` (optional) |
+| `track_value` | Watches how an object's members move across readings, optionally while an action runs. | `selector`, `action` (optional) |
+
+A prompt is something you choose. What the agent has to work out on its own — that Unity must be in Play Mode, what order the tools go in — is in the instructions the server sends on connect instead.
+
 ## Troubleshooting
 
 ### The agent does not show `unity-play`

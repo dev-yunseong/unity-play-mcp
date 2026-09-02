@@ -77,6 +77,19 @@ tool을 호출하기 전에 Play Mode를 시작합니다. Unity는 `ws://127.0.0
 
 MCP server는 agent가 연결할 때 짧은 사용 안내를 함께 넘깁니다. tool들이 어떤 관계인지 매번 설명하지 않아도 됩니다. 안내에는 Unity가 Play Mode여야 한다는 것, 첫 `get_scene_state` 전에 `start_readings`를 부른다는 것, `click`과 `enter_text`가 쓰는 instance id는 `get_scene_state`가 알려준다는 것이 담깁니다.
 
+## 준비된 요청
+
+MCP server는 prompt 네 개를 등록합니다. prompt를 지원하는 agent에서는 문장을 입력하는 대신 골라서 부르는 command로 보입니다. Claude Code는 `/unity-play:<이름>`으로 표시합니다.
+
+| Prompt | 하는 일 | 인자 |
+| --- | --- | --- |
+| `inspect_scene` | scene을 읽고 무엇이 있는지, 어떤 object를 조작할 수 있는지 보고합니다. | `selector` (선택) |
+| `review_screen` | game screen을 capture하고 layout, 가독성, 이상한 곳을 검토합니다. | `focus` (선택) |
+| `run_steps` | 적어 준 player action 순서를 수행하고 처음으로 어긋난 단계를 보고합니다. | `steps`, `expectation` (선택) |
+| `track_value` | object의 member 값이 판독을 거치며 어떻게 움직이는지 봅니다. action을 함께 줄 수 있습니다. | `selector`, `action` (선택) |
+
+prompt는 사용자가 고르는 것입니다. agent가 스스로 판단해야 하는 것 — Unity가 Play Mode여야 한다는 것, tool을 어떤 순서로 부르는지 — 은 prompt가 아니라 연결할 때 server가 넘기는 안내에 있습니다.
+
 ## 문제 해결
 
 ### Agent에 `unity-play`가 보이지 않음
