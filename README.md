@@ -75,6 +75,8 @@ Useful first requests include:
 - “Capture the game screen.”
 - “Click the Start button.”
 
+Ask “Is Unity running?” and the agent calls `get_unity_status`. It answers whether the game is reachable, whether readings have started, and which reading arrived last. Every other tool, when it cannot reach Unity, answers that the game is not running and that Play Mode has to be started — not a socket error.
+
 The MCP server hands the agent a short set of instructions when the agent connects, so you do not have to explain how the tools fit together. It states that Unity must be in Play Mode, that `start_readings` comes before the first `get_scene_state`, and that `click` and `enter_text` take the instance id reported by `get_scene_state`.
 
 ## Ready-made requests
@@ -102,7 +104,7 @@ Select **Refresh** in the Unity settings page, select **Add** again, and restart
 
 ### The MCP server cannot connect to Unity
 
-Confirm that the correct Unity project is open and in Play Mode. The connection is local only; remote agents and containers need explicit access to the host loopback address.
+Ask the agent to call `get_unity_status`; it names the address it is trying and whether anything answers there. Confirm that the correct Unity project is open and in Play Mode. The connection is local only; remote agents and containers need explicit access to the host loopback address.
 
 ### The settings page reports an unreadable configuration
 

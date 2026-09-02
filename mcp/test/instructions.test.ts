@@ -28,6 +28,7 @@ test("instructions say where an instance id comes from", () => {
 test("instructions name every tool they refer to", () => {
   // 안내가 부르라고 말하는 tool 이름이 tools.ts 의 등록 이름과 어긋나면, agent 는 없는 tool 을 찾는다.
   for (const toolName of [
+    "get_unity_status",
     "start_readings",
     "stop_readings",
     "get_scene_state",
