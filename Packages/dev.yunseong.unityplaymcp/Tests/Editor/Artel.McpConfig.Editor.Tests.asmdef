@@ -1,0 +1,23 @@
+{
+  "name": "Artel.McpConfig.Editor.Tests",
+  "rootNamespace": "Artel.Tests.McpConfig",
+  "references": [
+    "Artel.McpConfig.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "Newtonsoft.Json.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
