@@ -1,6 +1,6 @@
 {
   "name": "unity-play-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Model Context Protocol server for controlling a Unity Play MCP session.",
   "license": "MIT",
   "author": "dev-yunseong",
