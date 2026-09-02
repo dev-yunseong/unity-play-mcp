@@ -1,3 +1,4 @@
+using UnityPlayMcp.Affordances.Scan;
 using UnityPlayMcp.Protocol;
 using UnityPlayMcp.Protocol.Dto;
 using UnityEngine;
@@ -22,15 +23,6 @@ namespace UnityPlayMcp.Diagnostics
     {
         /// <summary>문자열을 못 읽은 플랫폼에서 쓰는 값. null을 그대로 실으면 소비자가 갈린다.</summary>
         private const string UnknownValue = "unknown";
-
-        /// <summary>
-        /// package.json의 <c>version</c>과 손으로 맞춘다.
-        ///
-        /// 런타임에는 package.json을 읽을 수 없고, <c>UnityEditor.PackageManager</c>로 읽으려면
-        /// 런타임 어셈블리가 에디터 전용 API에 걸려 Standalone 빌드가 깨진다. 상수 쪽이 싸고,
-        /// 어긋나면 <c>RuntimeEnvironmentTests</c>가 잡는다.
-        /// </summary>
-        private const string SdkVersion = "0.2.0";
 
 #if ENABLE_IL2CPP
         private const string ScriptingBackend = "IL2CPP";
@@ -68,7 +60,7 @@ namespace UnityPlayMcp.Diagnostics
                 IsEditor = Application.isEditor,
                 IsDebugBuild = Debug.isDebugBuild,
                 ScriptingBackend = ScriptingBackend,
-                SdkVersion = SdkVersion,
+                SdkVersion = PackageVersion.Value,
                 CollectedGroups = MetricGroupNames.Collected()
             };
         }

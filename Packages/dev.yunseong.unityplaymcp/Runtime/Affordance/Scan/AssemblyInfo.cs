@@ -5,3 +5,7 @@ using System.Runtime.CompilerServices;
 // 테스트에만 연다.
 [assembly: InternalsVisibleTo("UnityPlayMcp.Runtime.Tests")]
 [assembly: InternalsVisibleTo("UnityPlayMcp.Runtime.PlayModeTests")]
+
+// UnityPlayMcp.Runtime 이 PackageVersion 하나를 읽는다. 이 assembly 를 이미 참조하고 있고,
+// version 을 손으로 맞추는 자리를 둘로 늘리지 않으려면 그 값을 건네야 한다.
+[assembly: InternalsVisibleTo("UnityPlayMcp.Runtime")]

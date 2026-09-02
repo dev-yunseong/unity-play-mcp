@@ -572,14 +572,11 @@ namespace UnityPlayMcp.Affordances.Scan
             text.Append(',');
             Json.Property(text, "development", Debug.isDebugBuild);
             text.Append(',');
-            Json.Property(text, "sdk", PackageVersion);
+            Json.Property(text, "sdk", PackageVersion.Value);
             text.Append(',');
             Json.Property(text, "evidence", Fingerprint());
             text.Append('}');
         }
-
-        /// <summary>`package.json` 과 손으로 맞춘다. 읽어 올 다른 자리가 없다.</summary>
-        private const string PackageVersion = "0.2.0";
 
         private static string Backend()
         {
