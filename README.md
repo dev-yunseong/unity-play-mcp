@@ -73,6 +73,8 @@ Useful first requests include:
 - “Capture the game screen.”
 - “Click the Start button.”
 
+The MCP server hands the agent a short set of instructions when the agent connects, so you do not have to explain how the tools fit together. It states that Unity must be in Play Mode, that `start_readings` comes before the first `get_scene_state`, and that `click` and `enter_text` take the instance id reported by `get_scene_state`.
+
 ## Troubleshooting
 
 ### The agent does not show `unity-play`

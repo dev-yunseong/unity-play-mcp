@@ -73,6 +73,8 @@ tool을 호출하기 전에 Play Mode를 시작합니다. Unity는 `ws://127.0.0
 - “game screen을 capture해줘.”
 - “Start button을 눌러줘.”
 
+MCP server는 agent가 연결할 때 짧은 사용 안내를 함께 넘깁니다. tool들이 어떤 관계인지 매번 설명하지 않아도 됩니다. 안내에는 Unity가 Play Mode여야 한다는 것, 첫 `get_scene_state` 전에 `start_readings`를 부른다는 것, `click`과 `enter_text`가 쓰는 instance id는 `get_scene_state`가 알려준다는 것이 담깁니다.
+
 ## 문제 해결
 
 ### Agent에 `unity-play`가 보이지 않음
