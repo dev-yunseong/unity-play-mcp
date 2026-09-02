@@ -1,0 +1,166 @@
+name: Publish MCP package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to validate without publishing
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+      NPM_CONFIG_PROVENANCE: 'true'
+    steps:
+      - name: Validate target tag format
+        run: |
+          set -euo pipefail
+          if [[ ! "$TARGET_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must be a stable vMAJOR.MINOR.PATCH tag: $TARGET_TAG" >&2
+            exit 1
+          fi
+
+      - name: Checkout target tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TARGET_TAG }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: Confirm target tag exists
+        run: |
+          set -euo pipefail
+          git rev-parse --verify --quiet "refs/tags/${TARGET_TAG}^{commit}" >/dev/null
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Require npm 11.5.1 or later
+        run: |
+          set -euo pipefail
+          npm_version="$(npm --version)"
+          node --input-type=module -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) {
+              throw new Error(`npm 11.5.1 or later is required; found ${process.argv[1]}`);
+            }
+          ' "$npm_version"
+
+      - name: Validate release version contracts
+        run: |
+          set -euo pipefail
+          release_version="${TARGET_TAG#v}"
+          unity_version="$(node -p "require('./Packages/dev.yunseong.unityplaymcp/package.json').version")"
+          mcp_version="$(node -p "require('./mcp/package.json').version")"
+          server_version_file='Packages/dev.yunseong.unityplaymcp/Editor/McpConfig/mcp-server-version.txt'
+          server_version="$(tr -d '\r\n' < "$server_version_file")"
+          test -n "$server_version"
+          test "$release_version" = "$unity_version"
+          test "$mcp_version" = "$server_version"
+
+      - name: Detect MCP changes since the previous published release
+        id: mcp_changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          releases="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" | jq -s 'add')"
+          current_published_at="$(jq -r --arg current "$TARGET_TAG" '
+            map(select(.draft == false and .tag_name == $current))
+            | first.published_at // empty
+          ' <<<"$releases")"
+          if [ -z "$current_published_at" ]; then
+            echo "Target tag is not a published GitHub release: $TARGET_TAG" >&2
+            exit 1
+          fi
+          previous_tag="$(jq -r --arg cutoff "$current_published_at" '
+            map(select(.draft == false and .published_at < $cutoff))
+            | sort_by(.published_at)
+            | last.tag_name // empty
+          ' <<<"$releases")"
+          if [ -z "$previous_tag" ]; then
+            echo "No previous published release; MCP package validation will continue."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$previous_tag" "$TARGET_TAG" -- mcp/; then
+            echo "No MCP changes since $previous_tag."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "MCP changes found since $previous_tag."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install MCP dependencies
+        working-directory: mcp
+        run: npm ci
+
+      - name: Pack MCP package
+        id: pack
+        working-directory: mcp
+        run: |
+          set -euo pipefail
+          # npm은 lifecycle test output을 JSON 결과보다 먼저 보낸다. test reporter
+          # output 때문에 pack metadata JSON이 깨지지 않게 마지막 JSON array만 남긴다.
+          npm pack --json | awk '/^\[$/{json=1} json' > pack.json
+          tarball="$(node -e 'const pack = require("./pack.json"); process.stdout.write(pack[0].filename)')"
+          integrity="$(node -e 'const pack = require("./pack.json"); process.stdout.write(pack[0].integrity)')"
+          echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
+          echo "integrity=${integrity}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify packed MCP package
+        run: .github/scripts/verify-mcp-package.sh "mcp/${{ steps.pack.outputs.tarball }}"
+
+      - name: Check published package integrity
+        if: github.event_name == 'release' && steps.mcp_changes.outputs.changed == 'true'
+        id: registry
+        working-directory: mcp
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          set +e
+          registry_integrity="$(npm view "unity-play-mcp@${version}" dist.integrity 2>registry-error.log)"
+          view_exit_code=$?
+          set -e
+          if [ "$view_exit_code" -ne 0 ]; then
+            if ! grep -q 'E404' registry-error.log; then
+              cat registry-error.log >&2
+              exit "$view_exit_code"
+            fi
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$registry_integrity" ]; then
+            echo "The npm registry returned an empty integrity for an existing package version." >&2
+            exit 1
+          fi
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+          echo "integrity=${registry_integrity}" >> "$GITHUB_OUTPUT"
+
+      - name: Accept identical published package
+        if: github.event_name == 'release' && steps.mcp_changes.outputs.changed == 'true' && steps.registry.outputs.exists == 'true' && steps.registry.outputs.integrity == steps.pack.outputs.integrity
+        run: |
+          version="$(node -p "require('./mcp/package.json').version")"
+          echo "unity-play-mcp@${version} is already published with the verified integrity."
+
+      - name: Reject conflicting published package
+        if: github.event_name == 'release' && steps.mcp_changes.outputs.changed == 'true' && steps.registry.outputs.exists == 'true' && steps.registry.outputs.integrity != steps.pack.outputs.integrity
+        run: |
+          echo "The registry already contains this version with a different tarball integrity." >&2
+          exit 1
+
+      - name: Publish verified MCP package
+        if: github.event_name == 'release' && steps.mcp_changes.outputs.changed == 'true' && steps.registry.outputs.exists != 'true'
+        working-directory: mcp
+        run: npm publish "${{ steps.pack.outputs.tarball }}" --ignore-scripts

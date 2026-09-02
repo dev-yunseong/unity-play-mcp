@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
@@ -12,7 +14,7 @@ const connection = new UnityConnection({
   timeoutMilliseconds: parseTimeout(process.env.UNITY_PLAY_MCP_TIMEOUT_MS),
   pulseStore,
 });
-const server = new McpServer({ name: "unity-play-mcp", version: "0.1.0" });
+const server = new McpServer({ name: "unity-play-mcp", version: packageVersion() });
 
 registerTools(server, connection, pulseStore);
 await server.connect(new StdioServerTransport());
@@ -24,4 +26,17 @@ function parseTimeout(rawValue: string | undefined): number {
     throw new Error("UNITY_PLAY_MCP_TIMEOUT_MS must be a positive integer.");
   }
   return value;
+}
+
+function packageVersion(): string {
+  const packageJsonUrl = new URL("../package.json", import.meta.url);
+  const packageJson = JSON.parse(readFileSync(packageJsonUrl, "utf8")) as {
+    version?: unknown;
+  };
+
+  if (typeof packageJson.version !== "string" || packageJson.version.length === 0) {
+    throw new Error("package.json must contain a non-empty version.");
+  }
+
+  return packageJson.version;
 }

@@ -13,11 +13,12 @@ namespace Artel.McpConfig.Editor
     internal static class UnityPlayMcpSettingsProvider
     {
         private const string ServerName = "unity-play";
-        private const string ServerCommand = "node";
+        private const string McpServerVersionFileFromPackageRoot = "Editor/McpConfig/mcp-server-version.txt";
 
-        private static string _entryPoint;
+        private static McpServerEntry _serverEntry;
         private static IReadOnlyList<AgentRow> _rows;
         private static string _rootsError;
+        private static string _serverError;
 
         [SettingsProvider]
         internal static SettingsProvider Create()
@@ -39,8 +40,47 @@ namespace Artel.McpConfig.Editor
         {
             var projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
             var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var packageRoot = McpServerLocator.PackageRoot();
 
-            _entryPoint = McpServerLocator.FindEntryPoint(McpServerLocator.PackageRoot(), projectRoot, File.Exists);
+            _serverEntry = null;
+            _serverError = null;
+
+            // local build 는 package metadata 없이도 쓸 수 있다. version file 은 npx 가 필요할 때만 읽는다.
+            _serverEntry = McpServerLocator.Resolve(packageRoot, projectRoot, null, File.Exists);
+
+            if (_serverEntry == null && string.IsNullOrEmpty(packageRoot))
+            {
+                _serverError = "Could not locate the Unity Play MCP package directory, so the compatible MCP server version is unknown.";
+            }
+            else if (_serverEntry == null)
+            {
+                var versionFile = Path.Combine(packageRoot, McpServerVersionFileFromPackageRoot);
+
+                if (!File.Exists(versionFile))
+                {
+                    _serverError = "The MCP server version file is missing: " + versionFile;
+                }
+                else
+                {
+                    try
+                    {
+                        var mcpServerVersion = File.ReadAllText(versionFile).Trim();
+
+                        if (mcpServerVersion.Length == 0)
+                        {
+                            _serverError = "The MCP server version file is empty: " + versionFile;
+                        }
+                        else
+                        {
+                            _serverEntry = McpServerLocator.Resolve(packageRoot, projectRoot, mcpServerVersion, File.Exists);
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        _serverError = "Could not read the MCP server version file: " + exception.Message;
+                    }
+                }
+            }
 
             // 둘 중 하나라도 비면 설정 파일 자리를 못 정한다. 그대로 Path.Combine 에 넘기면 화면이 예외로
             // 매 frame 깨지거나, 홈 디렉터리 없이 상대경로가 만들어져 엉뚱한 자리에 파일을 새로 만든다.
@@ -93,16 +133,17 @@ namespace Artel.McpConfig.Editor
 
             EditorGUILayout.LabelField("MCP server", EditorStyles.boldLabel);
 
-            if (_entryPoint == null)
+            if (_serverError != null)
             {
-                EditorGUILayout.HelpBox(
-                    "Built MCP server not found. Clone the unity-play-mcp repository, then run " +
-                    "`npm install && npm run build` in its mcp/ directory.",
-                    MessageType.Warning);
+                EditorGUILayout.HelpBox(_serverError, MessageType.Error);
             }
             else
             {
-                EditorGUILayout.LabelField("Command", ServerCommand + " " + _entryPoint, EditorStyles.wordWrappedLabel);
+                EditorGUILayout.LabelField(
+                    "Command",
+                    _serverEntry.Command + " " + string.Join(" ", _serverEntry.Arguments),
+                    EditorStyles.wordWrappedLabel);
+                EditorGUILayout.LabelField("Selection", _serverEntry.Reason, EditorStyles.wordWrappedLabel);
             }
 
             EditorGUILayout.Space();
@@ -133,7 +174,7 @@ namespace Artel.McpConfig.Editor
             EditorGUILayout.LabelField(row.Agent.DisplayName, GUILayout.Width(110f));
             EditorGUILayout.LabelField(Status(row), GUILayout.Width(110f));
 
-            using (new EditorGUI.DisabledScope(_entryPoint == null || row.Error != null))
+            using (new EditorGUI.DisabledScope(_serverEntry == null || row.Error != null))
             {
                 if (GUILayout.Button("Add", GUILayout.Width(70f)))
                 {
@@ -175,9 +216,9 @@ namespace Artel.McpConfig.Editor
             {
                 var text = McpConfigFileStore.Read(row.Agent.ConfigPath);
 
-                // entry 는 넣을 때만 뜻이 있다. 빼는 쪽에서도 만들면 _entryPoint 가 null 인 채로 args 에 실린다.
+                // entry 는 넣을 때만 뜻이 있다. 빼는 쪽에서도 만들면 null 값이 args 에 실릴 수 있다.
                 var updated = add
-                    ? row.Agent.Format.Add(text, ServerName, new McpServerEntry(ServerCommand, new[] { _entryPoint }))
+                    ? row.Agent.Format.Add(text, ServerName, _serverEntry)
                     : row.Agent.Format.Remove(text, ServerName);
 
                 McpConfigFileStore.Write(row.Agent.ConfigPath, updated);

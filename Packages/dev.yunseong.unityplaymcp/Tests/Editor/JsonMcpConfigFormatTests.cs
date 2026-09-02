@@ -126,6 +126,18 @@ namespace Artel.Tests.McpConfig
             Assert.AreEqual("node", (string)root["servers"][ServerName]["command"]);
         }
 
+        [Test]
+        public void PreservesTheNpxCommandAndArguments()
+        {
+            var entry = new McpServerEntry("npx", new[] { "-y", "unity-play-mcp@0.1.0" });
+
+            var server = JObject.Parse(ClaudeCode().Add(string.Empty, ServerName, entry))["mcpServers"][ServerName];
+
+            Assert.AreEqual("npx", (string)server["command"]);
+            Assert.AreEqual("-y", (string)server["args"][0]);
+            Assert.AreEqual("unity-play-mcp@0.1.0", (string)server["args"][1]);
+        }
+
         /// <remarks>
         /// Newtonsoft 의 JObject 는 object 안의 주석을 담지 못한다. 읽어서 다시 쓰면 사용자가 적어 둔 주석이
         /// 사라지므로, 조용히 지우는 대신 멈춘다.
