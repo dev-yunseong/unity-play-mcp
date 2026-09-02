@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 판독이 사라진 객체를 말하는지, 그리고 <b>안 걸은 것을 사라졌다고 말하지 않는지</b> 검증한다.
+    /// pulse 가 사라진 객체를 말하는지, 그리고 <b>안 걸은 것을 사라졌다고 말하지 않는지</b> 검증한다.
     ///
     /// 뒤쪽이 이 규칙의 어려운 절반이다. 파괴를 말하는 것은 쉽고, 한도에 걸려 걷지 못한 것을 사라졌다고 하지
     /// 않는 것이 어렵다 — 거기서 틀리면 읽는 쪽이 살아 있는 객체를 지우고, 그것은 아무도 되돌려 주지 않는다.
@@ -67,10 +67,10 @@ namespace UnityPlayMcp.Tests
         }
 
         [Test]
-        public void 잘린_판독은_아무_말도_하지_않는다()
+        public void 잘린_pulse_는_아무_말도_하지_않는다()
         {
             // 한도에 걸려 안 걸은 객체다. 사라졌다고 하면 읽는 쪽이 살아 있는 것을 지운다 —
-            // 잔상이 한 판독 더 남는 쪽이 싸다.
+            // 잔상이 한 pulse 더 남는 쪽이 싸다.
             var gone = LiveState.Gone(
                 Ledger("Battle/Card(Clone)[16]|active"),
                 Ledger(),
@@ -81,9 +81,9 @@ namespace UnityPlayMcp.Tests
         }
 
         [Test]
-        public void 전량_판독은_말할_필요가_없다()
+        public void 전량_pulse_는_말할_필요가_없다()
         {
-            // 읽는 쪽이 전량 판독에서 쥔 것을 통째로 갈아치운다.
+            // 읽는 쪽이 전량 pulse 에서 쥔 것을 통째로 갈아치운다.
             var gone = LiveState.Gone(
                 Ledger("Battle/Card(Clone)[16]|active"),
                 Ledger(),

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
-    /// 프레임 타이밍의 원시 판독. Unity의 <c>FrameTimingManager</c>를 부르는 지점을 여기 하나로
+    /// 프레임 타이밍의 원시 reading. Unity의 <c>FrameTimingManager</c>를 부르는 지점을 여기 하나로
     /// 모아, 평균과 병목 분류는 에디터 없이도 시험할 수 있게 둔다.
     /// </summary>
     internal interface IFrameTimingReader
@@ -215,7 +215,7 @@ namespace UnityPlayMcp.Diagnostics
         }
 
         /// <summary>
-        /// 양수 판독만 모으는 평균. 0이나 음수는 "그 항목을 못 쟀다"는 뜻이라 분모에서도 빼야
+        /// 양수 reading 만 모으는 평균. 0이나 음수는 "그 항목을 못 쟀다"는 뜻이라 분모에서도 빼야
         /// 나머지 프레임의 평균이 눌리지 않는다.
         /// </summary>
         private struct PositiveMean
@@ -241,7 +241,7 @@ namespace UnityPlayMcp.Diagnostics
         }
 
         /// <summary>
-        /// 실제 <c>FrameTimingManager</c> 판독. <see cref="FrameTimingSampler"/>가 Unity API를
+        /// 실제 <c>FrameTimingManager</c> reading. <see cref="FrameTimingSampler"/>가 Unity API를
         /// 직접 알지 않도록 인터페이스 뒤에 둔다.
         ///
         /// Frame Timing Stats는 프로젝트 설정이라 SDK가 켤 수 없다. 꺼져 있으면 예외 없이 0개를

@@ -268,7 +268,7 @@ namespace UnityPlayMcp
 
         /// <summary>연결이 사라지면 게임 읽기를 멈춘다.</summary>
         /// <remarks>
-        /// 여기서 시작시킨 것이 없는데도 판독도 여기서 멈춘다. 연결이 끊겨 끝나는 세션은 <see cref="StopReadings"/> 를 부를
+        /// 여기서 시작시킨 것이 없는데도 reading 도 여기서 멈춘다. 연결이 끊겨 끝나는 세션은 <see cref="StopReadings"/> 를 부를
         /// 기회를 얻지 못하고, 돌게 남겨진 박자는 게임이 떠 있는 내내 아무도 읽지 않을 파일에 쓴다.
         /// </remarks>
         private void EndDiscovery()
@@ -278,18 +278,18 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 라이브 판독을 시작하고, 지금 돌고 있는지를 말한다.
+        /// 라이브 reading 을 시작하고, 지금 돌고 있는지를 말한다.
         /// </summary>
         /// <remarks>
         /// 연결로 함의되는 것이 아니라 청해지는 것이고, 그 분리가 이 메서드의 전부다. 연결은 도구가 봐도 된다고 말하고, 세션은
         /// 실행이 시작됐다고 말하며, 그것이 언제인지는 실행을 모는 쪽만 안다.
         ///
         /// 그 값이 얼마인지 재기 전까지 둘은 같은 순간이었다. 모든 씬을 도는 순회도 연결에서 시작하고 그것은 아무도 걸어가지 않은
-        /// 화면을 방문한다 — 그래서 그 곁에서 찍은 판독은 플레이어가 본 적 없는 화면에 게임이 있다고 보고한다. 샘플 게임에서
-        /// 실측했다: 순회 동안 찍은 판독은 8초에 125,548 바이트였고 플레이어가 있은 적 없는 씬 셋을 서술했다. 순회 뒤에 시작한
-        /// 같은 채널은 4,369 바이트짜리 판독 하나를 쓰고 14초 동안 아무것도 쓰지 않았다.
+        /// 화면을 방문한다 — 그래서 그 곁에서 찍은 pulse 는 플레이어가 본 적 없는 화면에 게임이 있다고 보고한다. 샘플 게임에서
+        /// 실측했다: 순회 동안 찍은 pulse 는 8초에 125,548 바이트였고 플레이어가 있은 적 없는 씬 셋을 서술했다. 순회 뒤에 시작한
+        /// 같은 채널은 4,369 바이트짜리 pulse 하나를 쓰고 14초 동안 아무것도 쓰지 않았다.
         ///
-        /// 독자가 걸러 낼 수 있는 잡음도 아니다. 판독은 자기가 순회 중이라고 말하지 않으므로 걸러 낼 근거가 그 안에 없다.
+        /// 독자가 걸러 낼 수 있는 잡음도 아니다. pulse 는 자기가 순회 중이라고 말하지 않으므로 걸러 낼 근거가 그 안에 없다.
         ///
         /// 멱등이다: 이미 읽고 있는 동안의 두 번째 호출은 참으로 답하고 아무것도 바꾸지 않는다.
         /// </remarks>
@@ -300,7 +300,7 @@ namespace UnityPlayMcp
                 return true;
             }
 
-            // 연결이 있으면 판독은 그 소켓으로 나간다. 없으면 sink 를 건네지 않아 예전대로
+            // 연결이 있으면 pulse 는 그 소켓으로 나간다. 없으면 sink 를 건네지 않아 예전대로
             // 파일로 떨어진다 — 아무도 듣고 있지 않을 때에도 채널을 지켜볼 수 있어야 한다는
             // 것이 이 채널을 만들 때의 규율이고, 연결이 없다는 것이 그것을 거둘 이유는 아니다.
             var sink = webSocketTransport == null
@@ -310,13 +310,13 @@ namespace UnityPlayMcp
             return Affordances.Scan.AffordanceBootstrap.WatchLiveState(sink);
         }
 
-        /// <summary>라이브 판독을 끝낸다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
+        /// <summary>라이브 reading 을 끝낸다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
         public void StopReadings()
         {
             Affordances.Scan.AffordanceBootstrap.StopWatching();
         }
 
-        /// <summary>라이브 판독이 돌고 있는지.</summary>
+        /// <summary>라이브 reading 이 돌고 있는지.</summary>
         internal bool Reading => Affordances.Scan.AffordanceBootstrap.Watching;
 
         public void StopTransport()

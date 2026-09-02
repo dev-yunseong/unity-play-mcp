@@ -549,7 +549,7 @@ namespace UnityPlayMcp.Affordances.Scan
             // `build` 가 있고 무엇이 이 문서를 만들었는지 말한다.
             "build-info-v1",
 
-            // 모든 객체가 `selector` 를 나르고, 이번 판독에 한해 제 씬 안에서 유일하다.
+            // 모든 객체가 `selector` 를 나르고, 이번 pulse 에 한해 제 씬 안에서 유일하다.
             "selector-v1",
 
             // `visuals[]` 가 모든 텍스트와 그림에 역할을 주고, `label` 과 `sprite` 는 컨트롤의 이름을 대거나 아예 없다 — 더는

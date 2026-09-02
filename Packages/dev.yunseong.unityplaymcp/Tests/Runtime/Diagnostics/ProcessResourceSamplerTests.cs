@@ -8,7 +8,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
     {
         private const float WindowSeconds = 1f;
 
-        /// <summary>판독값을 시험이 직접 정하는 리더. 실제 프로세스도 GC도 건드리지 않는다.</summary>
+        /// <summary>reading 값을 시험이 직접 정하는 리더. 실제 프로세스도 GC도 건드리지 않는다.</summary>
         private sealed class FakeProcessResourceReader : IProcessResourceReader
         {
             private readonly int[] collectionCounts = new int[3];
@@ -57,7 +57,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         {
             var sampler = new ProcessResourceSampler(new FakeProcessResourceReader());
 
-            // 비교할 이전 판독값이 없다. 0을 보내면 놀고 있는 프로세스로 읽힌다.
+            // 비교할 이전 reading 값이 없다. 0을 보내면 놀고 있는 프로세스로 읽힌다.
             Assert.IsFalse(sampler.TrySample(WindowSeconds, 4, out _));
         }
 

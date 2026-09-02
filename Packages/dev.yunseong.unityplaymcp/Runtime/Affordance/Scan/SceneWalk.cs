@@ -130,7 +130,7 @@ namespace UnityPlayMcp.Affordances.Scan
         /// </summary>
         /// <remarks>
         /// 홀로는 게임이 그것을 플레이하는 방식이 아니다. 주소로 로드되는 씬은 대개 이미 올라와 있는 매니저 씬 위에 더해지도록
-        /// 만들어졌고, 혼자 올라온 것은 반쯤 지어진 채로 오거나 비어 있을 수 있다. 그래서 판독은 버리지 않고 쥐되 표시해 둔다 —
+        /// 만들어졌고, 혼자 올라온 것은 반쯤 지어진 채로 오거나 비어 있을 수 있다. 그래서 pulse 는 버리지 않고 쥐되 표시해 둔다 —
         /// 불완전한 로드에서 서술된 화면도, 아무도 그것을 전체인 양 읽지만 않는다면 그 화면에 대한 유일한 진술이다.
         /// </remarks>
         private IEnumerator Read(string address)
@@ -160,7 +160,7 @@ namespace UnityPlayMcp.Affordances.Scan
             SceneEvidenceScan.CaptureLoaded();
             AffordanceReport.Note(SceneManager.GetActiveScene().name, "scene-loaded-alone");
 
-            // 판독을 뜬 바로 그 자리에서 화면도 남긴다. 다음 씬 로드가 시작되면 back buffer 는 이미 다른 씬이다.
+            // pulse 를 뜬 바로 그 자리에서 화면도 남긴다. 다음 씬 로드가 시작되면 back buffer 는 이미 다른 씬이다.
             // Collect 앞이다 — 저쪽은 앞선 씬이 남긴 것을 이 씬으로 옮겨 붙이는 일이고, 화면은 그 전의 이 씬이다.
             var afterAddressed = SceneWalkHooks.OnSceneRead(SceneManager.GetActiveScene().name);
 

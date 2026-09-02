@@ -31,7 +31,7 @@ namespace UnityPlayMcp.Protocol.Dto
         public FrameTimingDto FrameTiming { get; set; }
 
         /// <summary>
-        /// 프로세스 CPU·메모리. 읽을 수 없는 플랫폼이거나 아직 비교할 이전 판독이 없으면
+        /// 프로세스 CPU·메모리. 읽을 수 없는 플랫폼이거나 아직 비교할 이전 reading 이 없으면
         /// <c>null</c>이라 필드 자체가 빠진다. 0을 채워 보내면 "안 재는 환경"과 "정말 놀고 있는
         /// 프로세스"가 구분되지 않는다.
         /// </summary>

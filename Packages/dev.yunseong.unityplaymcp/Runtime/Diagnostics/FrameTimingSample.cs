@@ -1,7 +1,7 @@
 namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
-    /// 한 프레임의 CPU·GPU 분해 판독값.
+    /// 한 프레임의 CPU·GPU 분해 reading 값.
     ///
     /// 단위는 밀리초다. Unity의 <c>FrameTiming</c>이 이미 ms로 주므로 이 경계에서 환산하지 않는다.
     /// 초 단위로 모으는 <c>FrameTimeStatistics</c>와 헷갈리지 말 것.

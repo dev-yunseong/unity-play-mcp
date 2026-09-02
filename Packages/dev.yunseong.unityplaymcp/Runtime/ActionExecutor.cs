@@ -19,7 +19,7 @@ namespace UnityPlayMcp
         private readonly IScreenCapturer capturer;
 
         /// <summary>
-        /// 세션이 그렇게 말할 때 라이브 판독을 켜고 끄는 것.
+        /// 세션이 그렇게 말할 때 라이브 reading 을 켜고 끄는 것.
         /// </summary>
         /// <remarks>
         /// 매니저가 아니라 이음매로 쥔다. 이 클래스가 하는 다른 모든 일은 게임에 대고 하는 것이고 이것은 SDK 에 대고 하는 유일한
@@ -427,11 +427,11 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 청한 그 실행을 위해 라이브 판독을 켠다.
+        /// 청한 그 실행을 위해 라이브 reading 을 켠다.
         /// </summary>
         /// <remarks>
         /// 실행은 그것이 언제 시작하는지를 말하지만 연결은 그러지 않는다. 연결은 모든 씬을 도는 순회도 함께 시작시키는데, 그 순회
-        /// 동안 찍은 판독은 플레이어가 한 번도 걸어가지 않은 화면을 서술한다 — 그래서 둘을 갈랐고, 이쪽이 세션이 다스리는 절반이다.
+        /// 동안 찍은 pulse 는 플레이어가 한 번도 걸어가지 않은 화면을 서술한다 — 그래서 둘을 갈랐고, 이쪽이 세션이 다스리는 절반이다.
         /// </remarks>
         private ActionResultDto ExecuteStartReadings(int actionId)
         {

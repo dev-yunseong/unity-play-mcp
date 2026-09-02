@@ -154,7 +154,7 @@ namespace UnityPlayMcp.Affordances.Scan
         /// 하는 것이 아니라 청하는 것이다. 필드 백 개를 초당 열 번 읽는 값은 그 채널을 원하는 쪽이 치를 것이고, 이 패키지를
         /// 설치하는 프로젝트 대부분은 리포트만 원한다. 이미 돌고 있으면 false 를 돌려준다.
         ///
-        /// sink 가 없으면 판독은 리포트 옆의 파일로 간다. 그래야 아무것도 듣고 있지 않을 때에도 채널을 지켜볼 수 있다.
+        /// sink 가 없으면 pulse 는 리포트 옆의 파일로 간다. 그래야 아무것도 듣고 있지 않을 때에도 채널을 지켜볼 수 있다.
         /// </remarks>
         public static bool WatchLiveState(Live.IPulseSink sink = null)
         {
