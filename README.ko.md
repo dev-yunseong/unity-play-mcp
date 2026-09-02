@@ -28,20 +28,36 @@ https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.un
 ## Agent 연결
 
 1. Unity에서 **Edit > Project Settings > Unity Play MCP**를 엽니다.
-2. 사용하는 agent 행에서 **Add**를 누릅니다.
-3. 상태가 **Configured**인지 확인합니다.
-4. agent가 이미 실행 중이면 다시 시작합니다.
-5. Unity에서 Play Mode를 시작합니다.
-6. agent에게 현재 scene 조회나 game screen capture를 요청합니다.
+2. **Configuration scope**를 고릅니다: **Project**(기본값) 또는 **User**. 고른 scope는 이 project에 대해 계속 기억됩니다.
+3. 사용하는 agent 행에서 **Add**를 누릅니다.
+4. 상태가 **Configured**인지 확인합니다.
+5. agent가 이미 실행 중이면 다시 시작합니다.
+6. Unity에서 Play Mode를 시작합니다.
+7. agent에게 현재 scene 조회나 game screen capture를 요청합니다.
 
-설정 page는 선택한 agent의 설정 파일에 `unity-play` entry를 기록합니다.
+설정 page는 고른 scope의 설정 파일에 `unity-play` entry를 기록합니다. **Add**, **Remove**, **Configured** 상태는 모두 그 scope의 파일에만 적용됩니다.
+
+**Project scope** (Unity project 디렉터리 아래):
 
 | Agent | 설정 파일 |
 | --- | --- |
 | Claude Code | `<Unity project>/.mcp.json` |
 | Cursor | `<Unity project>/.cursor/mcp.json` |
 | Visual Studio Code | `<Unity project>/.vscode/mcp.json` |
+| Codex | `<Unity project>/.codex/config.toml` * |
+
+**User scope** (홈 디렉터리 아래, 이 계정의 모든 project가 함께 씀):
+
+| Agent | 설정 파일 |
+| --- | --- |
+| Claude Code | `~/.claude.json` |
+| Cursor | `~/.cursor/mcp.json` |
+| Visual Studio Code | Windows `%APPDATA%\Code\User\mcp.json`, macOS `~/Library/Application Support/Code/User/mcp.json`, Linux `~/.config/Code/User/mcp.json` |
 | Codex | `~/.codex/config.toml` |
+
+\* Codex는 `$CODEX_HOME/config.toml`을 읽고 `CODEX_HOME`의 기본값은 `~/.codex`입니다. 위 project scope 파일은 `CODEX_HOME`을 `<Unity project>/.codex`로 지정해 `codex`를 실행할 때만 적용됩니다.
+
+scope를 바꿔도 이미 있는 entry는 옮겨지거나 지워지지 않습니다. 자동 migration은 없습니다. 기본값이 **Project**이므로, 예전 version이 `~/.codex/config.toml`에 써 둔 Codex entry는 upgrade한 뒤에도 그대로 남습니다. 지우려면 scope를 **User**로 바꾸고 **Remove**를 누르세요.
 
 local build인 `mcp/dist/index.js`가 있으면 설정 page가 그 build를 사용합니다. Git URL로 설치한 package에는 보통 local server가 없으므로, 그때는 `npx -y unity-play-mcp@<compatible version>`을 기록합니다. compatible server version은 Unity package에 함께 들어 있습니다.
 
