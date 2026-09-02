@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Artel.Protocol.Dto
+namespace UnityPlayMcp.Protocol.Dto
 {
     /// <summary>
     /// The `returnValue` of a successful `capture_screen`.

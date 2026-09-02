@@ -1,7 +1,7 @@
-using Artel.Diagnostics;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Dto;
 
-namespace Artel.Protocol.Mapping
+namespace UnityPlayMcp.Protocol.Mapping
 {
     /// <summary>
     /// CPU·GPU 분해를 전송용 DTO로 옮긴다. 시간 값은 Unity가 준 밀리초 그대로 가고, 병목 분류를

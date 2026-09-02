@@ -1,12 +1,10 @@
 {
-  "name": "Artel.Affordances.Editor",
-  "rootNamespace": "Artel.Affordances.Editor",
+  "name": "UnityPlayMcp.Affordances.Scan",
+  "rootNamespace": "UnityPlayMcp.Affordances.Scan",
   "references": [
-    "Artel.Affordances.Scan"
+    "UnityPlayMcp.Affordances.Runtime"
   ],
-  "includePlatforms": [
-    "Editor"
-  ],
+  "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,

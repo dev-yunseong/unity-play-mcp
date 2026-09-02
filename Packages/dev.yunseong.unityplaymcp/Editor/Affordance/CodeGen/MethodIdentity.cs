@@ -1,7 +1,7 @@
 using System.Text;
 using Mono.Cecil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>맨 메서드 이름에 기대지 않고 컴파일 시점 근거를 이어 붙일 만큼은 안정적이다.</summary>
     internal static class MethodIdentity

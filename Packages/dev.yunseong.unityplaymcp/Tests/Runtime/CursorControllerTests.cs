@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Reflection;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol.Dto;
 using NUnit.Framework;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     public sealed class CursorControllerTests
     {
@@ -33,31 +33,31 @@ namespace Artel.Tests
             Drain(controller.MoveTo(target, null));
 
             var cursor = controllerObject.transform
-                .Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor");
+                .Find("Unity Play MCP Virtual Cursor Canvas/Unity Play MCP Virtual Cursor");
             Assert.That(cursor.gameObject.activeSelf, Is.True);
             Assert.That(cursor.position.x, Is.EqualTo(120f).Within(0.01f));
             Assert.That(cursor.position.y, Is.EqualTo(240f).Within(0.01f));
         }
 
         [Test]
-        public void Cursor_UsesArtelCoralWithHighContrastBorder()
+        public void Cursor_UsesCoralWithHighContrastBorder()
         {
-            var hadTheme = PlayerPrefs.HasKey("Artel.DarkTheme");
-            var previousTheme = PlayerPrefs.GetInt("Artel.DarkTheme");
+            var hadTheme = PlayerPrefs.HasKey("UnityPlayMcp.DarkTheme");
+            var previousTheme = PlayerPrefs.GetInt("UnityPlayMcp.DarkTheme");
             try
             {
-                PlayerPrefs.SetInt("Artel.DarkTheme", 1);
+                PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", 1);
                 var controller = CreateController();
 
                 var texture = controllerObject.transform
-                    .Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor")
+                    .Find("Unity Play MCP Virtual Cursor Canvas/Unity Play MCP Virtual Cursor")
                     .GetComponent<Image>().sprite.texture;
                 var pixels = texture.GetPixels32();
 
                 Assert.That(pixels, Has.Some.EqualTo(KeyboardStatusController.DarkAccentColor));
                 Assert.That(pixels, Has.Some.EqualTo(KeyboardStatusController.DarkForegroundColor));
 
-                PlayerPrefs.SetInt("Artel.DarkTheme", 0);
+                PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", 0);
                 typeof(CursorController)
                     .GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(controller, null);
@@ -70,11 +70,11 @@ namespace Artel.Tests
             {
                 if (hadTheme)
                 {
-                    PlayerPrefs.SetInt("Artel.DarkTheme", previousTheme);
+                    PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", previousTheme);
                 }
                 else
                 {
-                    PlayerPrefs.DeleteKey("Artel.DarkTheme");
+                    PlayerPrefs.DeleteKey("UnityPlayMcp.DarkTheme");
                 }
             }
         }
@@ -89,7 +89,7 @@ namespace Artel.Tests
             button.onClick.AddListener(() =>
             {
                 cursorWasVisibleDuringClick = controllerObject.transform
-                    .Find("Artel Virtual Cursor Canvas/Artel Virtual Cursor")
+                    .Find("Unity Play MCP Virtual Cursor Canvas/Unity Play MCP Virtual Cursor")
                     .gameObject.activeSelf;
             });
             var targetLookup = new TargetLookup();

@@ -1,10 +1,10 @@
 using System;
-using Artel.McpConfig.Editor;
+using UnityPlayMcp.McpConfig.Editor;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
-namespace Artel.Tests.McpConfig
+namespace UnityPlayMcp.Tests.McpConfig
 {
     public sealed class JsonMcpConfigFormatTests
     {

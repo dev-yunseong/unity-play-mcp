@@ -1,4 +1,4 @@
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// user-level 설정 파일 자리를 가르는 운영체제.

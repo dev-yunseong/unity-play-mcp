@@ -1,10 +1,10 @@
 {
-  "name": "Artel.Runtime",
-  "rootNamespace": "Artel",
+  "name": "UnityPlayMcp.Runtime",
+  "rootNamespace": "UnityPlayMcp",
   "references": [
     "Unity.TextMeshPro",
     "UnityEngine.UI",
-    "Artel.Affordances.Scan"
+    "UnityPlayMcp.Affordances.Scan"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

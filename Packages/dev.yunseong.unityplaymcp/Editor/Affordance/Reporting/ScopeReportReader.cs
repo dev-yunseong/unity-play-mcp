@@ -4,7 +4,7 @@ using System.Text;
 using UnityEditor.Callbacks;
 using UnityEngine;
 
-namespace Artel.Affordances.Editor
+namespace UnityPlayMcp.Affordances.Editor
 {
     /// <summary>
     /// 분석이 무엇을 했는지를, 볼 수 있는 자리인 콘솔에 말한다.
@@ -20,7 +20,7 @@ namespace Artel.Affordances.Editor
     /// </remarks>
     internal static class ScopeReportReader
     {
-        private const string ReportDirectory = "Library/ArtelScope";
+        private const string ReportDirectory = "Library/UnityPlayMcpScope";
 
         [DidReloadScripts]
         private static void Surface()
@@ -47,7 +47,7 @@ namespace Artel.Affordances.Editor
                 return;
             }
 
-            var summary = new StringBuilder("[Artel] Scope survey");
+            var summary = new StringBuilder("[Unity Play MCP] Scope survey");
 
             foreach (var report in reports)
             {

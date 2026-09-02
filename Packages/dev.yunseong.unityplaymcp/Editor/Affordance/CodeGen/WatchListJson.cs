@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 어셈블리의 근거가 누군가에게 보라고 청하는 것의 전부. 한 번에 쓴다.
@@ -135,8 +135,8 @@ namespace Artel.Affordances.CodeGen
 
             text.Append(']');
 
-            // 코드가 animator 에 건네는 모든 이름. 그래야 판독이 그 상태가 그중 하나로 불리는지 물을 수 있다.
-            // Unity 는 `IsName` 에는 답하지만 해시를 말로 되돌려 주는 것은 없으므로, 이 목록이 없으면 판독은
+            // 코드가 animator 에 건네는 모든 이름. 그래야 pulse 가 그 상태가 그중 하나로 불리는지 물을 수 있다.
+            // Unity 는 `IsName` 에는 답하지만 해시를 말로 되돌려 주는 것은 없으므로, 이 목록이 없으면 pulse 는
             // animator 가 바뀌었다고만 말하고 무엇으로 바뀌었는지는 영영 말하지 못한다.
             names.Sort(StringComparer.Ordinal);
             text.Append(",\"animatorNames\":[");
@@ -171,7 +171,7 @@ namespace Artel.Affordances.CodeGen
         /// 플레이어가 어떤 타입을 움직이게 만들 수 있는 방법들. 경우마다가 아니라 타입마다 모은다.
         /// </summary>
         /// <remarks>
-        /// 판독은 게임이 무엇을 쥐고 있는지를 말한다. 테스터가 다음에 무엇을 할 수 있는지는 말하지 않고, 그것
+        /// pulse 는 게임이 무엇을 쥐고 있는지를 말한다. 테스터가 다음에 무엇을 할 수 있는지는 말하지 않고, 그것
         /// 없이는 채널을 읽는 에이전트가 한 화면의 상태를 통째로 쥐고서도 그 위의 무엇이 무엇에 답할지를
         /// 모른다.
         ///
@@ -181,7 +181,7 @@ namespace Artel.Affordances.CodeGen
         /// 이름이다 — 둘 다 추상적으로는 쓸모가 없다. 게임이 어딘가에서 <c>RightArrow</c> 를 읽는다는 것을
         /// 아는 일은, 지금 그것을 눌러서 무슨 일이 일어나는지를 아는 일이 아니다.
         ///
-        /// 그래서 그것들을 나르는 타입에 대고 모은다. 판독은 실제로 화면에 있는 객체들을 걷고, 그중 어느
+        /// 그래서 그것들을 나르는 타입에 대고 모은다. pulse 는 실제로 화면에 있는 객체들을 걷고, 그중 어느
         /// 것에도 없는 타입은 아무것도 내놓지 않는다.
         /// </remarks>
         private sealed class Offer
@@ -192,7 +192,7 @@ namespace Artel.Affordances.CodeGen
             /// 실제로 Map 씬의 QA 가 그래서 전투에 진입하지 못했다 — 화살표를 눌러 보고 화면이 안 바뀌자
             /// 진입할 수 없다고 판단했다. 근거는 `Return` 이 씬을 바꾼다는 것을 알고 있었다.
             ///
-            /// 정렬된 사전인 이유: 키 순서가 판독마다 흔들리면 그 자체가 차이로 보고된다.
+            /// 정렬된 사전인 이유: 키 순서가 pulse 마다 흔들리면 그 자체가 차이로 보고된다.
             /// </remarks>
             internal readonly SortedDictionary<string, SortedSet<string>> Keys =
                 new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
@@ -222,7 +222,7 @@ namespace Artel.Affordances.CodeGen
 
             if (owner == null)
             {
-                // 어떤 GameObject 도 나르지 않는 타입 위의 경우는 판독이 걷는 무엇에 대고도 내놓을 수 없다. 아무 데도
+                // 어떤 GameObject 도 나르지 않는 타입 위의 경우는 pulse 가 걷는 무엇에 대고도 내놓을 수 없다. 아무 데도
                 // 세지 않는다. 그것이 내놓았을 것은 애초에 테스터에게 주어질 입력이 아니었기 때문이다.
                 return;
             }
@@ -268,7 +268,7 @@ namespace Artel.Affordances.CodeGen
         /// 이 갈래를 타면 무엇이 일어나는가. 읽는 사람이 고를 수 있을 만큼만 짧게.
         /// </summary>
         /// <remarks>
-        /// 효과 전부를 옮기지 않는다. 판독은 초당 열 번 나가고 이 목록은 객체마다 붙으므로, 근거 문서를
+        /// 효과 전부를 옮기지 않는다. pulse 는 초당 열 번 나가고 이 목록은 객체마다 붙으므로, 근거 문서를
         /// 그대로 실으면 크기가 그쪽에 매인다. 여기서 고르는 것은 <b>테스터가 화면에서 확인할 수 있는
         /// 것</b>이다 — 씬이 바뀐다, 어떤 상태가 쓰인다. 나머지는 <c>inspect</c> 로 물을 수 있고,
         /// 물어야 알 만한 것이기도 하다.
@@ -373,7 +373,7 @@ namespace Artel.Affordances.CodeGen
         /// 사라졌다.
         ///
         /// 그래서 구분자를 쓴다. <c>\u0001</c> 은 식별자에도 씬 이름에도 나타날 수 없고 JSON 에서
-        /// 이스케이프된다. 판독으로 나갈 때 <see cref="Artel.Affordances.Live.WatchList"/> 가 다시 가른다.
+        /// 이스케이프된다. pulse 로 나갈 때 <see cref="UnityPlayMcp.Affordances.Live.WatchList"/> 가 다시 가른다.
         /// </remarks>
         private static void Keyed(
             StringBuilder text, SortedDictionary<string, SortedSet<string>> keys)

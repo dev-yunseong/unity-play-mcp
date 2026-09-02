@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// The camera Unity's screen-point helpers need for a RectTransform.

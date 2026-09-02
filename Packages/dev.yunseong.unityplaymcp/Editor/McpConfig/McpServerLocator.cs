@@ -2,7 +2,7 @@ using System;
 using System.Reflection;
 using UnityEditor.PackageManager;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 이 기계에서 빌드된 MCP server 의 entry point 를 찾는다.

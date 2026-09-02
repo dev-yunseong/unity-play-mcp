@@ -1,11 +1,11 @@
 using System.IO;
 using System.Linq;
-using Artel.McpConfig.Editor;
+using UnityPlayMcp.McpConfig.Editor;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
-namespace Artel.Tests.McpConfig
+namespace UnityPlayMcp.Tests.McpConfig
 {
     /// <remarks>
     /// <see cref="McpAgentConfigurator"/> 는 <see cref="McpConfigFileStore"/> 로 실제 disk 를 읽고 쓰므로,

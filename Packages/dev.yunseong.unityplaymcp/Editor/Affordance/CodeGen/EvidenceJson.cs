@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>런타임 스캐너를 위해 유계이고 결정적인 근거 문서 하나를 쓴다.</summary>
     internal static class EvidenceJson

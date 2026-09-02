@@ -2,7 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// An edit-mode test on purpose: outside play mode Unity never runs <c>OnEnable</c>, so no

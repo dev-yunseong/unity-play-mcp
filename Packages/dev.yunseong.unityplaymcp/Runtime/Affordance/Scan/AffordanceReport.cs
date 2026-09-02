@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 방문한 모든 씬을 통틀어, 여태 본 모든 것.
@@ -549,7 +549,7 @@ namespace Artel.Affordances.Scan
             // `build` 가 있고 무엇이 이 문서를 만들었는지 말한다.
             "build-info-v1",
 
-            // 모든 객체가 `selector` 를 나르고, 이번 판독에 한해 제 씬 안에서 유일하다.
+            // 모든 객체가 `selector` 를 나르고, 이번 pulse 에 한해 제 씬 안에서 유일하다.
             "selector-v1",
 
             // `visuals[]` 가 모든 텍스트와 그림에 역할을 주고, `label` 과 `sprite` 는 컨트롤의 이름을 대거나 아예 없다 — 더는
@@ -572,14 +572,11 @@ namespace Artel.Affordances.Scan
             text.Append(',');
             Json.Property(text, "development", Debug.isDebugBuild);
             text.Append(',');
-            Json.Property(text, "sdk", PackageVersion);
+            Json.Property(text, "sdk", PackageVersion.Value);
             text.Append(',');
             Json.Property(text, "evidence", Fingerprint());
             text.Append('}');
         }
-
-        /// <summary>`package.json` 과 손으로 맞춘다. 읽어 올 다른 자리가 없다.</summary>
-        private const string PackageVersion = "0.1.0";
 
         private static string Backend()
         {

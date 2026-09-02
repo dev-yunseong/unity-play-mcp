@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Artel.Diagnostics;
+using UnityPlayMcp.Diagnostics;
 using NUnit.Framework;
 
-namespace Artel.Tests.Diagnostics
+namespace UnityPlayMcp.Tests.Diagnostics
 {
     public sealed class FrameTimingSamplerTests
     {

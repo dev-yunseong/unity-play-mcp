@@ -1,4 +1,4 @@
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 프레임을 가장 오래 붙잡은 구간. 메인 스레드·렌더 스레드·GPU 중 무엇이 가장 길었는지로 정한다.

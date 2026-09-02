@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
-    /// <summary>바뀐 판독이 가는 자리.</summary>
+    /// <summary>바뀐 pulse 가 가는 자리.</summary>
     /// <remarks>
     /// 소켓이 아니라 이음매다. 이 패키지는 JSON 을 손으로 써서 그것을 싣고 나가는 게임이 직렬화 의존성을 지지 않게 하는데,
     /// 여기에 전송을 넣으면 원하든 원하지 않든 모든 게임에 대해 그것을 되돌리게 된다. 도착하는 것은 완성된 문서이고,
@@ -26,10 +26,10 @@ namespace Artel.Affordances.Live
     /// 받은 독자는 그중 무엇이 중요했는지를 스스로 알아내야 한다.
     ///
     /// 결정하는 것은 문서의 다이제스트가 아니라 움직인 값의 목록이다. 다이제스트를 먼저 시도했는데, 실행해 봐야만 드러나는
-    /// 방식으로 틀렸다: 문서는 그것이 몇 번째 판독인지와 어느 프레임에 찍혔는지를 나르고 둘 다 매번 다르므로, 모든 판독이
-    /// 새것으로 보였고 게이트는 단 한 번도 닫히지 않았다. 샘플 게임에서 실측하니 판독 33 건 중 33 건이 나갔고 그중 22 건이
-    /// 제 텍스트로 아무것도 바뀌지 않았다고 말하고 있었다. 값 자체를 비교하는 것은 판독이 주장하는 바에서 어긋날 수 없다.
-    /// 판독이 발행하는 바로 그 비교이기 때문이다.
+    /// 방식으로 틀렸다: 문서는 그것이 몇 번째 pulse 인지와 어느 프레임에 찍혔는지를 나르고 둘 다 매번 다르므로, 모든 pulse 가
+    /// 새것으로 보였고 게이트는 단 한 번도 닫히지 않았다. 샘플 게임에서 실측하니 pulse 33 건 중 33 건이 나갔고 그중 22 건이
+    /// 제 텍스트로 아무것도 바뀌지 않았다고 말하고 있었다. 값 자체를 비교하는 것은 pulse 가 주장하는 바에서 어긋날 수 없다.
+    /// pulse 가 발행하는 바로 그 비교이기 때문이다.
     ///
     /// 게이트가 일하게 만드는 것은 그 위쪽에 있다. 경계 없는 씬 덤프를 해싱하면 매 프레임 변화를 보고하게 되고 — 숨 쉬는
     /// idle 애니메이션 하나면 충분하다 — 그래서 다른 SDK 의 전부 읽기 모드는 플레이 중에 쓸 수 있었던 적이 없다. 이쪽은
@@ -54,7 +54,7 @@ namespace Artel.Affordances.Live
         /// </remarks>
         internal const int SchemaVersion = 2;
 
-        /// <summary>판독 사이의 초.</summary>
+        /// <summary>pulse 사이의 초.</summary>
         /// <remarks>
         /// 초당 하나. 전에는 초당 열이었는데, 감시 대상 멤버를 초당 열 번 읽는 값이 플레이 모드에서 게임을 눈에 띄게 느리게
         /// 만들었다. 그러면 agent 가 보는 화면과 조작 결과가 게임이 실제로 어떻게 도는지를 말하지 못한다.
@@ -85,19 +85,19 @@ namespace Artel.Affordances.Live
         private float _interval = DefaultInterval;
         private float _delivery = DefaultDelivery;
 
-        /// <summary>찍었으나 아직 건네지 않은 판독들.</summary>
+        /// <summary>찍었으나 아직 건네지 않은 pulse 들.</summary>
         private readonly System.Collections.Generic.List<string> _pending =
             new System.Collections.Generic.List<string>();
         private bool _read;
 
-        /// <summary>직전 판독이 sink 에 닿지 못했는지.</summary>
+        /// <summary>직전 pulse 가 sink 에 닿지 못했는지.</summary>
         private bool _lost;
 
         /// <summary>
-        /// 감시가 시작된 순간부터 세어 이것이 몇 번째 판독인지.
+        /// 감시가 시작된 순간부터 세어 이것이 몇 번째 pulse 인지.
         /// </summary>
         /// <remarks>
-        /// 보낸 것마다가 아니라 찍은 판독마다 센다. 그래서 번호의 빈자리 자체가 소식이다: 그 구간 동안 상태가 가만히 있었다는
+        /// 보낸 것마다가 아니라 찍은 pulse 마다 센다. 그래서 번호의 빈자리 자체가 소식이다: 그 구간 동안 상태가 가만히 있었다는
         /// 말인데, 그것이 없으면 독자는 타임스탬프 둘과 간격에 대한 추측으로 그것을 유추해야 한다.
         /// </remarks>
         private long _reading;
@@ -113,18 +113,18 @@ namespace Artel.Affordances.Live
         /// </remarks>
         private readonly Restless _pixels = new Restless(1f);
 
-        /// <summary>직전 판독이 한 말. 이번 판독이 그 차이를 말할 수 있도록.</summary>
+        /// <summary>직전 pulse 가 한 말. 이번 pulse 가 그 차이를 말할 수 있도록.</summary>
         private readonly System.Collections.Generic.Dictionary<string, string> _since =
             new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
 
         internal static bool InProgress => _beating != null;
 
-        /// <summary>이것이 시작된 뒤로 나간 판독의 수.</summary>
+        /// <summary>이것이 시작된 뒤로 나간 pulse 의 수.</summary>
         internal static int Sent { get; private set; }
 
-        /// <summary>찍었으나 바뀌지 않은 것으로 판명된 판독의 수.</summary>
+        /// <summary>찍었으나 바뀌지 않은 것으로 판명된 pulse 의 수.</summary>
         /// <remarks>
-        /// 말해 두는 것은 두 숫자가 함께여야 게이트가 무슨 일이든 하고 있음을 보이기 때문이다. 모든 판독이 나가는 게임은 어떤
+        /// 말해 두는 것은 두 숫자가 함께여야 게이트가 무슨 일이든 하고 있음을 보이기 때문이다. 모든 pulse 가 나가는 게임은 어떤
         /// 조건도 언급하지 않는 이유로 움직이는 멤버를 watch list 에 가진 것이고, 그것은 우회해 조율할 것이 아니라 가서 봐야
         /// 할 것이다.
         /// </remarks>
@@ -138,7 +138,7 @@ namespace Artel.Affordances.Live
                 return false;
             }
 
-            var carrier = new GameObject("Artel Pulse") { hideFlags = HideFlags.HideAndDontSave };
+            var carrier = new GameObject("Unity Play MCP Pulse") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(carrier);
 
             _beating = carrier.AddComponent<Pulse>();
@@ -174,7 +174,7 @@ namespace Artel.Affordances.Live
         {
             var untilDelivery = _delivery;
 
-            // 첫 판독은 언제나 나간다. 아직 아무 말도 하지 않았으므로 "바뀌지 않음" 은 이것이 그것에 대해 할 수 있는 주장이 아니다.
+            // 첫 pulse 는 언제나 나간다. 아직 아무 말도 하지 않았으므로 "바뀌지 않음" 은 이것이 그것에 대해 할 수 있는 주장이 아니다.
             while (_beating == this)
             {
                 Take();
@@ -204,18 +204,18 @@ namespace Artel.Affordances.Live
                 }
                 catch (Exception exception)
                 {
-                    // 판독은 도착했든 아니든 유효하다. 다음 전달에 그것들을 다시 보내면 sink 가 언짢은 동안 계속 그러게 되는데, 그것이 소켓
+                    // pulse 는 도착했든 아니든 유효하다. 다음 전달에 그것들을 다시 보내면 sink 가 언짢은 동안 계속 그러게 되는데, 그것이 소켓
                     // 하나가 망가진 것을 홍수로 바꾸는 모양이다.
                     //
-                    // 대신 다음 것이 전량으로 나간다. 판독은 움직인 것만 나르므로 잃어버린 하나는 아무도 다시 듣지 못할 차이다 — 독자는
-                    // 무언가 그 값들을 움직이기 전까지 그것들에 대해 틀린 채로 있고, 그런 일은 영영 없을 수도 있다. 전량 판독 하나가 그것을
+                    // 대신 다음 것이 전량으로 나간다. pulse 는 움직인 것만 나르므로 잃어버린 하나는 아무도 다시 듣지 못할 차이다 — 독자는
+                    // 무언가 그 값들을 움직이기 전까지 그것들에 대해 틀린 채로 있고, 그런 일은 영영 없을 수도 있다. 전량 pulse 하나가 그것을
                     // 고치고 그다음부터 차이가 다시 이어진다.
                     //
-                    // 배치의 나머지는 시도하지 않고 버린다. 그것들은 도착하지 않은 판독에 대한 차이이므로, 보내면 독자는 값을 들은 적도 없는
+                    // 배치의 나머지는 시도하지 않고 버린다. 그것들은 도착하지 않은 pulse 에 대한 차이이므로, 보내면 독자는 값을 들은 적도 없는
                     // 것에 대한 변경을 쥐게 된다.
                     _lost = true;
                     _pending.Clear();
-                    Debug.LogWarning("[Artel] A reading could not be delivered: " + exception.Message);
+                    Debug.LogWarning("[Unity Play MCP] A reading could not be delivered: " + exception.Message);
                     return;
                 }
 
@@ -241,9 +241,9 @@ namespace Artel.Affordances.Live
             }
             catch (Exception exception)
             {
-                // 나쁜 판독 하나는 건너뛸 판독이지 감시를 멈출 이유가 아니다. 던지는 필드는 이미 문서 안에서 읽지 못한 것으로
+                // 나쁜 pulse 하나는 건너뛸 pulse 이지 감시를 멈출 이유가 아니다. 던지는 필드는 이미 문서 안에서 읽지 못한 것으로
                 // 보고된다. 이것은 걷기 자체가 무너진 경우이고, 씬이 헐리는 중이면 그런 일이 생길 수 있다.
-                Debug.LogWarning("[Artel] A reading could not be taken: " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] A reading could not be taken: " + exception.Message);
                 return;
             }
 

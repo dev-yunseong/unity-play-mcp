@@ -5,7 +5,7 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Text;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>게임이 도는 동안 읽어 달라고 근거가 청하는 멤버 하나.</summary>
     internal sealed class Watched
@@ -27,7 +27,7 @@ namespace Artel.Affordances.Live
         /// </summary>
         /// <remarks>
         /// 자동 프로퍼티는 <c>&lt;Instance&gt;k__BackingField</c> 라 불리는 필드다. 그 이름이 그것을 찾아 주고 다른 무엇도
-        /// 그것을 쓰지 않는다 — 근거는 <c>StageDataSingleton.Instance</c> 라고 말한다 — 그래서 필드 이름을 댄 판독은 그것이
+        /// 그것을 쓰지 않는다 — 근거는 <c>StageDataSingleton.Instance</c> 라고 말한다 — 그래서 필드 이름을 댄 pulse 는 그것이
         /// 답하는 조건에 이어지지 않는다.
         /// </remarks>
         internal string Property;
@@ -74,7 +74,7 @@ namespace Artel.Affordances.Live
     /// </remarks>
     internal static class WatchList
     {
-        private const string ResourceName = "kr.artel.affordance.watch";
+        private const string ResourceName = "dev.yunseong.unityplaymcp.affordance.watch";
 
         private static List<Watched> _resolved;
         private static List<string> _animatorNames;
@@ -84,13 +84,13 @@ namespace Artel.Affordances.Live
         /// 플레이어가 어떤 타입을 움직이게 만들 수 있는 방법들. 그것이 씬 안의 무엇에 붙어 있을 때.
         /// </summary>
         /// <remarks>
-        /// 판독은 게임이 무엇을 쥐고 있는지를 말하고, 이것이 없으면 다음에 그것에 무엇을 할 수 있는지는 아무것도 말하지 않는다.
+        /// pulse 는 게임이 무엇을 쥐고 있는지를 말하고, 이것이 없으면 다음에 그것에 무엇을 할 수 있는지는 아무것도 말하지 않는다.
         /// 스캔은 버튼을 스스로 찾는다 — persistent call 은 누구나 볼 수 있는 배선이다 — 그리고 이것들이 스캔이 볼 수 없는
         /// 둘이다: 여기서 어떤 키가 뜻을 가지는가, 그리고 어떤 객체가 포인터에 답하는가. 둘 다 컴파일된 코드 안의 리터럴과
         /// 메서드 이름이다.
         ///
         /// 씬이 아니라 타입으로 키를 잡는다. 키를 뜻 있게 만드는 것은 그것을 읽는 무언가가 지금 화면에 있다는 사실이기
-        /// 때문이다. 판독은 거기 있는 객체들을 걷고 각각의 컴포넌트에 물으므로, 그 타입이 없는 화면은 누가 여기가 어느 화면인지
+        /// 때문이다. pulse 는 거기 있는 객체들을 걷고 각각의 컴포넌트에 물으므로, 그 타입이 없는 화면은 누가 여기가 어느 화면인지
         /// 알아내지 않아도 아무것도 내놓지 않는다.
         /// </remarks>
         internal sealed class Offer
@@ -103,7 +103,7 @@ namespace Artel.Affordances.Live
         /// <remarks>
         /// 이름만 나르던 자리다. 그때는 씬의 키 다섯이 대등하게 실려, 어느 것이 무엇을 하는지 읽는 쪽이 알
         /// 길이 없었다 — 실제로 Map 씬의 QA 가 그래서 전투에 진입하지 못했다. 근거는 `Return` 이 씬을
-        /// 바꾼다는 것을 알고 있었고, 그 앎이 여기서 버려지고 있었다(ARTEL-539).
+        /// 바꾼다는 것을 알고 있었고, 그 앎이 여기서 버려지고 있었다.
         ///
         /// <see cref="Does"/> 가 비어 있는 것은 "아무 일도 안 한다" 가 아니라 "분석이 못 읽었다" 이다.
         /// 그 둘은 읽는 쪽의 다음 수가 다르므로 방출에서도 갈라 쓴다.
@@ -131,9 +131,9 @@ namespace Artel.Affordances.Live
         /// 게임 코드가 animator 에 건네는 모든 이름.
         /// </summary>
         /// <remarks>
-        /// Unity 는 animator 가 있는 상태를 해시로 돌려주고 그것을 말로 바꿔 주는 것은 없으므로, 판독은 상태가 바뀌었다고만
+        /// Unity 는 animator 가 있는 상태를 해시로 돌려주고 그것을 말로 바꿔 주는 것은 없으므로, pulse 는 상태가 바뀌었다고만
         /// 말하고 무엇으로 바뀌었는지는 말하지 못한다 — 화면 녹화가 이미 보여 주는 절반이고, 녹화가 줄 수 없는 절반은 아니다.
-        /// <c>IsName</c> 은 그 물음에 거꾸로 답하므로, 후보를 아는 판독은 물어서 상태의 이름을 댈 수 있다.
+        /// <c>IsName</c> 은 그 물음에 거꾸로 답하므로, 후보를 아는 pulse 는 물어서 상태의 이름을 댈 수 있다.
         /// </remarks>
         internal static IReadOnlyList<string> AnimatorNames
         {
@@ -320,8 +320,8 @@ namespace Artel.Affordances.Live
         /// 필드가 쥔 것에서 실제로 걸어갈 수 있을 때의 경로 — 아니면 없음.
         /// </summary>
         /// <remarks>
-        /// 판독마다 묻지 않고 여기서 한 번 결정한다. 타입이 어떤 멤버를 가졌는지는 게임이 도는 동안 바뀌지 않고, 옆의 이름과
-        /// 다르게 답하는 판독은 둘 중 어느 답보다도 나쁘기 때문이다.
+        /// pulse 마다 묻지 않고 여기서 한 번 결정한다. 타입이 어떤 멤버를 가졌는지는 게임이 도는 동안 바뀌지 않고, 옆의 이름과
+        /// 다르게 답하는 pulse 는 둘 중 어느 답보다도 나쁘기 때문이다.
         ///
         /// 걸어지지 않을 때는 보고하지 않고 떨어뜨린다. 근거는 필드로 가는 길에 <c>transform</c> 을 벗겨 내므로,
         /// <c>MapMove.battle1.transform.position</c> 으로 쓰인 목적지가 여기에는 <c>GameObject</c> 위의 <c>position</c> 으로
@@ -391,7 +391,7 @@ namespace Artel.Affordances.Live
         /// <remarks>
         /// 배열이 평평한 이유는 <see cref="Entries"/> 에 있다. 그것은 항목의 끝을 첫 <c>}</c> 로 찾으므로
         /// — 괄호를 셀 수 없다, 필드가 제 대괄호를 나르는 제네릭 타입 이름을 쥔다 — 키를 객체로 만들면
-        /// 항목이 첫 키에서 잘린다. 실제로 그렇게 만들었다가 키가 통째로 사라졌다(ARTEL-539).
+        /// 항목이 첫 키에서 잘린다. 실제로 그렇게 만들었다가 키가 통째로 사라졌다.
         ///
         /// 구분자가 없는 항목은 옛 형식이다. 그때는 이름만 실렸고, 그 리소스로 만든 빌드도 무엇을 누를 수
         /// 있는지는 그대로 말할 수 있어야 한다.

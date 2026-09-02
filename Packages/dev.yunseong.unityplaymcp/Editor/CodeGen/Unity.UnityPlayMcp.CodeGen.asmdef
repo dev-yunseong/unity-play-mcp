@@ -1,8 +1,9 @@
 {
-  "name": "Artel.McpConfig.Editor",
-  "rootNamespace": "Artel.McpConfig.Editor",
+  "name": "Unity.UnityPlayMcp.CodeGen",
+  "rootNamespace": "UnityPlayMcp.CodeGen",
   "references": [
-    "Artel.Affordances.Scan"
+    "UnityPlayMcp.Runtime",
+    "Unity.CompilationPipeline.Common.dll"
   ],
   "includePlatforms": [
     "Editor"
@@ -11,10 +12,11 @@
   "allowUnsafeCode": false,
   "overrideReferences": true,
   "precompiledReferences": [
-    "Newtonsoft.Json.dll"
+    "Mono.Cecil.dll",
+    "Unity.CompilationPipeline.Common.dll"
   ],
   "autoReferenced": false,
   "defineConstraints": [],
   "versionDefines": [],
-  "noEngineReferences": false
+  "noEngineReferences": true
 }

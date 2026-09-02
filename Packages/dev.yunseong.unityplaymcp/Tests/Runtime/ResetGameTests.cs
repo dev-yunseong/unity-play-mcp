@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol.Dto;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// reset_game reloads the scene the run started in. The one thing it must never do is reload
@@ -13,7 +13,7 @@ namespace Artel.Tests
     public sealed class ResetGameTests
     {
         /// <summary>게임이 쓴 것처럼 굴 키. 이 스위트가 PlayerPrefs 에 남기는 유일한 흔적이다.</summary>
-        private const string GameKey = "artel.tests.gameKey";
+        private const string GameKey = "unityplaymcp.tests.gameKey";
 
         [TearDown]
         public void TearDown()

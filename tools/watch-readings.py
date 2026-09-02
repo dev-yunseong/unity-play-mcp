@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""라이브 판독을 1초마다 다시 읽는 페이지로 낸다.
+"""라이브 reading 을 1초마다 다시 읽는 페이지로 낸다.
 
-이것은 소비자이고, 일부러 멍청한 소비자다. 채널은 씬이 바뀔 때 전량 판독을, 그 외에는 차이를
-보내므로 그것을 읽는 쪽은 마지막 전량 판독을 쥐고 그 위에 차이를 얹어야 한다. 그 일을 여기서
+이것은 소비자이고, 일부러 멍청한 소비자다. 채널은 씬이 바뀔 때 전량 pulse 를, 그 외에는 차이를
+보내므로 그것을 읽는 쪽은 마지막 전량 pulse 를 쥐고 그 위에 차이를 얹어야 한다. 그 일을 여기서
 하는 것이 요점이다: 페이지가 도착한 것만으로 화면의 현재 상태를 보일 수 있으면 채널이 충분한
 것이고, 못 보이면 부족한 자리가 논쟁이 아니라 눈에 보인다.
 
@@ -12,7 +12,7 @@
 없을 것이다 — 그것은 게임이 아니라 프로세스에 관한 값이고 — 소켓이 이미 듣는 쪽에 그것을
 나르고 있다.
 
-    tools/watch-readings.py [--port 8770] [--file <path to artel-pulse.jsonl>]
+    tools/watch-readings.py [--port 8770] [--file <path to unity-play-mcp-pulse.jsonl>]
                             [--socket ws://127.0.0.1:17311]
 
 그리고 http://localhost:8770 을 열고 에디터에서 게임을 플레이한다.
@@ -25,19 +25,19 @@ import os
 import socketserver
 
 DEFAULT_FILE = os.path.expanduser(
-    "~/Library/Application Support/Team6203/WordVenture/artel-pulse.jsonl"
+    "~/Library/Application Support/Team6203/WordVenture/unity-play-mcp-pulse.jsonl"
 )
 
-# ArtelManager 의 websocketPort. 그 컴포넌트가 씬에 있으면 언제나 열려 있다.
+# UnityPlayMcpHost 의 websocketPort. 그 컴포넌트가 씬에 있으면 언제나 열려 있다.
 #
-# 경로 /ws 가 붙는다. ArtelWebSocketServer 가 AddWebSocketService("/ws", ...) 로 거기에만
+# 경로 /ws 가 붙는다. AgentWebSocketServer 가 AddWebSocketService("/ws", ...) 로 거기에만
 # 서비스를 매단다. 루트로 붙으면 포트는 열려 있고 핸드셰이크만 조용히 거절당하므로, 게임이
 # 돌고 있는데도 버튼이 살아나지 않는 모습이 된다.
 DEFAULT_SOCKET = "ws://127.0.0.1:17311/ws"
 
 PAGE = """<!doctype html>
 <meta charset="utf-8">
-<title>Artel — live readings</title>
+<title>Unity Play MCP — live readings</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 16px; }
@@ -88,23 +88,23 @@ PAGE = """<!doctype html>
                 border: 1px solid rgba(128,128,128,.4); background: transparent; }
   .bar button:disabled { opacity: .4; cursor: default; }
 </style>
-<h1>Artel — live readings</h1>
+<h1>Unity Play MCP — live readings</h1>
 <div class="bar">
   <span>씬 <b id="scene">—</b></span>
-  <span>판독 <b id="reading">—</b></span>
+  <span>reading <b id="reading">—</b></span>
   <span>받은 문서 <b id="docs">0</b> (전량 <b id="whole">0</b>)</span>
   <span>오브젝트 <b id="count">0</b> (꺼짐 <b id="off">0</b>)</span>
   <span id="stale"></span>
 </div>
 <div class="bar">
-  <button id="go">판독 시작</button>
-  <button id="halt">판독 종료</button>
-  <span id="run">판독 <b>모름</b></span>
+  <button id="go">reading 시작</button>
+  <button id="halt">reading 종료</button>
+  <span id="run">reading <b>모름</b></span>
   <span id="quiet"></span>
   <span id="said"></span>
 </div>
 <div class="tabs">
-  <button id="tab-pulse" class="sel" onclick="show('pulse')">판독</button>
+  <button id="tab-pulse" class="sel" onclick="show('pulse')">pulse</button>
   <button id="tab-perf" onclick="show('perf')">성능</button>
   <button id="tab-raw" onclick="show('raw')">원문</button>
 </div>
@@ -161,7 +161,7 @@ function show(which) {
     document.getElementById("tab-" + one).classList.toggle("sel", one === which);
   }
 }
-// 마지막 전량 판독에 그 뒤의 모든 차이를 얹은 것. scene+selector 로 키를 잡는다. 경로는
+// 마지막 전량 pulse 에 그 뒤의 모든 차이를 얹은 것. scene+selector 로 키를 잡는다. 경로는
 // 정체가 아니기 때문이다 — 만들어진 적 다섯이 하나를 공유한다.
 let held = new Map();
 // static 은 매달릴 객체가 없다 — 그것들이 따로 구워지는 이유 전체가 그것이다. 화면의 전제는
@@ -176,7 +176,7 @@ const moved = new Map();
 
 // 원문 그대로. 이 페이지가 접어서 그린 것과 채널이 실제로 보낸 것을 나란히 댈 수 있어야
 // 접는 과정에서 잃은 것이 보인다. 바운드를 두는 이유는 한 시간 열어 둔 페이지가 그 시간의
-// 모든 판독을 붙들고 있을 이유가 없기 때문이다.
+// 모든 pulse 를 붙들고 있을 이유가 없기 때문이다.
 const raws = [];
 
 function drawRaw() {
@@ -185,7 +185,7 @@ function drawRaw() {
     ? raws.map(d => {
         const n = (d.changed ?? []).length;
         return `<div class="raw"><div class="head">`
-          + `<span>판독 <b>${d.reading ?? "?"}</b></span>`
+          + `<span>reading <b>${d.reading ?? "?"}</b></span>`
           + `<span>프레임 ${d.frame ?? "?"}</span>`
           + `<span>${d.scene ?? "—"}</span>`
           + (d.whole ? `<span class="whole">전량</span>` : `<span>델타</span>`)
@@ -211,7 +211,7 @@ function apply(doc) {
     statics.set((st.declaring ?? "") + "::" + (st.member ?? ""), st);
   }
 
-  // 객체가 어느 목록으로 도착하는지가 그것이 켜져 있는지를 말한다. 이번 판독에 아무 말도 하지
+  // 객체가 어느 목록으로 도착하는지가 그것이 켜져 있는지를 말한다. 이번 pulse 에 아무 말도 하지
   // 않는 객체는 마지막으로 있던 목록에 그대로 남고, 그것이 옳다 — 그것이 바뀌는 일 자체가
   // 차이이고 그러면 그 객체를 여기로 데려왔을 것이기 때문이다.
   for (const [live, list] of [[true, doc.active], [false, doc.deactive]]) {
@@ -325,13 +325,13 @@ function draw() {
 const SOCKET = "__SOCKET__";
 let perf = [];
 
-// 성능 탭이 읽는 것과 같은 소켓이다. 판독은 연결이 아니라 세션이므로 — 연결은 도구가 봐도
-// 된다는 말이고 시작은 실행이 시작됐다는 말이다 — 그것을 말할 자리가 있어야 하고, 판독을
+// 성능 탭이 읽는 것과 같은 소켓이다. reading 은 연결이 아니라 세션이므로 — 연결은 도구가 봐도
+// 된다는 말이고 시작은 실행이 시작됐다는 말이다 — 그것을 말할 자리가 있어야 하고, pulse 를
 // 지켜보는 자리가 이 페이지다.
 let socket = null;
 let actionId = 1;
 
-// 판독이 도는지, 마지막 문서가 언제였는지. 정지 화면은 아무것도 내보내지 않는 것이 옳은
+// pulse 가 도는지, 마지막 문서가 언제였는지. 정지 화면은 아무것도 내보내지 않는 것이 옳은
 // 동작이라, 그 침묵과 "아직 시작 안 함" 이 화면에서 같아 보이면 안 된다.
 let running = null;
 let lastDoc = null;
@@ -339,7 +339,7 @@ let pending = null;
 
 function drawRun() {
   const el = document.getElementById("run");
-  el.innerHTML = "판독 <b>"
+  el.innerHTML = "reading <b>"
     + (running === true ? "도는 중" : running === false ? "멈춤" : "모름") + "</b>";
   el.className = running === false ? "warn" : "";
 
@@ -347,7 +347,7 @@ function drawRun() {
   if (running !== true) { quiet.textContent = ""; return; }
   quiet.textContent = lastDoc === null
     ? "아직 한 건도 안 옴"
-    : "마지막 판독 " + Math.round((Date.now() - lastDoc) / 1000) + "초 전 "
+    : "마지막 pulse " + Math.round((Date.now() - lastDoc) / 1000) + "초 전 "
       + "— 화면이 그대로면 이것이 맞는 동작입니다";
 }
 setInterval(drawRun, 1000);
@@ -385,12 +385,12 @@ function connectSocket() {
 
   socket.onopen = () => mark("붙음 — " + SOCKET);
   socket.onclose = () => {
-    // 게임이 멈추면 세션도 끝난다. 다시 붙어도 판독은 꺼진 채이므로 그렇게 말한다.
+    // 게임이 멈추면 세션도 끝난다. 다시 붙어도 reading 은 꺼진 채이므로 그렇게 말한다.
     running = null; drawRun();
     mark("끊김. 5초 뒤 다시", true);
     setTimeout(connectSocket, 5000);
   };
-  socket.onerror = () => mark("오류 — 게임이 실행 중이고 ArtelManager 가 씬에 있어야 합니다", true);
+  socket.onerror = () => mark("오류 — 게임이 실행 중이고 UnityPlayMcpHost 가 씬에 있어야 합니다", true);
 
   socket.onmessage = event => {
     let doc;
@@ -398,7 +398,7 @@ function connectSocket() {
 
     if (doc.type === "ACTION_RESULT") {
       // 체크 표시가 아니라 온전한 문장으로 말한다. 거절은 제 이유의 이름을 댄다 — 출시 빌드는
-      // 판독을 하지 않는다 — 그것을 감추면 죽은 버튼이 살아 있는 것처럼 보인다.
+      // reading 을 하지 않는다 — 그것을 감추면 죽은 버튼이 살아 있는 것처럼 보인다.
       const r = (doc.results ?? [])[0] ?? {};
       const said = document.getElementById("said");
       said.textContent = r.success ? "됨" : ("거절 — " + (r.error || "이유 없음"));

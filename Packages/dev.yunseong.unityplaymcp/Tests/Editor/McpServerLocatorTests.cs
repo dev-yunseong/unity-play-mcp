@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Artel.McpConfig.Editor;
+using UnityPlayMcp.McpConfig.Editor;
 using NUnit.Framework;
 
-namespace Artel.Tests.McpConfig
+namespace UnityPlayMcp.Tests.McpConfig
 {
     public sealed class McpServerLocatorTests
     {

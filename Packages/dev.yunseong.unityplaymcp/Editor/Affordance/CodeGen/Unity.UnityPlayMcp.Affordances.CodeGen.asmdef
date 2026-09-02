@@ -1,8 +1,7 @@
 {
-  "name": "Unity.Artel.CodeGen",
-  "rootNamespace": "Artel.CodeGen",
+  "name": "Unity.UnityPlayMcp.Affordances.CodeGen",
+  "rootNamespace": "UnityPlayMcp.Affordances.CodeGen",
   "references": [
-    "Artel.Runtime",
     "Unity.CompilationPipeline.Common.dll"
   ],
   "includePlatforms": [

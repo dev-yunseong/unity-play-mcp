@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>맨 위로만 들어오고 맨 아래로만 나가는 명령어의 한 줄기.</summary>
     internal sealed class BasicBlock

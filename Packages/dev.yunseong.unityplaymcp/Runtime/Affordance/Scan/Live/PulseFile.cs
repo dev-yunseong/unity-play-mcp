@@ -2,10 +2,10 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
-    /// 바뀐 판독마다 한 줄씩 쓴다. 소켓이 전혀 없어도 판독을 지켜볼 수 있도록.
+    /// 바뀐 pulse 마다 한 줄씩 쓴다. 소켓이 전혀 없어도 pulse 를 지켜볼 수 있도록.
     /// </summary>
     /// <remarks>
     /// 연결이 아니라 파일인 것은, 아무도 듣고 있지 않은 동안에도 패키지가 쓸모 있어야 하기 때문이다. 이것을 tail 하는
@@ -13,17 +13,17 @@ namespace Artel.Affordances.Live
     /// 보이는 채널이다.
     ///
     /// 한 줄에 문서 하나이고 다시 서식을 입히지 않으므로, 파일은 그것에 대한 진술이 아니라 도착한 그것이다. 갈아치우지
-    /// 않고 덧붙인다: 입력 전의 상태가 입력 후의 상태를 뜻 있게 만드는 것이고, 최신 판독만 쥔 파일은 무엇이 바뀌었는지를
+    /// 않고 덧붙인다: 입력 전의 상태가 입력 후의 상태를 뜻 있게 만드는 것이고, 최신 pulse 만 쥔 파일은 무엇이 바뀌었는지를
     /// 말하는 모든 쌍의 절반을 버린다.
     ///
-    /// 핸들은 열어 둔다. 판독마다 열고 닫는 것이 판독 하나를 짓는 것보다 비싸고, 줄마다 하는 flush 가 독자로 하여금
+    /// 핸들은 열어 둔다. pulse 마다 열고 닫는 것이 pulse 하나를 짓는 것보다 비싸고, 줄마다 하는 flush 가 독자로 하여금
     /// 버퍼를 기다리지 않고 그것을 보게 한다.
     /// </remarks>
     public sealed class PulseFile : IPulseSink, System.IDisposable
     {
-        private const string FileName = "artel-pulse.jsonl";
+        private const string FileName = "unity-play-mcp-pulse.jsonl";
 
-        /// <summary>판독이 쓰이는 자리.</summary>
+        /// <summary>pulse 가 쓰이는 자리.</summary>
         public static string Path => System.IO.Path.Combine(Application.persistentDataPath, FileName);
 
         private StreamWriter _writer;
@@ -56,7 +56,7 @@ namespace Artel.Affordances.Live
             }
             catch (System.Exception exception)
             {
-                Debug.LogWarning("[Artel] Could not open " + Path + ": " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] Could not open " + Path + ": " + exception.Message);
                 return null;
             }
         }

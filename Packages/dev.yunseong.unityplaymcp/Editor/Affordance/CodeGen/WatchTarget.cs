@@ -1,7 +1,7 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 살아 있는 값이 무언가를 결정하는 멤버. 되읽을 수 있을 만큼 정확히 이름 붙인 것.
@@ -39,7 +39,7 @@ namespace Artel.Affordances.CodeGen
         /// <remarks>
         /// 자동 프로퍼티는 <c>&lt;Instance&gt;k__BackingField</c> 라 불리는 필드이고, 리플렉션에 필요한 이름이
         /// 그것이다. 다른 무엇도 그 이름을 쓰지 않는다: 근거는 <c>StageDataSingleton.Instance</c> 라고 하므로,
-        /// 멤버 이름에 대한 조건에 판독을 이어 붙이려는 독자는 아무것도 찾지 못한다. 둘 다 쓴다 — 찾아볼 때 쓸
+        /// 멤버 이름에 대한 조건에 pulse 를 이어 붙이려는 독자는 아무것도 찾지 못한다. 둘 다 쓴다 — 찾아볼 때 쓸
         /// 이름과, 나머지 전부가 그것을 부르는 이름.
         /// </remarks>
         internal string Property;
@@ -65,7 +65,7 @@ namespace Artel.Affordances.CodeGen
         /// </summary>
         /// <remarks>
         /// <c>spellCards.Count == 1</c> 은 목록의 크기에 대한 것이고, 목록이 필드다. 필드를 감시하면 답이 된다 —
-        /// 판독은 컬렉션을 그 개수로 쓴다 — 다만 양쪽 끝이 그 두 숫자 중 어느 쪽을 비교하는지에 대해 합의할
+        /// pulse 는 컬렉션을 그 개수로 쓴다 — 다만 양쪽 끝이 그 두 숫자 중 어느 쪽을 비교하는지에 대해 합의할
         /// 때만 그렇다. 타입에서 추론하도록 두지 않고 적어 둔다.
         ///
         /// 필드 자체가 값일 때는 null 이고, 대부분이 그렇다.

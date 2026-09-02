@@ -1,7 +1,7 @@
 using System;
 using UnityEditor;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 고른 <see cref="McpConfigScope"/> 를 Unity project 별로 기억한다.

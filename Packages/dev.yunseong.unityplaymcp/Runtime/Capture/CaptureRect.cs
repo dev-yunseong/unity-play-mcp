@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Artel.Capture
+namespace UnityPlayMcp.Capture
 {
     /// <summary>
     /// The screen pixels a capture reads, and whether the screen cut them short.

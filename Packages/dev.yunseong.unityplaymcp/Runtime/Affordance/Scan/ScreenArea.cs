@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 객체가 화면에서 차지하는 면적. 에이전트가 겨누는 숫자로.

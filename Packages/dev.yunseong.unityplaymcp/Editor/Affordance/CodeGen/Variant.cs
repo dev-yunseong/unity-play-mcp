@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>플레이어가 하는 무언가.</summary>
     internal sealed class InputRead
@@ -120,10 +120,10 @@ namespace Artel.Affordances.CodeGen
         /// </summary>
         /// <remarks>
         /// Unity 는 런타임에 상태의 이름을 돌려주지 않는다. <c>AnimatorStateInfo</c> 는 해시를 나르고 그것을 말로
-        /// 바꿔 주는 것은 없으므로, animator 에 대한 판독은 상태가 바뀌었다고는 말해도 어느 상태로 바뀌었는지는
+        /// 바꿔 주는 것은 없으므로, animator 에 대한 pulse 는 상태가 바뀌었다고는 말해도 어느 상태로 바뀌었는지는
         /// 말하지 못한다 — 그리고 그것이 정확히 화면 녹화가 이미 주는 절반이고, 정확히 녹화가 줄 수 없는 절반이다.
         ///
-        /// 다만 물어볼 수는 있다. <c>IsName</c> 은 현재 상태가 무엇으로 불리는지에 답하므로, 후보를 아는 판독은
+        /// 다만 물어볼 수는 있다. <c>IsName</c> 은 현재 상태가 무엇으로 불리는지에 답하므로, 후보를 아는 pulse 는
         /// 그것들을 시험해 상태의 이름을 댈 수 있다. 후보는 코드 안에 있다: <c>SetTrigger("Death")</c> 가 하나를
         /// 적어 두었다.
         ///

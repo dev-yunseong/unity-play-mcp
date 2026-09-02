@@ -4,7 +4,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 코드가 하는 것으로 밝혀진 것과, 한 씬이 실제로 쥐고 있는 것을 잇는다.

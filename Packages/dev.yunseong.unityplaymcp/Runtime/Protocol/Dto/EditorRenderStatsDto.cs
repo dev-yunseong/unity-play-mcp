@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Artel.Protocol.Dto
+namespace UnityPlayMcp.Protocol.Dto
 {
     /// <summary>
     /// 에디터 Game view의 렌더 통계. Game view Stats 창이 보여 주는 것과 같은 값이다.

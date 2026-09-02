@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Artel.Tests.Fixtures
+namespace UnityPlayMcp.Tests.Fixtures
 {
     /// <summary>
     /// A game component that reads <see cref="Input"/> the way a game does.
@@ -17,12 +17,12 @@ namespace Artel.Tests.Fixtures
         /// The one runtime type this fixture names on purpose.
         /// </summary>
         /// <remarks>
-        /// InputMethodWeaver only takes an assembly whose IL actually references `Artel.Runtime`,
+        /// InputMethodWeaver only takes an assembly whose IL actually references `UnityPlayMcp.Runtime`,
         /// and the IL carries that reference only where a type is used. Drop this field and the
         /// weaver skips the fixture: every `Input` call below keeps reading the real device, and
         /// the tests fail while the weaver itself is working.
         /// </remarks>
-        public ArtelManager Manager;
+        public UnityPlayMcpHost Manager;
 
         public bool ReadSpaceKeyDown()
         {

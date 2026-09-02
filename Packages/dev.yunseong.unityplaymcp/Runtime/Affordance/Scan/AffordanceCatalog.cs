@@ -5,7 +5,7 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Text;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 어셈블리가 나르는 근거. 한 번 읽고 쥐고 있는다.
@@ -25,7 +25,7 @@ namespace Artel.Affordances.Scan
     /// </remarks>
     internal static class AffordanceCatalog
     {
-        private const string ResourceName = "kr.artel.affordance.evidence";
+        private const string ResourceName = "dev.yunseong.unityplaymcp.affordance.evidence";
 
         private sealed class Carried
         {

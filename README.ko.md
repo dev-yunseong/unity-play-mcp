@@ -27,6 +27,26 @@ https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.un
 https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#v0.1.0
 ```
 
+## 0.1.0에서 올라올 때
+
+0.2.0은 namespace, assembly, type 이름을 `Artel`에서 `UnityPlayMcp`로 바꿉니다. 예전 이름으로 이 package를 부르던 code는 더 이상 compile되지 않습니다.
+
+| 전 | 후 |
+| --- | --- |
+| namespace `Artel.*` | `UnityPlayMcp.*` |
+| assembly `Artel.Runtime` | `UnityPlayMcp.Runtime` |
+| `ArtelManager` | `UnityPlayMcpHost` |
+| `ArtelInput` | `VirtualInput` |
+| `ArtelWebSocketServer` | `AgentWebSocketServer` |
+
+예전 이름으로 쓰인 것은 옮기지도 읽지도 않습니다. package는 새 이름으로 쓰고 예전 것은 그 자리에 그대로 두므로, 필요 없어지면 직접 지우세요.
+
+- `<persistentDataPath>/artel-pulse.jsonl`과 `<persistentDataPath>/artel-affordances.json` — `unity-play-mcp-` 이름으로 다시 쓰입니다
+- `Library/ArtelScope` — cache라 다음 scan에서 다시 만들어집니다
+- PlayerPrefs의 `Artel.DarkTheme` 항목 — overlay theme이 한 번 기본값으로 돌아가고, 그 뒤로는 다시 기억합니다
+
+올라오기 전에 뜬 Profiler capture는 marker 이름이 `Artel.Manager.*`입니다. 새 이름은 `UnityPlayMcp.Host.*`라 예전 capture와 이어지지 않습니다.
+
 ## Agent 연결
 
 1. Unity에서 **Edit > Project Settings > Unity Play MCP**를 엽니다.

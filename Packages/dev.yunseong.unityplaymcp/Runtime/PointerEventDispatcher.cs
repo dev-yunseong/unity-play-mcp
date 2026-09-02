@@ -3,7 +3,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     /// <summary>
     /// Turns the agent's pointer into the events uGUI listens for. Unity's own input module reads
@@ -77,7 +77,7 @@ namespace Artel
             {
                 // Worth saying out loud: from the outside this is indistinguishable from a press
                 // that landed on nothing, and a game with a canvas is expected to have one.
-                Debug.LogWarning("[Artel] mouse_down found no EventSystem, so no uGUI element can answer it.");
+                Debug.LogWarning("[Unity Play MCP] mouse_down found no EventSystem, so no uGUI element can answer it.");
                 return;
             }
 
@@ -125,7 +125,7 @@ namespace Artel
             // chatter. Without it a drag that does nothing is indistinguishable from a drag that
             // was never delivered, and the difference is the whole diagnosis.
             Debug.Log(string.Format(
-                "[Artel] mouse_down at ({0}, {1}) over {2} hits: {3}. press={4} drag={5}",
+                "[Unity Play MCP] mouse_down at ({0}, {1}) over {2} hits: {3}. press={4} drag={5}",
                 position.x,
                 position.y,
                 raycastResults.Count,
@@ -216,7 +216,7 @@ namespace Artel
             var camera = Camera.main;
             if (camera == null)
             {
-                Debug.Log("[Artel] no Camera.main, so the pointer cannot be turned into a world point.");
+                Debug.Log("[Unity Play MCP] no Camera.main, so the pointer cannot be turned into a world point.");
                 return;
             }
 
@@ -267,7 +267,7 @@ namespace Artel
             }
 
             Debug.Log(string.Format(
-                "[Artel] colliders under the pointer: {0}. queriesHitTriggers={1}\n" +
+                "[Unity Play MCP] colliders under the pointer: {0}. queriesHitTriggers={1}\n" +
                 "  camera={2} near={3} far={4} cullingMask={5}\n" +
                 "  along the ray: {6}",
                 description.Length == 0 ? "none" : description.ToString(),

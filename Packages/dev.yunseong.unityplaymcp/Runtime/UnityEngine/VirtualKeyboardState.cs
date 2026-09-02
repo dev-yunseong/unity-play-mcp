@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using global::UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     internal sealed class VirtualKeyboardState
     {

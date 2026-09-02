@@ -4,7 +4,7 @@ using System.IO.Compression;
 using System.Text;
 using Mono.Cecil;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
     /// 근거를 기록마다 attribute 하나가 아니라 어셈블리 안의 압축된 blob 하나로 나른다.
@@ -32,7 +32,7 @@ namespace Artel.Affordances.CodeGen
         /// 찾는데, 난독화가 앗아갈 수 있는 것은 여기서 이것 하나다 — attribute 는 제 타입에 붙어 있으므로
         /// 이름이 바뀌어도 살아남지만, 리소스는 붙어 있을 것이 없다.
         /// </remarks>
-        internal const string ResourceName = "kr.artel.affordance.evidence";
+        internal const string ResourceName = "dev.yunseong.unityplaymcp.affordance.evidence";
 
         /// <summary>
         /// 어셈블리 안에서 watch list 가 불리는 이름.
@@ -46,7 +46,7 @@ namespace Artel.Affordances.CodeGen
         /// 늘 하던 대로 읽는다. 같은 문서에 접어 넣었다면 모든 독자가 제게 쓸모없는 한 줄에 대해 합의해야
         /// 했을 것이다.
         /// </remarks>
-        internal const string WatchResourceName = "kr.artel.affordance.watch";
+        internal const string WatchResourceName = "dev.yunseong.unityplaymcp.affordance.watch";
 
         /// <summary>모듈 위의 blob 을 갈아 끼우고, 몇 바이트였는지 말한다.</summary>
         internal static int Attach(ModuleDefinition module, string json)

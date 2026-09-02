@@ -1,6 +1,6 @@
 using System;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 고른 agent 의 설정 파일 하나를 읽고, 형식에 맞게 고치고, 다시 쓴다.

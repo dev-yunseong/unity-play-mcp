@@ -4,7 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Artel.Tests.Input
+namespace UnityPlayMcp.Tests.Input
 {
     public sealed class KeyboardStatusControllerTests
     {
@@ -28,18 +28,18 @@ namespace Artel.Tests.Input
         [Test]
         public void KeyboardOverlay_UsesDarkBrandPaletteByDefault()
         {
-            var hadTheme = PlayerPrefs.HasKey("Artel.DarkTheme");
-            var previousTheme = PlayerPrefs.GetInt("Artel.DarkTheme");
+            var hadTheme = PlayerPrefs.HasKey("UnityPlayMcp.DarkTheme");
+            var previousTheme = PlayerPrefs.GetInt("UnityPlayMcp.DarkTheme");
             var host = new GameObject("keyboard status");
             try
             {
-                PlayerPrefs.SetInt("Artel.DarkTheme", 1);
+                PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", 1);
                 var controller = host.AddComponent<KeyboardStatusController>();
                 typeof(KeyboardStatusController)
                     .GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(controller, null);
                 var panel = host.transform
-                    .Find("Artel Keyboard Status Canvas/Keyboard Status Panel");
+                    .Find("Unity Play MCP Keyboard Status Canvas/Keyboard Status Panel");
 
                 Assert.That(panel.GetComponent<Image>().color, Is.EqualTo((Color)KeyboardStatusController.DarkPanelColor));
                 // 다크에서는 밝힌 coral을 써야 한다. 원본 #F04B3A는 다크 패널 위에서
@@ -49,7 +49,7 @@ namespace Artel.Tests.Input
                     Is.EqualTo((Color)KeyboardStatusController.DarkAccentColor));
                 Assert.That(panel.Find("Separator"), Is.Not.Null);
 
-                PlayerPrefs.SetInt("Artel.DarkTheme", 0);
+                PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", 0);
                 typeof(KeyboardStatusController)
                     .GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(controller, null);
@@ -64,11 +64,11 @@ namespace Artel.Tests.Input
                 Object.DestroyImmediate(host);
                 if (hadTheme)
                 {
-                    PlayerPrefs.SetInt("Artel.DarkTheme", previousTheme);
+                    PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", previousTheme);
                 }
                 else
                 {
-                    PlayerPrefs.DeleteKey("Artel.DarkTheme");
+                    PlayerPrefs.DeleteKey("UnityPlayMcp.DarkTheme");
                 }
             }
         }

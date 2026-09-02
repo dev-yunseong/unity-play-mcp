@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-namespace Artel.Capture
+namespace UnityPlayMcp.Capture
 {
     /// <summary>
     /// One encoded still of the screen, or the reason there is none.

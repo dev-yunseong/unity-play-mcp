@@ -1,10 +1,10 @@
-using Artel.Diagnostics;
-using Artel.Protocol.Dto;
-using Artel.Protocol.Mapping;
-using Artel.Serialization;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Protocol.Mapping;
+using UnityPlayMcp.Serialization;
 using NUnit.Framework;
 
-namespace Artel.Tests.Diagnostics
+namespace UnityPlayMcp.Tests.Diagnostics
 {
     /// <summary>
     /// 실제 렌더 수치를 단정하면 실행 환경마다 결과가 갈린다. 배치모드에서는 그리는 것이 거의

@@ -1,4 +1,4 @@
-namespace Artel.Diagnostics
+namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
     /// 한 집계 구간의 CPU·GPU 프레임타임 분해와 병목 분류.

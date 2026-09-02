@@ -7,16 +7,16 @@ using Mono.Cecil.Cil;
 using Unity.CompilationPipeline.Common.Diagnostics;
 using Unity.CompilationPipeline.Common.ILPostProcessing;
 
-namespace Artel.CodeGen
+namespace UnityPlayMcp.CodeGen
 {
-    public sealed class ArtelILPostProcessor : ILPostProcessor
+    public sealed class InputCallILPostProcessor : ILPostProcessor
     {
-        private const string RuntimeAssemblyName = "Artel.Runtime";
+        private const string RuntimeAssemblyName = "UnityPlayMcp.Runtime";
         public override ILPostProcessor GetInstance() => this;
 
         public override bool WillProcess(ICompiledAssembly compiledAssembly)
         {
-            if (compiledAssembly.Name == RuntimeAssemblyName || compiledAssembly.Name == "Unity.Artel.CodeGen")
+            if (compiledAssembly.Name == RuntimeAssemblyName || compiledAssembly.Name == "Unity.UnityPlayMcp.CodeGen")
             {
                 return false;
             }
@@ -45,7 +45,7 @@ namespace Artel.CodeGen
                 using (var assembly = AssemblyDefinition.ReadAssembly(peStream, reader))
                 {
                     // WillProcess가 통과시켰다고 해서 위빙할 게 있다는 뜻은 아니다. 거기서 보는
-                    // 컴파일러 참조 목록에는 autoReferenced 때문에 Artel.Runtime이 항상 들어 있고,
+                    // 컴파일러 참조 목록에는 autoReferenced 때문에 UnityPlayMcp.Runtime이 항상 들어 있고,
                     // 실제로 SDK 타입을 쓰는지는 IL 메타데이터를 열어 봐야 안다.
                     var inputWeaver = InputMethodWeaver.TryCreate(assembly.MainModule);
                     if (inputWeaver == null)

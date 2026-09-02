@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using Artel.Protocol;
+using UnityPlayMcp.Protocol;
 
-namespace Artel.Capture
+namespace UnityPlayMcp.Capture
 {
     /// <summary>
     /// What one `capture_screen` call asks for, after the JSON-RPC params have been read.

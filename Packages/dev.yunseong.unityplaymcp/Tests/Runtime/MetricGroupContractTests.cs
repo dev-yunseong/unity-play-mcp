@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Artel.Protocol;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol;
+using UnityPlayMcp.Protocol.Dto;
 using Newtonsoft.Json;
 using NUnit.Framework;
 
-namespace Artel.Tests.Protocol
+namespace UnityPlayMcp.Tests.Protocol
 {
     /// <summary>
     /// 성능 보고가 싣는 지표군과 <c>DEVICE_CONTEXT</c>가 선언하는 목록이 어긋나지 않게 잡는다.
@@ -45,7 +45,7 @@ namespace Artel.Tests.Protocol
         /// <c>includePlatforms: [Editor]</c>라 에디터에서만 도는데, 누가 목록을
         /// <c>#if UNITY_EDITOR</c>로 감싸도 에디터에서는 그대로 통과한다. 통과할 근거가 없는
         /// 단정을 두면 없는 커버리지를 있다고 광고하게 되므로 두지 않는다. Standalone 확인은
-        /// 빌드가 필요하고, ARTEL-486 PR에 미검증으로 남겼다.
+        /// 빌드가 필요해 미검증으로 남겼다.
         /// </remarks>
         [Test]
         public void Collected_DoesNotHandOutTheBackingArray()

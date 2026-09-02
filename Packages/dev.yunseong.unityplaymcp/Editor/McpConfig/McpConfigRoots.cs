@@ -1,6 +1,6 @@
 using System;
 
-namespace Artel.McpConfig.Editor
+namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
     /// 설정 파일 자리를 계산하는 데 필요한 뿌리 경로와 운영체제.

@@ -3,14 +3,14 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Artel
+namespace UnityPlayMcp
 {
     public sealed class CursorController : MonoBehaviour
     {
         private const int CursorWidth = 36;
         private const int CursorHeight = 48;
         private const int OverlaySortingOrder = short.MaxValue;
-        private const string DarkThemePlayerPrefsKey = ArtelOwnedPlayerPrefs.DarkTheme;
+        private const string DarkThemePlayerPrefsKey = OwnedPlayerPrefs.DarkTheme;
 
         [SerializeField] private bool smoothMovement;
         [SerializeField] private float movementDurationSeconds = 0.35f;
@@ -125,14 +125,14 @@ namespace Artel
 
         private void CreateCursor()
         {
-            var canvasObject = new GameObject("Artel Virtual Cursor Canvas", typeof(RectTransform), typeof(Canvas));
+            var canvasObject = new GameObject("Unity Play MCP Virtual Cursor Canvas", typeof(RectTransform), typeof(Canvas));
             canvasObject.transform.SetParent(transform, false);
 
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = OverlaySortingOrder;
 
-            var cursorObject = new GameObject("Artel Virtual Cursor", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var cursorObject = new GameObject("Unity Play MCP Virtual Cursor", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             cursorObject.transform.SetParent(canvasObject.transform, false);
 
             cursorTransform = cursorObject.GetComponent<RectTransform>();
@@ -158,7 +158,7 @@ namespace Artel
         {
             var texture = new Texture2D(CursorWidth, CursorHeight, TextureFormat.RGBA32, false)
             {
-                name = "Artel Virtual Cursor Texture",
+                name = "Unity Play MCP Virtual Cursor Texture",
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp
             };

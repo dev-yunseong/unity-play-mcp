@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Artel.Affordances.Scan
+namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
     /// 리포트가 화면이 아니라 게임을 덮도록 빌드의 모든 씬을 방문한다.
@@ -43,7 +43,7 @@ namespace Artel.Affordances.Scan
                 return false;
             }
 
-            var carrier = new GameObject("Artel Scene Walk") { hideFlags = HideFlags.HideAndDontSave };
+            var carrier = new GameObject("Unity Play MCP Scene Walk") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(carrier);
 
             _walking = carrier.AddComponent<SceneWalk>();
@@ -61,8 +61,8 @@ namespace Artel.Affordances.Scan
                 // 예전에는 똑같이 읽히던 서로 다른 두 사실. Build Settings 가 비어 있고 제 주소를 나열할 방법도 없는 프로젝트가
                 // 씬이 없는 프로젝트인 것은 아니다.
                 Debug.LogWarning(ExtraScenes.Available
-                    ? "[Artel] No scenes in Build Settings and none reachable by address."
-                    : "[Artel] No scenes in Build Settings. If this game loads its scenes by " +
+                    ? "[Unity Play MCP] No scenes in Build Settings and none reachable by address."
+                    : "[Unity Play MCP] No scenes in Build Settings. If this game loads its scenes by " +
                       "address, install Addressables support and walk again.");
 
                 AffordanceReport.Merge("(walk)", string.Empty, new List<string>
@@ -79,14 +79,14 @@ namespace Artel.Affordances.Scan
 
             for (var index = 0; index < count; index++)
             {
-                Debug.Log("[Artel] Walking scene " + (index + 1) + " of " + count + ".");
+                Debug.Log("[Unity Play MCP] Walking scene " + (index + 1) + " of " + count + ".");
                 strays.Capture();
                 yield return Read(index);
             }
 
             for (var index = 0; index < addressed.Count; index++)
             {
-                Debug.Log("[Artel] Walking addressed scene " + (index + 1) + " of " + addressed.Count + ".");
+                Debug.Log("[Unity Play MCP] Walking addressed scene " + (index + 1) + " of " + addressed.Count + ".");
                 strays.Capture();
                 yield return Read(addressed[index]);
             }
@@ -100,7 +100,7 @@ namespace Artel.Affordances.Scan
             // 바로 그 같은 씬에 산다 — 스스로 설치되는 패키지가 그 씬에 대해 가진 유일한 손잡이다.
             SceneEvidenceScan.CapturePersistent(gameObject.scene);
 
-            Debug.Log("[Artel] Walk finished. " + AffordanceReport.SceneCount + " scenes in the report; removed " +
+            Debug.Log("[Unity Play MCP] Walk finished. " + AffordanceReport.SceneCount + " scenes in the report; removed " +
                       removed + " object(s) left behind: " + AffordanceBootstrap.Save());
 
             Finish();
@@ -120,7 +120,7 @@ namespace Artel.Affordances.Scan
             }
             catch (System.Exception exception)
             {
-                Debug.LogWarning("[Artel] The address catalogue could not be read: " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] The address catalogue could not be read: " + exception.Message);
                 return new List<string>();
             }
         }
@@ -130,7 +130,7 @@ namespace Artel.Affordances.Scan
         /// </summary>
         /// <remarks>
         /// 홀로는 게임이 그것을 플레이하는 방식이 아니다. 주소로 로드되는 씬은 대개 이미 올라와 있는 매니저 씬 위에 더해지도록
-        /// 만들어졌고, 혼자 올라온 것은 반쯤 지어진 채로 오거나 비어 있을 수 있다. 그래서 판독은 버리지 않고 쥐되 표시해 둔다 —
+        /// 만들어졌고, 혼자 올라온 것은 반쯤 지어진 채로 오거나 비어 있을 수 있다. 그래서 pulse 는 버리지 않고 쥐되 표시해 둔다 —
         /// 불완전한 로드에서 서술된 화면도, 아무도 그것을 전체인 양 읽지만 않는다면 그 화면에 대한 유일한 진술이다.
         /// </remarks>
         private IEnumerator Read(string address)
@@ -143,7 +143,7 @@ namespace Artel.Affordances.Scan
             }
             catch (System.Exception exception)
             {
-                Debug.LogWarning("[Artel] " + address + " would not load: " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] " + address + " would not load: " + exception.Message);
                 yield break;
             }
 
@@ -160,7 +160,7 @@ namespace Artel.Affordances.Scan
             SceneEvidenceScan.CaptureLoaded();
             AffordanceReport.Note(SceneManager.GetActiveScene().name, "scene-loaded-alone");
 
-            // 판독을 뜬 바로 그 자리에서 화면도 남긴다. 다음 씬 로드가 시작되면 back buffer 는 이미 다른 씬이다.
+            // pulse 를 뜬 바로 그 자리에서 화면도 남긴다. 다음 씬 로드가 시작되면 back buffer 는 이미 다른 씬이다.
             // Collect 앞이다 — 저쪽은 앞선 씬이 남긴 것을 이 씬으로 옮겨 붙이는 일이고, 화면은 그 전의 이 씬이다.
             var afterAddressed = SceneWalkHooks.OnSceneRead(SceneManager.GetActiveScene().name);
 
@@ -212,7 +212,7 @@ namespace Artel.Affordances.Scan
             if (moved.Count > 0)
             {
                 Debug.Log(
-                    "[Artel] Scene walk will unload " + moved.Count + " object(s) left behind by " +
+                    "[Unity Play MCP] Scene walk will unload " + moved.Count + " object(s) left behind by " +
                     identity + ": " + string.Join(", ", moved) + ".");
             }
         }
@@ -227,7 +227,7 @@ namespace Artel.Affordances.Scan
             }
             catch (System.Exception exception)
             {
-                Debug.LogWarning("[Artel] Scene " + buildIndex + " would not load: " + exception.Message);
+                Debug.LogWarning("[Unity Play MCP] Scene " + buildIndex + " would not load: " + exception.Message);
                 yield break;
             }
 
@@ -245,7 +245,7 @@ namespace Artel.Affordances.Scan
                 if (waited > PatiencePerScene)
                 {
                     // 가둔다. 그러지 않으면 끝나지 않는 씬이 에디터가 열려 있는 내내 순회를 붙잡고, 그때쯤이면 게임은 이미 쓸 수 없다.
-                    Debug.LogWarning("[Artel] Scene " + buildIndex + " did not finish loading in " +
+                    Debug.LogWarning("[Unity Play MCP] Scene " + buildIndex + " did not finish loading in " +
                                      PatiencePerScene + "s. Moving on.");
                     yield break;
                 }

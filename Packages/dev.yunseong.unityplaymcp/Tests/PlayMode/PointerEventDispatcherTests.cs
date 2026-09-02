@@ -5,7 +5,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     public sealed class PointerEventDispatcherTests
     {

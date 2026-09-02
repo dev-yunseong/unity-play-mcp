@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Artel.Affordances.CodeGen
+namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>결정 하나와, 거기 닿기 위해 그 결정의 어느 갈래를 탔는가.</summary>
     /// <remarks>

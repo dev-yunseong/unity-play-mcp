@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace Artel.Affordances.Live
+namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
     /// 근거가 청한 것 너머로, 컴포넌트에서 되읽을 수 있는 모든 것.
@@ -40,7 +40,7 @@ namespace Artel.Affordances.Live
         /// </remarks>
         private static readonly string[] NotTheGames =
         {
-            "UnityEngine", "UnityEditor", "Unity", "Artel", "System", "mscorlib", "netstandard",
+            "UnityEngine", "UnityEditor", "Unity", "UnityPlayMcp", "System", "mscorlib", "netstandard",
             "nunit", "Newtonsoft", "Mono", "TMPro"
         };
 
@@ -174,8 +174,8 @@ namespace Artel.Affordances.Live
         /// </summary>
         /// <remarks>
         /// watch list 가 건네받은 멤버들에 대해 이미 갖는 것과 같은 필요다: 자동 프로퍼티는
-        /// <c>&lt;Instance&gt;k__BackingField</c> 라 불리는 필드이고, 그렇게 이름 붙인 판독은 다른 누가 쓴 무엇에도 이어지지
-        /// 않는다. 둘이 같을 때는 null 이므로, 판독은 두 번째 이름이 있을 때만 그것을 나른다.
+        /// <c>&lt;Instance&gt;k__BackingField</c> 라 불리는 필드이고, 그렇게 이름 붙인 pulse 는 다른 누가 쓴 무엇에도 이어지지
+        /// 않는다. 둘이 같을 때는 null 이므로, pulse 는 두 번째 이름이 있을 때만 그것을 나른다.
         /// </remarks>
         private static string Spoken(string name)
         {

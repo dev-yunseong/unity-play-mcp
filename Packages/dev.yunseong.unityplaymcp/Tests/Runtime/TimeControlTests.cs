@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Protocol.Dto;
+using UnityPlayMcp.Protocol.Dto;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Artel.Tests
+namespace UnityPlayMcp.Tests
 {
     /// <summary>
     /// pause_time and resume_time, which are the only actions that change state the game keeps

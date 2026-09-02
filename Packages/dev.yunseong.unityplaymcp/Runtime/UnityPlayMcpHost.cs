@@ -1,16 +1,16 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Artel.Capture;
-using Artel.Diagnostics;
-using Artel.Protocol.Dto;
-using Artel.Protocol.Mapping;
-using Artel.Serialization;
+using UnityPlayMcp.Capture;
+using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Protocol.Dto;
+using UnityPlayMcp.Protocol.Mapping;
+using UnityPlayMcp.Serialization;
 using UnityEngine;
 
-namespace Artel
+namespace UnityPlayMcp
 {
-    public sealed class ArtelManager : MonoBehaviour, IReadingChannel
+    public sealed class UnityPlayMcpHost : MonoBehaviour, IReadingChannel
     {
         private const float PerformanceReportIntervalSeconds = 1f;
         private const string BindAddress = "127.0.0.1";
@@ -21,9 +21,9 @@ namespace Artel
         /// each time because the check runs in Awake, before anything else can
         /// register it.
         /// </summary>
-        private static ArtelManager instance;
+        private static UnityPlayMcpHost instance;
 
-        private IArtelWebSocketTransport webSocketTransport;
+        private IAgentTransport webSocketTransport;
         private ActionExecutor actionExecutor;
         private CursorController cursorController;
         private PointerEventDispatcher pointerEvents;
@@ -44,7 +44,7 @@ namespace Artel
         /// <summary>서버가 열린 동안 되돌려 줄 host game의 원래 설정.</summary>
         private bool hostRunInBackground;
         private long nextMessageId = 1;
-        private readonly Queue<ArtelRequestDto> actionRequests = new Queue<ArtelRequestDto>();
+        private readonly Queue<AgentRequestDto> actionRequests = new Queue<AgentRequestDto>();
         private bool processingActions;
 
         /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
@@ -74,15 +74,20 @@ namespace Artel
         /// loads so a manager the scene does carry — with its configured server —
         /// keeps the spot.
         /// </summary>
+        /// <remarks>
+        /// test 가 부를 수 있도록 <c>internal</c> 이다. hook 이 남긴 오브젝트를 나중에 관찰하는 test 는
+        /// play mode 당 한 번만 도는 hook 때문에 다른 fixture 보다 먼저 돌아야 하고, 그 순서는 fixture
+        /// 이름의 알파벳 순이라 이름을 바꾸는 것만으로 조용히 깨진다. 직접 부르면 순서와 무관해진다.
+        /// </remarks>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void SpawnInDevelopmentBuilds()
+        internal static void SpawnInDevelopmentBuilds()
         {
             if (instance != null)
             {
                 return;
             }
 
-            new GameObject("Artel").AddComponent<ArtelManager>();
+            new GameObject("Unity Play MCP").AddComponent<UnityPlayMcpHost>();
         }
 #endif
 
@@ -190,11 +195,11 @@ namespace Artel
 
         private void Update()
         {
-            using (ArtelProfilerMarkers.ManagerUpdate.Auto())
+            using (ProfilerMarkers.HostUpdate.Auto())
             {
                 RecordFrameTime();
 
-                ArtelInput.AdvanceFrame();
+                VirtualInput.AdvanceFrame();
 
                 if (webSocketTransport == null)
                 {
@@ -204,7 +209,7 @@ namespace Artel
 
                 NoticeNewConnection();
 
-                using (ArtelProfilerMarkers.ManagerHandleMessage.Auto())
+                using (ProfilerMarkers.HostHandleMessage.Auto())
                 {
                     while (webSocketTransport.TryDequeueMessage(out var message))
                     {
@@ -212,7 +217,7 @@ namespace Artel
                     }
                 }
 
-                using (ArtelProfilerMarkers.ManagerPerformanceReport.Auto())
+                using (ProfilerMarkers.HostPerformanceReport.Auto())
                 {
                     SendPerformanceReport();
                 }
@@ -231,7 +236,7 @@ namespace Artel
         {
             if (webSocketTransport == null)
             {
-                webSocketTransport = new ArtelWebSocketServer(BindAddress, WebSocketPort);
+                webSocketTransport = new AgentWebSocketServer(BindAddress, WebSocketPort);
 
                 // This is the host game's own Player Setting, and the package ships inside the
                 // game build — so it is held for exactly as long as this server, and put back in
@@ -255,7 +260,7 @@ namespace Artel
 
             webSocketTransport.Start();
             BeginDiscovery();
-            Debug.Log("[Artel] WebSocket server started at ws://127.0.0.1:17311/ws.");
+            Debug.Log("[Unity Play MCP] WebSocket server started at ws://127.0.0.1:17311/ws.");
         }
 
         /// <summary>
@@ -268,7 +273,7 @@ namespace Artel
 
         /// <summary>연결이 사라지면 게임 읽기를 멈춘다.</summary>
         /// <remarks>
-        /// 여기서 시작시킨 것이 없는데도 판독도 여기서 멈춘다. 연결이 끊겨 끝나는 세션은 <see cref="StopReadings"/> 를 부를
+        /// 여기서 시작시킨 것이 없는데도 reading 도 여기서 멈춘다. 연결이 끊겨 끝나는 세션은 <see cref="StopReadings"/> 를 부를
         /// 기회를 얻지 못하고, 돌게 남겨진 박자는 게임이 떠 있는 내내 아무도 읽지 않을 파일에 쓴다.
         /// </remarks>
         private void EndDiscovery()
@@ -278,18 +283,18 @@ namespace Artel
         }
 
         /// <summary>
-        /// 라이브 판독을 시작하고, 지금 돌고 있는지를 말한다.
+        /// 라이브 reading 을 시작하고, 지금 돌고 있는지를 말한다.
         /// </summary>
         /// <remarks>
         /// 연결로 함의되는 것이 아니라 청해지는 것이고, 그 분리가 이 메서드의 전부다. 연결은 도구가 봐도 된다고 말하고, 세션은
         /// 실행이 시작됐다고 말하며, 그것이 언제인지는 실행을 모는 쪽만 안다.
         ///
         /// 그 값이 얼마인지 재기 전까지 둘은 같은 순간이었다. 모든 씬을 도는 순회도 연결에서 시작하고 그것은 아무도 걸어가지 않은
-        /// 화면을 방문한다 — 그래서 그 곁에서 찍은 판독은 플레이어가 본 적 없는 화면에 게임이 있다고 보고한다. 샘플 게임에서
-        /// 실측했다: 순회 동안 찍은 판독은 8초에 125,548 바이트였고 플레이어가 있은 적 없는 씬 셋을 서술했다. 순회 뒤에 시작한
-        /// 같은 채널은 4,369 바이트짜리 판독 하나를 쓰고 14초 동안 아무것도 쓰지 않았다.
+        /// 화면을 방문한다 — 그래서 그 곁에서 찍은 pulse 는 플레이어가 본 적 없는 화면에 게임이 있다고 보고한다. 샘플 게임에서
+        /// 실측했다: 순회 동안 찍은 pulse 는 8초에 125,548 바이트였고 플레이어가 있은 적 없는 씬 셋을 서술했다. 순회 뒤에 시작한
+        /// 같은 채널은 4,369 바이트짜리 pulse 하나를 쓰고 14초 동안 아무것도 쓰지 않았다.
         ///
-        /// 독자가 걸러 낼 수 있는 잡음도 아니다. 판독은 자기가 순회 중이라고 말하지 않으므로 걸러 낼 근거가 그 안에 없다.
+        /// 독자가 걸러 낼 수 있는 잡음도 아니다. pulse 는 자기가 순회 중이라고 말하지 않으므로 걸러 낼 근거가 그 안에 없다.
         ///
         /// 멱등이다: 이미 읽고 있는 동안의 두 번째 호출은 참으로 답하고 아무것도 바꾸지 않는다.
         /// </remarks>
@@ -300,7 +305,7 @@ namespace Artel
                 return true;
             }
 
-            // 연결이 있으면 판독은 그 소켓으로 나간다. 없으면 sink 를 건네지 않아 예전대로
+            // 연결이 있으면 pulse 는 그 소켓으로 나간다. 없으면 sink 를 건네지 않아 예전대로
             // 파일로 떨어진다 — 아무도 듣고 있지 않을 때에도 채널을 지켜볼 수 있어야 한다는
             // 것이 이 채널을 만들 때의 규율이고, 연결이 없다는 것이 그것을 거둘 이유는 아니다.
             var sink = webSocketTransport == null
@@ -310,13 +315,13 @@ namespace Artel
             return Affordances.Scan.AffordanceBootstrap.WatchLiveState(sink);
         }
 
-        /// <summary>라이브 판독을 끝낸다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
+        /// <summary>라이브 reading 을 끝낸다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
         public void StopReadings()
         {
             Affordances.Scan.AffordanceBootstrap.StopWatching();
         }
 
-        /// <summary>라이브 판독이 돌고 있는지.</summary>
+        /// <summary>라이브 reading 이 돌고 있는지.</summary>
         internal bool Reading => Affordances.Scan.AffordanceBootstrap.Watching;
 
         public void StopTransport()
@@ -350,7 +355,7 @@ namespace Artel
             // The connection this was taken for is gone, so the host game gets its setting back.
             Application.runInBackground = hostRunInBackground;
 
-            Debug.Log("[Artel] WebSocket transport stopped.");
+            Debug.Log("[Unity Play MCP] WebSocket transport stopped.");
         }
 
         /// <summary>
@@ -360,14 +365,14 @@ namespace Artel
         private void ReleaseAgentInput()
         {
             pointerEvents.ReleaseAll();
-            ArtelInput.ReleaseAllVirtualInput();
+            VirtualInput.ReleaseAllVirtualInput();
         }
 
-        private void HandleMessage(ArtelWebSocketMessage message)
+        private void HandleMessage(AgentMessage message)
         {
             try
             {
-                var request = jsonCodec.Deserialize<ArtelRequestDto>(message.Text);
+                var request = jsonCodec.Deserialize<AgentRequestDto>(message.Text);
                 if (request == null)
                 {
                     throw new InvalidOperationException("Message body is empty.");
@@ -387,7 +392,7 @@ namespace Artel
             }
         }
 
-        private void EnqueueAction(ArtelRequestDto request)
+        private void EnqueueAction(AgentRequestDto request)
         {
             actionRequests.Enqueue(request);
             if (!processingActions)
@@ -407,7 +412,7 @@ namespace Artel
             processingActions = false;
         }
 
-        private IEnumerator ExecuteActionRequest(ArtelRequestDto request)
+        private IEnumerator ExecuteActionRequest(AgentRequestDto request)
         {
             var results = new List<ActionResultDto>();
 
@@ -436,7 +441,7 @@ namespace Artel
                 RequestId = request.Id,
                 // 여기서 읽는다. 배치를 받은 자리가 아니라 마지막 액션이 끝난 자리다 — 커서 활강처럼
                 // 여러 프레임에 걸치는 액션이 있고, 그때 둘이 갈린다. 기다리는 쪽이 궁금한 것은 배치가
-                // 끝난 뒤의 화면이므로 끝난 프레임이라야 답이 된다(ARTEL-620).
+                // 끝난 뒤의 화면이므로 끝난 프레임이라야 답이 된다.
                 Frame = Time.frameCount,
                 Results = results
             };
@@ -564,7 +569,7 @@ namespace Artel
 
             warnedFrameTimingUnavailable = true;
             Debug.LogWarning(
-                "[Artel] Frame timing data is unavailable, so CPU/GPU breakdown is left out of the " +
+                "[Unity Play MCP] Frame timing data is unavailable, so CPU/GPU breakdown is left out of the " +
                 "performance report. Enable Project Settings > Player > Frame Timing Stats to collect it.");
         }
 
@@ -596,7 +601,7 @@ namespace Artel
             return 1f / 60f;
         }
 
-        private void SendError(ArtelWebSocketMessage request, string error)
+        private void SendError(AgentMessage request, string error)
         {
             var message = new ErrorMessage
             {

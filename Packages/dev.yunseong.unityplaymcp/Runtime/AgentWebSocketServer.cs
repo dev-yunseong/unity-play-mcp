@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using WebSocketSharp;
 using WebSocketSharp.Server;
 
-namespace Artel
+namespace UnityPlayMcp
 {
-    internal sealed class ArtelWebSocketMessage
+    internal sealed class AgentMessage
     {
-        public ArtelWebSocketMessage(string text, Action<string> reply)
+        public AgentMessage(string text, Action<string> reply)
         {
             Text = text;
             Reply = reply;
@@ -18,17 +18,17 @@ namespace Artel
         public Action<string> Reply { get; private set; }
     }
 
-    internal sealed class ArtelWebSocketServer : IArtelWebSocketTransport
+    internal sealed class AgentWebSocketServer : IAgentTransport
     {
         private readonly string bindAddress;
         private readonly int port;
-        private readonly ConcurrentQueue<ArtelWebSocketMessage> incomingMessages =
-            new ConcurrentQueue<ArtelWebSocketMessage>();
+        private readonly ConcurrentQueue<AgentMessage> incomingMessages =
+            new ConcurrentQueue<AgentMessage>();
         private readonly Dictionary<string, Action<string>> sendByConnectionId =
             new Dictionary<string, Action<string>>();
         private WebSocketServer server;
 
-        public ArtelWebSocketServer(string bindAddress, int port)
+        public AgentWebSocketServer(string bindAddress, int port)
         {
             this.bindAddress = bindAddress;
             this.port = port;
@@ -51,7 +51,7 @@ namespace Artel
             server.Start();
         }
 
-        public bool TryDequeueMessage(out ArtelWebSocketMessage message)
+        public bool TryDequeueMessage(out AgentMessage message)
         {
             return incomingMessages.TryDequeue(out message);
         }
@@ -83,9 +83,9 @@ namespace Artel
             Stop();
         }
 
-        private ArtelWebSocketBehavior CreateBehavior()
+        private AgentSocketBehavior CreateBehavior()
         {
-            var behavior = new ArtelWebSocketBehavior();
+            var behavior = new AgentSocketBehavior();
             behavior.Configure(
                 (connectionId, send) =>
                 {
@@ -101,12 +101,12 @@ namespace Artel
                         sendByConnectionId.Remove(connectionId);
                     }
                 },
-                (text, reply) => incomingMessages.Enqueue(new ArtelWebSocketMessage(text, reply)));
+                (text, reply) => incomingMessages.Enqueue(new AgentMessage(text, reply)));
             return behavior;
         }
     }
 
-    internal sealed class ArtelWebSocketBehavior : WebSocketBehavior
+    internal sealed class AgentSocketBehavior : WebSocketBehavior
     {
         private Action<string, Action<string>> onOpen;
         private Action<string> onClose;
