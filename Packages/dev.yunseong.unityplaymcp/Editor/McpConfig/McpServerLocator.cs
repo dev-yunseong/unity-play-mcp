@@ -14,6 +14,7 @@ namespace Artel.McpConfig.Editor
     internal static class McpServerLocator
     {
         private const string EntryPointFromRoot = "mcp/dist/index.js";
+        private const string NpmPackageName = "unity-play-mcp";
 
         /// <summary>package 가 놓인 실제 디렉터리. package 정보를 얻지 못하면 <c>null</c>.</summary>
         internal static string PackageRoot()
@@ -22,15 +23,20 @@ namespace Artel.McpConfig.Editor
         }
 
         /// <summary>
-        /// 후보 두 자리를 차례로 본다.
+        /// 로컬 build 를 먼저 찾고, 없으면 version 을 고정한 npm package 실행을 돌려준다.
         /// </summary>
         /// <remarks>
         /// 첫째는 package 의 조부모다. package 가 저장소의 <c>Packages/</c> 에 놓였을 때 — embedded 이든
         /// 샘플 프로젝트의 <c>file:</c> 참조이든 — 거기가 저장소 루트다. 둘째는 Unity project 루트로, Unity
         /// project 자체가 저장소 루트인 경우다. 둘 다 아니면 (예를 들어 package 만 git URL 로 설치했으면)
-        /// 이 기계에 server 가 없는 것이므로 <c>null</c> 을 돌려준다.
+        /// 이 기계에 server 가 없는 경우에도 npm registry 에서 같은 version 을 실행할 수 있다. compatible
+        /// version 을 모르면 latest 를 고르지 않고 <c>null</c> 을 돌려준다.
         /// </remarks>
-        internal static string FindEntryPoint(string packageRoot, string projectRoot, Func<string, bool> fileExists)
+        internal static McpServerEntry Resolve(
+            string packageRoot,
+            string projectRoot,
+            string mcpServerVersion,
+            Func<string, bool> fileExists)
         {
             var repositoryRoot = GrandparentOf(packageRoot);
 
@@ -40,7 +46,7 @@ namespace Artel.McpConfig.Editor
 
                 if (fileExists(candidate))
                 {
-                    return candidate;
+                    return LocalEntry(candidate);
                 }
             }
 
@@ -50,11 +56,27 @@ namespace Artel.McpConfig.Editor
 
                 if (fileExists(candidate))
                 {
-                    return candidate;
+                    return LocalEntry(candidate);
                 }
             }
 
-            return null;
+            if (string.IsNullOrWhiteSpace(mcpServerVersion))
+            {
+                return null;
+            }
+
+            return new McpServerEntry(
+                "npx",
+                new[] { "-y", NpmPackageName + "@" + mcpServerVersion.Trim() },
+                "Using the npm MCP server package because no local build was found.");
+        }
+
+        private static McpServerEntry LocalEntry(string entryPoint)
+        {
+            return new McpServerEntry(
+                "node",
+                new[] { entryPoint },
+                "Using the local MCP server build found in this repository.");
         }
 
         /// <summary>

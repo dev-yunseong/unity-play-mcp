@@ -1,14 +1,37 @@
 {
   "name": "unity-play-mcp",
   "version": "0.1.0",
-  "private": true,
+  "description": "Model Context Protocol server for controlling a Unity Play MCP session.",
+  "license": "MIT",
+  "author": "dev-yunseong",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dev-yunseong/unity-play-mcp.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://github.com/dev-yunseong/unity-play-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/dev-yunseong/unity-play-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "unity"
+  ],
+  "engines": {
+    "node": ">=22.14"
+  },
+  "files": [
+    "dist/*.js"
+  ],
   "type": "module",
   "bin": {
     "unity-play-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc && cp dist/src/*.js dist/",
-    "test": "node --test dist/test/*.test.js"
+    "build": "tsc && cp dist/src/*.js dist/ && chmod +x dist/index.js",
+    "test": "node --test dist/test/*.test.js",
+    "prepack": "npm run build && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",

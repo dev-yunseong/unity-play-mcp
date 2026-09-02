@@ -14,44 +14,66 @@ namespace Artel.Tests.McpConfig
         }
 
         [Test]
-        public void FindsTheServerBesideThePackagesDirectory()
+        public void UsesTheLocalBuildBesideThePackagesDirectory()
         {
-            var found = McpServerLocator.FindEntryPoint(
+            var found = McpServerLocator.Resolve(
                 "/repo/Packages/dev.yunseong.unityplaymcp",
                 "/somewhere/else",
+                "0.1.0",
                 Existing("/repo/mcp/dist/index.js"));
 
-            Assert.AreEqual("/repo/mcp/dist/index.js", found);
+            Assert.AreEqual("node", found.Command);
+            CollectionAssert.AreEqual(new[] { "/repo/mcp/dist/index.js" }, found.Arguments);
         }
 
         [Test]
-        public void FallsBackToTheProjectRootWhenThePackageIsNotInARepositoryCheckout()
+        public void UsesTheLocalBuildAtTheProjectRootWhenThePackageIsNotInARepositoryCheckout()
         {
-            var found = McpServerLocator.FindEntryPoint(
+            var found = McpServerLocator.Resolve(
                 null,
                 "/repo",
+                "0.1.0",
                 Existing("/repo/mcp/dist/index.js"));
 
-            Assert.AreEqual("/repo/mcp/dist/index.js", found);
+            Assert.AreEqual("node", found.Command);
+            CollectionAssert.AreEqual(new[] { "/repo/mcp/dist/index.js" }, found.Arguments);
         }
 
         [Test]
         public void PrefersThePackageSiblingOverTheProjectRoot()
         {
-            var found = McpServerLocator.FindEntryPoint(
+            var found = McpServerLocator.Resolve(
                 "/repo/Packages/dev.yunseong.unityplaymcp",
                 "/project",
+                "0.1.0",
                 Existing("/repo/mcp/dist/index.js", "/project/mcp/dist/index.js"));
 
-            Assert.AreEqual("/repo/mcp/dist/index.js", found);
+            Assert.AreEqual("node", found.Command);
+            CollectionAssert.AreEqual(new[] { "/repo/mcp/dist/index.js" }, found.Arguments);
         }
 
         [Test]
-        public void FindsNothingWhenTheServerHasNotBeenBuilt()
+        public void UsesPinnedNpxWhenNoLocalBuildExists()
         {
-            var found = McpServerLocator.FindEntryPoint(
+            var found = McpServerLocator.Resolve(
                 "/repo/Packages/dev.yunseong.unityplaymcp",
                 "/repo",
+                "0.1.0",
+                Existing());
+
+            Assert.AreEqual("npx", found.Command);
+            CollectionAssert.AreEqual(new[] { "-y", "unity-play-mcp@0.1.0" }, found.Arguments);
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("   ")]
+        public void RefusesNpxWhenTheMcpServerVersionIsMissingOrEmpty(string mcpServerVersion)
+        {
+            var found = McpServerLocator.Resolve(
+                "/repo/Packages/dev.yunseong.unityplaymcp",
+                "/repo",
+                mcpServerVersion,
                 Existing());
 
             Assert.IsNull(found);
