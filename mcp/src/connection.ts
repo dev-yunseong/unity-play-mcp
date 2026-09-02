@@ -372,6 +372,7 @@ function isGamePushFrame(value: { type: string }): value is GamePush {
   if (value.type === "PERFORMANCE" || value.type === "DEVICE_CONTEXT") {
     return typeof Reflect.get(value, "id") === "number";
   }
+  const gone = Reflect.get(value, "gone");
   return value.type === "PULSE"
     && typeof Reflect.get(value, "id") === "number"
     && typeof Reflect.get(value, "schema") === "number"
@@ -385,7 +386,7 @@ function isGamePushFrame(value: { type: string }): value is GamePush {
     && Array.isArray(Reflect.get(value, "statics"))
     && Array.isArray(Reflect.get(value, "active"))
     && Array.isArray(Reflect.get(value, "deactive"))
-    && Array.isArray(Reflect.get(value, "gone"))
+    && (gone === undefined || Array.isArray(gone))
     && Array.isArray(Reflect.get(value, "changed"));
 }
 

@@ -126,6 +126,24 @@ test("routes push frames and safely ignores malformed, unmatched, and duplicate 
   fixture.connection.close();
 });
 
+test("routes a pulse when Unity omits gone", async () => {
+  const fixture = createFixture();
+  const connected = fixture.connection.ensureConnected();
+  fixture.sockets[0].open();
+  await connected;
+
+  fixture.sockets[0].message({
+    type: "PULSE", id: 1, schema: 2, reading: 1, frame: 10, scene: "Main",
+    statics: [], active: [], deactive: [], whole: true, watching: 1,
+    unresolved: 0, unwatchable: 0, changed: [],
+  });
+
+  assert.equal(fixture.folded.length, 1);
+  assert.equal((fixture.folded[0] as { type: string }).type, "PULSE");
+  assert.deepEqual(fixture.reports, []);
+  fixture.connection.close();
+});
+
 test("cleans up timeout and rejects pending actions on disconnect without resending", async () => {
   const fixture = createFixture();
   const pending = fixture.connection.sendActions([{ id: 1, method: "resume_time", params: [] }]);
