@@ -1,7 +1,9 @@
 {
   "name": "Artel.McpConfig.Editor",
   "rootNamespace": "Artel.McpConfig.Editor",
-  "references": [],
+  "references": [
+    "Artel.Affordances.Scan"
+  ],
   "includePlatforms": [
     "Editor"
   ],

@@ -180,7 +180,7 @@ namespace Artel.Affordances.Scan
                 return false;
             }
 
-            if (!Live.Pulse.Begin(destination))
+            if (!Live.Pulse.Begin(destination, ReadingInterval()))
             {
                 (ours as System.IDisposable)?.Dispose();
                 return false;
@@ -191,6 +191,25 @@ namespace Artel.Affordances.Scan
             Debug.Log("[Artel] Watching " + Live.WatchList.All().Count + " members named by the evidence" +
                       (sink == null ? ". Readings go to " + Live.PulseFile.Path : "."));
             return true;
+        }
+
+        /// <summary>이 project 에 대해 고른 판독 사이의 초.</summary>
+        /// <remarks>
+        /// 고른 값은 <c>EditorPrefs</c> 에 있고 그것은 editor 에만 있다. 이 어셈블리는 게임과 함께 빌드되므로
+        /// editor 어셈블리를 참조할 수 없고, 그래서 값을 읽는 코드는 editor 로 컴파일될 때에만 존재한다.
+        /// 값을 나르려고 <c>Resources</c> 나 <c>ProjectSettings</c> 아래에 asset 을 두는 길도 있었지만, 그것은
+        /// 사람이 청한 적 없는 파일을 프로젝트에 만드는 일이라 <c>#if</c> 하나로 갈랐다.
+        ///
+        /// 감시가 시작할 때 한 번 읽는다. 도는 중에 화면에서 값을 바꾸면 다음 시작부터 적용된다 — 박자를 도중에
+        /// 갈아 끼우면 이미 나간 판독들의 간격이 문서 어디에도 적히지 않은 채로 달라진다.
+        /// </remarks>
+        private static float ReadingInterval()
+        {
+#if UNITY_EDITOR
+            return Live.PulseIntervalPreference.Current();
+#else
+            return Live.Pulse.DefaultInterval;
+#endif
         }
 
         /// <summary>라이브 채널이 돌고 있는지.</summary>
