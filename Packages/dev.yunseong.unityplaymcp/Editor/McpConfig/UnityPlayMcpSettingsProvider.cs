@@ -8,15 +8,27 @@ namespace Artel.McpConfig.Editor
 {
     /// <summary>
     /// <c>Edit &gt; Project Settings &gt; Unity Play MCP</c>. agent 네 곳의 설정 파일에 이 저장소의 MCP server 를
-    /// 넣고 뺀다.
+    /// 넣고 뺀다. 어느 자리의 설정을 볼지는 <see cref="McpConfigScope"/> 로 고른다.
     /// </summary>
     internal static class UnityPlayMcpSettingsProvider
     {
         private const string ServerName = "unity-play";
         private const string McpServerVersionFileFromPackageRoot = "Editor/McpConfig/mcp-server-version.txt";
 
+        private const string ScopeNotice =
+            "Switching the scope does not move or delete anything that is already written. " +
+            "Each scope keeps its own file, so an entry added under the other scope stays there " +
+            "until you switch back and select Remove.";
+
+        private const string CodexProjectScopeNotice =
+            "Codex reads $CODEX_HOME/config.toml, and CODEX_HOME defaults to ~/.codex. The project-scope " +
+            "Codex file applies only when you start Codex with CODEX_HOME set to <Unity project>/.codex.";
+
         private static McpServerEntry _serverEntry;
         private static IReadOnlyList<AgentRow> _rows;
+        private static string _projectRoot;
+        private static McpConfigRoots _roots;
+        private static McpConfigScope _scope;
         private static string _rootsError;
         private static string _serverError;
 
@@ -26,7 +38,7 @@ namespace Artel.McpConfig.Editor
             return new SettingsProvider("Project/Unity Play MCP", SettingsScope.Project)
             {
                 label = "Unity Play MCP",
-                keywords = new HashSet<string> { "MCP", "agent", "Claude", "Cursor", "Codex", "VS Code" },
+                keywords = new HashSet<string> { "MCP", "agent", "Claude", "Cursor", "Codex", "VS Code", "scope" },
                 activateHandler = (searchContext, rootElement) => Reload(),
                 guiHandler = searchContext => Draw(),
             };
@@ -38,7 +50,8 @@ namespace Artel.McpConfig.Editor
         /// </remarks>
         private static void Reload()
         {
-            var projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+            _projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+
             var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var packageRoot = McpServerLocator.PackageRoot();
 
@@ -46,7 +59,7 @@ namespace Artel.McpConfig.Editor
             _serverError = null;
 
             // local build 는 package metadata 없이도 쓸 수 있다. version file 은 npx 가 필요할 때만 읽는다.
-            _serverEntry = McpServerLocator.Resolve(packageRoot, projectRoot, null, File.Exists);
+            _serverEntry = McpServerLocator.Resolve(packageRoot, _projectRoot, null, File.Exists);
 
             if (_serverEntry == null && string.IsNullOrEmpty(packageRoot))
             {
@@ -72,7 +85,7 @@ namespace Artel.McpConfig.Editor
                         }
                         else
                         {
-                            _serverEntry = McpServerLocator.Resolve(packageRoot, projectRoot, mcpServerVersion, File.Exists);
+                            _serverEntry = McpServerLocator.Resolve(packageRoot, _projectRoot, mcpServerVersion, File.Exists);
                         }
                     }
                     catch (Exception exception)
@@ -84,20 +97,36 @@ namespace Artel.McpConfig.Editor
 
             // 둘 중 하나라도 비면 설정 파일 자리를 못 정한다. 그대로 Path.Combine 에 넘기면 화면이 예외로
             // 매 frame 깨지거나, 홈 디렉터리 없이 상대경로가 만들어져 엉뚱한 자리에 파일을 새로 만든다.
-            if (string.IsNullOrEmpty(projectRoot) || string.IsNullOrEmpty(homeDirectory))
+            if (string.IsNullOrEmpty(_projectRoot) || string.IsNullOrEmpty(homeDirectory))
             {
                 _rootsError =
                     "Could not locate the Unity project directory or the home directory, so this page does " +
                     "not know where the agent configuration files are.";
+                _roots = null;
                 _rows = new List<AgentRow>();
                 return;
             }
 
             _rootsError = null;
+            _roots = new McpConfigRoots(
+                _projectRoot,
+                homeDirectory,
+                HostPlatform(),
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+            _scope = McpConfigScopePreference.Read(_projectRoot);
 
+            BuildRows();
+        }
+
+        /// <summary>고른 scope 의 catalog 로 화면의 행을 다시 만든다.</summary>
+        /// <remarks>
+        /// scope 를 바꾸면 행마다 보는 파일이 통째로 달라지므로 status 만 다시 읽어서는 안 된다.
+        /// </remarks>
+        private static void BuildRows()
+        {
             var rows = new List<AgentRow>();
 
-            foreach (var agent in McpAgent.Catalog(projectRoot, homeDirectory))
+            foreach (var agent in McpAgent.Catalog(_scope, _roots))
             {
                 rows.Add(new AgentRow(agent));
             }
@@ -106,13 +135,30 @@ namespace Artel.McpConfig.Editor
             ReadStatus();
         }
 
+        /// <remarks>
+        /// Unity editor 는 세 운영체제에서만 돈다. 그 밖의 값이 오면 Linux 의 자리를 쓴다. Unity 가 아직 없는
+        /// 운영체제를 여기서 미리 나눠 두어도 확인할 방법이 없다.
+        /// </remarks>
+        private static McpHostPlatform HostPlatform()
+        {
+            switch (Application.platform)
+            {
+                case RuntimePlatform.WindowsEditor:
+                    return McpHostPlatform.Windows;
+                case RuntimePlatform.OSXEditor:
+                    return McpHostPlatform.MacOs;
+                default:
+                    return McpHostPlatform.Linux;
+            }
+        }
+
         private static void ReadStatus()
         {
             foreach (var row in _rows)
             {
                 try
                 {
-                    row.Configured = row.Agent.Format.Contains(McpConfigFileStore.Read(row.Agent.ConfigPath), ServerName);
+                    row.Configured = McpAgentConfigurator.IsConfigured(row.Agent, ServerName);
                     row.Error = null;
                 }
                 catch (Exception exception)
@@ -153,17 +199,45 @@ namespace Artel.McpConfig.Editor
             {
                 EditorGUILayout.HelpBox(_rootsError, MessageType.Error);
             }
-
-            foreach (var row in _rows)
+            else
             {
-                DrawRow(row);
+                DrawScopePopup();
+
+                foreach (var row in _rows)
+                {
+                    DrawRow(row);
+                }
             }
 
             EditorGUILayout.Space();
 
+            // 뿌리 경로를 못 구한 상태에서도 이 버튼은 남는다. 경로를 못 구한 이유가 사라졌을 때 화면을
+            // 닫았다 여는 것 말고 다시 시도할 방법이 필요하다.
             if (GUILayout.Button("Refresh", GUILayout.Width(80f)))
             {
                 Reload();
+            }
+        }
+
+        /// <remarks>
+        /// 고른 값은 파일에 손대지 않고 어느 파일을 볼지만 바꾼다. 그래서 고르는 즉시 저장하고 행을 다시 만든다.
+        /// </remarks>
+        private static void DrawScopePopup()
+        {
+            var chosen = (McpConfigScope)EditorGUILayout.EnumPopup("Configuration scope", _scope);
+
+            if (chosen != _scope)
+            {
+                _scope = chosen;
+                McpConfigScopePreference.Write(_projectRoot, _scope);
+                BuildRows();
+            }
+
+            EditorGUILayout.HelpBox(ScopeNotice, MessageType.Info);
+
+            if (_scope == McpConfigScope.Project)
+            {
+                EditorGUILayout.HelpBox(CodexProjectScopeNotice, MessageType.Info);
             }
         }
 
@@ -214,14 +288,15 @@ namespace Artel.McpConfig.Editor
         {
             try
             {
-                var text = McpConfigFileStore.Read(row.Agent.ConfigPath);
-
                 // entry 는 넣을 때만 뜻이 있다. 빼는 쪽에서도 만들면 null 값이 args 에 실릴 수 있다.
-                var updated = add
-                    ? row.Agent.Format.Add(text, ServerName, _serverEntry)
-                    : row.Agent.Format.Remove(text, ServerName);
-
-                McpConfigFileStore.Write(row.Agent.ConfigPath, updated);
+                if (add)
+                {
+                    McpAgentConfigurator.Add(row.Agent, ServerName, _serverEntry);
+                }
+                else
+                {
+                    McpAgentConfigurator.Remove(row.Agent, ServerName);
+                }
             }
             catch (Exception exception)
             {
