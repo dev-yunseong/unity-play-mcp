@@ -72,6 +72,13 @@ test("gone removes scene and selector key", () => {
   assert.deepEqual(store.getState()?.active, []);
 });
 
+test("a delta without gone retains existing objects", () => {
+  const store = new PulseStore();
+  store.fold(pulse({ whole: true, active: [object(1, "A", 1)] }));
+  store.fold(pulse({ reading: 2, gone: undefined }));
+  assert.deepEqual(store.getState()?.active.map(({ id }) => id), [1]);
+});
+
 test("scene change resets objects even if malformed as delta", () => {
   const store = new PulseStore();
   store.fold(pulse({ whole: true, active: [object(1, "A", 1)] }));

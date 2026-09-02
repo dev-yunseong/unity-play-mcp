@@ -48,7 +48,7 @@ export interface PulseFrame {
   watching: number;
   unresolved: number;
   unwatchable: number;
-  gone: string[];
+  gone?: string[];
   changed: string[];
 }
 
@@ -260,7 +260,7 @@ function indexObjects(pulse: PulseFrame, replace: boolean, sceneChanged: boolean
     ? new Map<string, MemberReading[]>()
     : new Map(previous.history);
 
-  for (const key of pulse.gone) {
+  for (const key of pulse.gone ?? []) {
     const held = objects.get(key);
     objects.delete(key);
     forgetHistory(history, key);
