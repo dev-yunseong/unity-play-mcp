@@ -26,6 +26,25 @@ cd mcp && npm install && npm run build && npm test
 
 `mcp/README.md` has the client configuration and the environment variables.
 
+## Configuring an agent from Unity
+
+`Edit > Project Settings > Unity Play MCP` writes the `unity-play` server entry
+into an agent's MCP configuration file, so the absolute path of the built server
+does not have to be typed by hand. It covers Claude Code (`.mcp.json`), Cursor
+(`.cursor/mcp.json`), and VS Code (`.vscode/mcp.json`) in the Unity project
+directory, and Codex (`~/.codex/config.toml`) in the home directory.
+
+The page finds `mcp/dist/index.js` next to the package's repository checkout. Run
+`npm install && npm run build` in `mcp/` first; until that file exists the page
+says so and the `Add` buttons stay disabled.
+
+Writing keeps everything else in the file — other MCP servers, and the unrelated
+tables in `config.toml`. It does replace the whole `unity-play` entry, so an
+`[mcp_servers.unity-play.env]` table added by hand is rewritten away the next
+time `Add` is pressed. A JSON file is reformatted as it is rewritten, so hand
+formatting does not survive; a `.vscode/mcp.json` that carries comments is refused
+rather than rewritten, because rewriting it would delete them.
+
 ## Sample
 
 `samples/WordVenture` is included as the sample Unity project. It references

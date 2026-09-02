@@ -7,6 +7,9 @@ Build it with `npm install && npm run build`, then configure the MCP client to
 run `node mcp/dist/index.js` from the repository root. The game listens at
 `ws://127.0.0.1:17311/ws` by default.
 
+`Edit > Project Settings > Unity Play MCP` in Unity writes that configuration for
+Claude Code, Cursor, VS Code, or Codex without hand-editing the file.
+
 `UNITY_PLAY_MCP_URL` overrides the WebSocket URL. `UNITY_PLAY_MCP_TIMEOUT_MS`
 sets the action timeout in milliseconds and defaults to `15000`.
 
