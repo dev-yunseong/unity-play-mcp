@@ -2,7 +2,7 @@
 
 - Date: 2026-09-02
 - GitHub Issue: https://github.com/dev-yunseong/unity-play-mcp/issues/22
-- Status: In Progress — implementation and local validation complete; first npm publish requires two-factor authentication
+- Status: In Progress — npm 0.1.0 published; trusted publisher setup remains after merge
 
 ## Goal
 
@@ -92,10 +92,12 @@ agent 를 붙일 수 있게 된다.
   - `workflow_dispatch` 는 `release_tag` input 을 필수로 받아 publish 없이 변경 감지·version 검증·tarball 검증을
     실행한다.
 
-- [ ] **Step 6: first publish and trust setup** — workflow 와 같은 script 로 `.tgz` 를 만들고 모든 artifact
-      검증을 통과한 뒤 현재 login session 으로 `npm publish <검증된.tgz> --ignore-scripts` 를 실행한다. publish
-      뒤 registry version 의 integrity 가 local pack 과 같은지 확인한다. workflow 가 default branch 에 들어간
-      뒤 npm trusted publisher 를 GitHub repository
+- [x] **Step 6a: first publish** — workflow 와 같은 script 로 `.tgz` 를 만들고 모든 artifact 검증을 통과한 뒤
+      현재 login session 으로 `npm publish <검증된.tgz> --ignore-scripts --otp=<one-time password>` 를 실행했다.
+      publish 뒤 registry version 의 integrity 가 local pack 과 같은지 확인했고, `npx -y unity-play-mcp@0.1.0`도
+      bounded smoke test에서 stdio를 기다리는 상태를 확인했다.
+
+- [ ] **Step 6b: trusted publisher setup** — workflow 가 default branch 에 들어간 뒤 npm trusted publisher 를 GitHub repository
       `dev-yunseong/unity-play-mcp`, workflow `publish-mcp.yml`, environment 없음, 허용 action `npm publish` 로
       연결한다. 빈 directory의 실행 확인은 bounded timeout 으로 process가 즉시 crash하지 않고 stdio를 기다리는지
       검사한다.
