@@ -5,7 +5,8 @@
 /// 여기 적는 것은 그 순서와 전제뿐이다. 이 문자열은 모든 대화에 들어가므로 tool 설명을 옮겨 적지 않는다.
 export const serverInstructions = [
   "Unity Play MCP drives a Unity game running in the Unity editor on this machine.",
-  "Every tool talks to that editor over a local WebSocket, so nothing works unless the user has the Unity project open and has entered Play Mode. If a tool reports that the connection failed, ask the user to enter Play Mode rather than retrying.",
+  "Every tool talks to that editor over a local WebSocket, so nothing works unless the user has the Unity project open and has entered Play Mode.",
+  "Call get_unity_status first. It answers whether the game is running and whether readings have started, and it never fails just because Unity is off. Any other tool that reports Unity is not running means the same thing: ask the user to enter Play Mode instead of retrying.",
   "",
   "Reading the scene:",
   "- Call start_readings once before the first get_scene_state. Without it get_scene_state answers that no reading has arrived.",

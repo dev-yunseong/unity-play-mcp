@@ -67,6 +67,22 @@ interface PendingAction {
   timeout: ReturnType<typeof setTimeout>;
 }
 
+/// Unity 에 닿지 못해 실패했다는 것.
+///
+/// 이것과 그냥 `Error` 를 가르는 이유는 부르는 쪽이 두 실패에 다른 말을 해야 하기 때문이다. 소켓에
+/// 닿지 못한 것은 게임이 안 돌고 있다는 뜻이고 사용자가 Play Mode 를 시작해야 풀린다. action 이
+/// 실패한 것은 게임은 돌고 있는데 그 요청이 틀렸다는 뜻이다. 문자열을 비교해 가르지 않는다.
+export class UnityUnreachableError extends Error {
+  constructor(readonly url: string, readonly cause?: unknown) {
+    super(
+      `Unity is not running. Nothing is listening at ${url}. ` +
+      "The Unity editor must be open with the project in Play Mode. " +
+      "Ask the user to enter Play Mode, then try again.",
+    );
+    this.name = "UnityUnreachableError";
+  }
+}
+
 const OPEN = 1;
 
 export class UnityConnection {
@@ -133,6 +149,16 @@ export class UnityConnection {
     return resultFrame.results;
   }
 
+  /// 지금 이 순간 소켓이 열려 있는지. 새로 연결하지 않으므로 상태를 보는 쪽이 상태를 바꾸지 않는다.
+  isConnected(): boolean {
+    return this.socket?.readyState === OPEN;
+  }
+
+  /// 이 server 가 Unity 를 찾는 자리.
+  get endpoint(): string {
+    return this.url;
+  }
+
   async ensureConnected(): Promise<void> {
     this.started = true;
     await this.connect();
@@ -177,7 +203,7 @@ export class UnityConnection {
         if (!settled) {
           settled = true;
           this.connectionAttempt = undefined;
-          reject(new Error(`Unity WebSocket closed before connecting: ${this.url}`));
+          reject(new UnityUnreachableError(this.url));
         }
         this.handleDisconnect(socket, new Error("Unity WebSocket closed"));
       });
@@ -185,7 +211,7 @@ export class UnityConnection {
         if (!settled) {
           settled = true;
           this.connectionAttempt = undefined;
-          reject(toError(error, `Unity WebSocket failed to connect: ${this.url}`));
+          reject(new UnityUnreachableError(this.url, error));
         }
         this.handleDisconnect(socket, toError(error, "Unity WebSocket error"));
       });
