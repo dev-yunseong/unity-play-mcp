@@ -11,7 +11,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -164,3 +164,10 @@ jobs:
         if: github.event_name == 'release' && steps.mcp_changes.outputs.changed == 'true' && steps.registry.outputs.exists != 'true'
         working-directory: mcp
         run: npm publish "${{ steps.pack.outputs.tarball }}" --ignore-scripts
+
+      - name: Update latest tag
+        if: github.event_name == 'release'
+        run: |
+          set -euo pipefail
+          git tag -f latest "$TARGET_TAG"
+          git push origin refs/tags/latest --force
