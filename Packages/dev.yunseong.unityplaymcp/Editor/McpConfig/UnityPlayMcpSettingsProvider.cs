@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using Artel.Affordances.Live;
 using UnityEditor;
 using UnityEngine;
 
@@ -8,7 +10,8 @@ namespace Artel.McpConfig.Editor
 {
     /// <summary>
     /// <c>Edit &gt; Project Settings &gt; Unity Play MCP</c>. agent 네 곳의 설정 파일에 이 저장소의 MCP server 를
-    /// 넣고 뺀다. 어느 자리의 설정을 볼지는 <see cref="McpConfigScope"/> 로 고른다.
+    /// 넣고 뺀다. 어느 자리의 설정을 볼지는 <see cref="McpConfigScope"/> 로 고르고, 살아 있는 값을 얼마나 자주 읽을지는
+    /// <see cref="PulseIntervalPreference"/> 로 고른다.
     /// </summary>
     internal static class UnityPlayMcpSettingsProvider
     {
@@ -24,11 +27,19 @@ namespace Artel.McpConfig.Editor
             "Codex reads $CODEX_HOME/config.toml, and CODEX_HOME defaults to ~/.codex. The project-scope " +
             "Codex file applies only when you start Codex with CODEX_HOME set to <Unity project>/.codex.";
 
+        private const string ReadingIntervalNotice =
+            "While the agent is watching the scene in Play Mode, the watched members are read this often. " +
+            "A value shorter than the default catches a value that rises and falls again inside one second, " +
+            "which a 1 second interval never sees; the game pays for it, because every reading walks the scene " +
+            "while it runs. A longer value costs the game less and hides more. The interval applies the next " +
+            "time watching starts, not to a run already in progress.";
+
         private static McpServerEntry _serverEntry;
         private static IReadOnlyList<AgentRow> _rows;
         private static string _projectRoot;
         private static McpConfigRoots _roots;
         private static McpConfigScope _scope;
+        private static float _readingInterval;
         private static string _rootsError;
         private static string _serverError;
 
@@ -38,7 +49,7 @@ namespace Artel.McpConfig.Editor
             return new SettingsProvider("Project/Unity Play MCP", SettingsScope.Project)
             {
                 label = "Unity Play MCP",
-                keywords = new HashSet<string> { "MCP", "agent", "Claude", "Cursor", "Codex", "VS Code", "scope" },
+                keywords = new HashSet<string> { "MCP", "agent", "Claude", "Cursor", "Codex", "VS Code", "scope", "interval" },
                 activateHandler = (searchContext, rootElement) => Reload(),
                 guiHandler = searchContext => Draw(),
             };
@@ -94,6 +105,12 @@ namespace Artel.McpConfig.Editor
                     }
                 }
             }
+
+            // 간격은 project 경로만 있으면 읽을 수 있다. agent 행이 그려지지 못하는 상황에서도 이 값은 보여야 하므로
+            // 아래의 이른 return 앞에서 읽는다.
+            _readingInterval = string.IsNullOrEmpty(_projectRoot)
+                ? PulseIntervalPreference.Default
+                : PulseIntervalPreference.Read(_projectRoot);
 
             // 둘 중 하나라도 비면 설정 파일 자리를 못 정한다. 그대로 Path.Combine 에 넘기면 화면이 예외로
             // 매 frame 깨지거나, 홈 디렉터리 없이 상대경로가 만들어져 엉뚱한 자리에 파일을 새로 만든다.
@@ -210,6 +227,10 @@ namespace Artel.McpConfig.Editor
             }
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Live readings", EditorStyles.boldLabel);
+            DrawReadingInterval();
+
+            EditorGUILayout.Space();
 
             // 뿌리 경로를 못 구한 상태에서도 이 버튼은 남는다. 경로를 못 구한 이유가 사라졌을 때 화면을
             // 닫았다 여는 것 말고 다시 시도할 방법이 필요하다.
@@ -217,6 +238,38 @@ namespace Artel.McpConfig.Editor
             {
                 Reload();
             }
+        }
+
+        /// <remarks>
+        /// <c>DelayedFloatField</c> 를 쓰는 것은 범위 밖의 값을 잘라내기 때문이다. 보통의 <c>FloatField</c> 는
+        /// 글자를 칠 때마다 값을 돌려주므로, "0.25" 를 치는 사람이 "0" 에서 이미 최솟값으로 잘려 나머지를 칠 수 없다.
+        /// </remarks>
+        private static void DrawReadingInterval()
+        {
+            if (string.IsNullOrEmpty(_projectRoot))
+            {
+                EditorGUILayout.HelpBox(
+                    "Could not locate the Unity project directory, so this page cannot remember a reading interval.",
+                    MessageType.Error);
+                return;
+            }
+
+            var typed = EditorGUILayout.DelayedFloatField("Reading interval (s)", _readingInterval);
+
+            if (typed != _readingInterval)
+            {
+                // 저장한 값을 그대로 받아 화면에 되돌린다. 잘려 나간 값을 입력란이 계속 들고 있으면 다음에
+                // 화면을 열 때 숫자가 저 혼자 바뀐 것처럼 보인다.
+                _readingInterval = PulseIntervalPreference.Write(_projectRoot, typed);
+            }
+
+            EditorGUILayout.LabelField(
+                " ",
+                "Default " + PulseIntervalPreference.Default.ToString(CultureInfo.InvariantCulture) + " s, " +
+                "between " + PulseIntervalPreference.Minimum.ToString(CultureInfo.InvariantCulture) + " s and " +
+                PulseIntervalPreference.Maximum.ToString(CultureInfo.InvariantCulture) + " s.",
+                EditorStyles.miniLabel);
+            EditorGUILayout.HelpBox(ReadingIntervalNotice, MessageType.Info);
         }
 
         /// <remarks>

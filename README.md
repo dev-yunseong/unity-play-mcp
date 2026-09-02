@@ -92,6 +92,19 @@ The MCP server registers four prompts. In an agent that surfaces them, they appe
 
 A prompt is something you choose. What the agent has to work out on its own — that Unity must be in Play Mode, what order the tools go in — is in the instructions the server sends on connect instead.
 
+## Reading interval
+
+While an agent watches the running game, Unity Play MCP reads the members the scan named at a fixed interval and sends only what changed. The default interval is 1 second.
+
+To change it, open **Edit > Project Settings > Unity Play MCP** and set **Reading interval (s)**. Unity remembers the value for this project. Values from 0.02 to 10 seconds are accepted; a value outside that range is clamped to the nearest end, and a value that cannot be read as a number falls back to 1 second. A new interval applies the next time watching starts, not to a run already in progress.
+
+What the interval buys and costs:
+
+- **Shorter** catches a value that rises and falls again between two readings. At 1 second, a counter that goes up and comes back down inside that second never appears to have moved.
+- **Longer** costs the game less. Every reading walks the watched members while the game runs, so 0.1 second means ten of those every second — enough to slow Play Mode noticeably, which makes what the agent sees stop matching how the game really runs.
+
+Shorten it only while chasing a value that moves faster than 1 second, and put it back afterwards.
+
 ## Troubleshooting
 
 ### The agent does not show `unity-play`
