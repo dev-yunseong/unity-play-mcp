@@ -5,6 +5,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { UnityConnection } from "./connection.js";
+import { serverInstructions } from "./instructions.js";
+import { registerPrompts } from "./prompts.js";
 import { PulseStore } from "./pulse.js";
 import { registerTools } from "./tools.js";
 
@@ -14,9 +16,13 @@ const connection = new UnityConnection({
   timeoutMilliseconds: parseTimeout(process.env.UNITY_PLAY_MCP_TIMEOUT_MS),
   pulseStore,
 });
-const server = new McpServer({ name: "unity-play-mcp", version: packageVersion() });
+const server = new McpServer(
+  { name: "unity-play-mcp", version: packageVersion() },
+  { instructions: serverInstructions },
+);
 
 registerTools(server, connection, pulseStore);
+registerPrompts(server);
 await server.connect(new StdioServerTransport());
 
 function parseTimeout(rawValue: string | undefined): number {

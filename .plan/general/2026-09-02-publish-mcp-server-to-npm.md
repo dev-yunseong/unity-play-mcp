@@ -15,6 +15,8 @@ agent 를 붙일 수 있게 된다.
 - MCP server 를 별도 저장소로 분리하는 것.
 - Unity package 를 저장소 루트로 옮겨 `?path=` 없이 설치되게 하는 것.
 - release 와 무관한 push 에서 npm package 를 publish 하는 것.
+- release 뒤 `latest` tag 를 이동시켜 Unity Package Manager 설치 URL이 최신 release를 가리키게 하는 것은
+  포함한다. 특정 version tag 설치도 계속 지원한다.
 - 기존 build script 구조 (`tsc` 로 `dist/src` 와 `dist/test` 를 만든 뒤 `dist/` 로 flatten) 를 갈아엎는 것.
 
 ## Context / Constraints
@@ -70,7 +72,7 @@ agent 를 붙일 수 있게 된다.
       version 과 `mcp-server-version.txt` 를 같이 올려야 한다는 것을 적는다.
 
 - [x] **Step 5: release publish workflow** — `.github/workflows/publish-mcp.yml` 을 만든다.
-  - `release: types: [published]`, GitHub-hosted runner, `contents: read` 와 `id-token: write` 만 사용한다.
+  - `release: types: [published]`, GitHub-hosted runner, `contents: write` 와 `id-token: write` 를 사용한다.
   - checkout 은 tag history 를 비교할 수 있도록 전체 history 를 받는다. GitHub API 가 돌려준 release 목록에서
     현재 release 를 제외한 직전 published release tag 를 기준으로 `git diff <previous>..<current> -- mcp/` 를
     계산하고, `mcp/**` 변경이 있을 때만 계속한다. 이전 published release 가 없으면 계속한다.
@@ -89,6 +91,8 @@ agent 를 붙일 수 있게 된다.
     다르면 실패한다. version 이 없을 때만 `npm publish <검증된.tgz> --ignore-scripts` 를 실행한다. 이 idempotency가
     최초 manual publish 뒤 첫 release와 성공한 workflow 재실행을 안전하게 만든다.
     npm trusted publishing 이 OpenID Connect token 과 provenance 를 자동 생성하므로 `NPM_TOKEN` 은 저장하지 않는다.
+  - release event의 validation과 publish가 모두 성공한 뒤에만 `latest` tag를 `TARGET_TAG`로 force update한다.
+    `workflow_dispatch`에서는 tag를 이동하지 않는다.
   - `workflow_dispatch` 는 `release_tag` input 을 필수로 받아 publish 없이 변경 감지·version 검증·tarball 검증을
     실행한다.
 

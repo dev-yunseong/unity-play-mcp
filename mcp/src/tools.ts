@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
 import { objectKey, type PulseObject, type PulseStore } from "./pulse.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
@@ -85,7 +86,7 @@ export async function dispatchActions(
     };
   } catch (error) {
     return {
-      content: [{ type: "text", text: `Unity action failed: ${errorMessage(error)}` }],
+      content: [{ type: "text", text: failureText("Unity action failed", error) }],
       isError: true,
     };
   }
@@ -93,6 +94,57 @@ export async function dispatchActions(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/// 실패를 agent 가 읽을 문장으로 바꾼다.
+///
+/// Unity 에 닿지 못한 것은 요청의 문제가 아니라 게임이 안 돌고 있다는 뜻이라, 무엇을 하려다 실패했는지
+/// 는 도움이 되지 않는다. 그래서 그 경우에만 접두사를 떼고 사용자가 할 일만 남긴다. 소켓 오류를
+/// 그대로 흘리면 agent 가 자기 인자를 의심하거나 재시도한다.
+export function failureText(attempted: string, error: unknown): string {
+  if (error instanceof UnityUnreachableError) {
+    return error.message;
+  }
+  return `${attempted}: ${errorMessage(error)}`;
+}
+
+export interface UnityStatus {
+  connected: boolean;
+  endpoint: string;
+  reading?: number;
+  frame?: number;
+  scene?: string;
+  lastReadingAt?: number;
+  now: number;
+}
+
+/// status tool 이 돌려줄 문장.
+///
+/// 순수 함수인 이유는 이 문장이 계약이기 때문이다. 연결됨과 안 됨, pulse 가 시작됨과 안 됨의 네 경우가
+/// 서로 다른 말을 해야 하고, 그것을 실제 소켓 없이 확인할 수 있어야 한다.
+export function describeStatus(status: UnityStatus): string {
+  if (!status.connected) {
+    return [
+      `Unity is not running. Nothing is listening at ${status.endpoint}.`,
+      "The Unity editor must be open with the project in Play Mode.",
+      "Ask the user to enter Play Mode before calling any other tool.",
+    ].join(" ");
+  }
+
+  const head = `Unity is running and connected at ${status.endpoint}.`;
+
+  if (status.lastReadingAt === undefined) {
+    return `${head} No scene reading has arrived yet. Call start_readings before get_scene_state.`;
+  }
+
+  const secondsAgo = Math.max(0, Math.round((status.now - status.lastReadingAt) / 1000));
+  const age = secondsAgo === 0 ? "just now" : `${secondsAgo}s ago`;
+
+  return [
+    head,
+    `Readings are running: reading ${status.reading} on frame ${status.frame} arrived ${age}.`,
+    `Scene: ${status.scene}.`,
+  ].join(" ");
 }
 
 async function dispatchOne(
@@ -275,6 +327,33 @@ function findCapture(results: ActionResult[]): CapturePayload | undefined {
 }
 
 export function registerTools(server: McpServer, connection: UnityConnection, store: PulseStore): void {
+  server.registerTool("get_unity_status", {
+    description: "Check whether the Unity game is running and reachable, and whether scene readings have started. Call this first, and whenever another tool reports that Unity is not running.",
+    inputSchema: {},
+  }, async () => {
+    // 닿지 못하는 것은 이 tool 의 실패가 아니라 이 tool 이 물어본 것에 대한 답이다. isError 를 붙이면
+    // agent 가 상태를 물어본 것마저 실패했다고 읽는다.
+    try {
+      await connection.ensureConnected();
+    } catch (error) {
+      if (error instanceof UnityUnreachableError) {
+        return text(describeStatus({ connected: false, endpoint: connection.endpoint, now: Date.now() }));
+      }
+      return { ...text(failureText("Could not check Unity", error)), isError: true };
+    }
+
+    const state = store.getState() as unknown as Record<string, unknown> | undefined;
+    return text(describeStatus({
+      connected: connection.isConnected(),
+      endpoint: connection.endpoint,
+      reading: state?.reading as number | undefined,
+      frame: state?.frame as number | undefined,
+      scene: state?.scene as string | undefined,
+      lastReadingAt: store.getLastReadingAt(),
+      now: Date.now(),
+    }));
+  });
+
   server.registerTool("get_scene_state", {
     description: "Read the latest folded Unity scene state. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on.",
     inputSchema: {
@@ -290,7 +369,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       return stateResponse(store, selector, includeInactive, includeHistory, root, depth);
     } catch (error) {
       return {
-        ...text(`Scene state is unavailable: ${errorMessage(error)}`),
+        ...text(failureText("Scene state is unavailable", error)),
         isError: true,
       };
     }
@@ -326,7 +405,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         { type: "text", text: `${capture.width}x${capture.height}; clipped=${capture.clipped}` },
       ] };
     } catch (error) {
-      return { ...text(`Screenshot failed: ${errorMessage(error)}`), isError: true };
+      return { ...text(failureText("Screenshot failed", error)), isError: true };
     }
   });
 

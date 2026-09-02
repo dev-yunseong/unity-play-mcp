@@ -16,8 +16,10 @@ Unity Play MCP를 사용하면 coding agent가 실행 중인 Unity game의 현�
 Unity에서 **Window > Package Manager**를 열고 **Add package from git URL**을 선택한 뒤 다음 URL을 입력합니다.
 
 ```text
-https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp
+https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#latest
 ```
+
+`latest` tag는 가장 최근에 성공한 GitHub release를 가리킵니다. Unity Package Manager가 이전 version을 cache에서 계속 사용하면 **Update**를 누르거나 package를 제거한 뒤 다시 추가합니다.
 
 특정 release를 설치하려면 package path 뒤에 tag를 붙입니다.
 
@@ -73,6 +75,23 @@ tool을 호출하기 전에 Play Mode를 시작합니다. Unity는 `ws://127.0.0
 - “game screen을 capture해줘.”
 - “Start button을 눌러줘.”
 
+“Unity 켜져 있어?”라고 물으면 agent가 `get_unity_status`를 부릅니다. 게임에 닿는지, pulse가 시작됐는지, 마지막 pulse가 언제 왔는지 답합니다. 다른 tool도 Unity에 닿지 못하면 socket 오류 대신 게임이 돌고 있지 않으니 Play Mode를 시작하라고 답합니다.
+
+MCP server는 agent가 연결할 때 짧은 사용 안내를 함께 넘깁니다. tool들이 어떤 관계인지 매번 설명하지 않아도 됩니다. 안내에는 Unity가 Play Mode여야 한다는 것, 첫 `get_scene_state` 전에 `start_readings`를 부른다는 것, `click`과 `enter_text`가 쓰는 instance id는 `get_scene_state`가 알려준다는 것이 담깁니다.
+
+## 준비된 요청
+
+MCP server는 prompt 네 개를 등록합니다. prompt를 지원하는 agent에서는 문장을 입력하는 대신 골라서 부르는 command로 보입니다. Claude Code는 `/unity-play:<이름>`으로 표시합니다.
+
+| Prompt | 하는 일 | 인자 |
+| --- | --- | --- |
+| `inspect_scene` | scene을 읽고 무엇이 있는지, 어떤 object를 조작할 수 있는지 보고합니다. | `selector` (선택) |
+| `review_screen` | game screen을 capture하고 layout, 가독성, 이상한 곳을 검토합니다. | `focus` (선택) |
+| `run_steps` | 적어 준 player action 순서를 수행하고 처음으로 어긋난 단계를 보고합니다. | `steps`, `expectation` (선택) |
+| `track_value` | object의 member 값이 pulse를 거치며 어떻게 움직이는지 봅니다. action을 함께 줄 수 있습니다. | `selector`, `action` (선택) |
+
+prompt는 사용자가 고르는 것입니다. agent가 스스로 판단해야 하는 것 — Unity가 Play Mode여야 한다는 것, tool을 어떤 순서로 부르는지 — 은 prompt가 아니라 연결할 때 server가 넘기는 안내에 있습니다.
+
 ## Reading interval
 
 agent가 실행 중인 game을 지켜보는 동안, Unity Play MCP는 scan이 이름을 적어 둔 member를 일정한 간격으로 읽고 바뀐 것만 보냅니다. 기본 간격은 1초입니다.
@@ -98,7 +117,7 @@ Unity 설정 page에서 **Refresh**를 누르고 **Add**를 다시 누른 뒤 ag
 
 ### MCP server가 Unity에 연결하지 못함
 
-올바른 Unity project가 열려 있고 Play Mode인지 확인합니다. 연결은 local 전용입니다. remote agent나 container에서 사용하려면 host loopback address에 접근할 수 있어야 합니다.
+agent에게 `get_unity_status`를 부르게 하면 어느 주소로 연결을 시도하는지, 거기에 무엇이 응답하는지 알려줍니다. 올바른 Unity project가 열려 있고 Play Mode인지 확인합니다. 연결은 local 전용입니다. remote agent나 container에서 사용하려면 host loopback address에 접근할 수 있어야 합니다.
 
 ### 설정 page가 설정 파일을 읽을 수 없다고 표시함
 
