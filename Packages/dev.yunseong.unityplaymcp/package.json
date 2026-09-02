@@ -1,6 +1,6 @@
 {
   "name": "dev.yunseong.unityplaymcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Unity Play MCP",
   "description": "Read the current Unity scene state, perform actions, and capture screenshots for coding agents.",
   "license": "MIT",

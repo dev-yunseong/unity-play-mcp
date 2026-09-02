@@ -27,6 +27,26 @@ To install a specific release, append its tag after the package path:
 https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#v0.1.0
 ```
 
+## Upgrading from 0.1.0
+
+Release 0.2.0 renames every namespace, assembly, and type from `Artel` to `UnityPlayMcp`. Code that referred to the package by its old names no longer compiles.
+
+| Was | Now |
+| --- | --- |
+| namespace `Artel.*` | `UnityPlayMcp.*` |
+| assembly `Artel.Runtime` | `UnityPlayMcp.Runtime` |
+| `ArtelManager` | `UnityPlayMcpHost` |
+| `ArtelInput` | `VirtualInput` |
+| `ArtelWebSocketServer` | `AgentWebSocketServer` |
+
+Nothing written under the old names is migrated or read. The package writes the new names and leaves the old artifacts where they are, so delete these when you no longer want them:
+
+- `<persistentDataPath>/artel-pulse.jsonl` and `<persistentDataPath>/artel-affordances.json` — written again under `unity-play-mcp-` names
+- `Library/ArtelScope` — a cache, rebuilt on the next scan
+- the `Artel.DarkTheme` PlayerPrefs entry — the overlay theme falls back to its default once, then remembers again
+
+Profiler captures taken before the upgrade carry `Artel.Manager.*` marker names. The new ones are `UnityPlayMcp.Host.*`, so old and new captures do not line up.
+
 ## Connect your agent
 
 1. In Unity, open **Edit > Project Settings > Unity Play MCP**.

@@ -30,7 +30,7 @@ namespace UnityPlayMcp.Diagnostics
         /// 런타임 어셈블리가 에디터 전용 API에 걸려 Standalone 빌드가 깨진다. 상수 쪽이 싸고,
         /// 어긋나면 <c>RuntimeEnvironmentTests</c>가 잡는다.
         /// </summary>
-        private const string SdkVersion = "0.1.0";
+        private const string SdkVersion = "0.2.0";
 
 #if ENABLE_IL2CPP
         private const string ScriptingBackend = "IL2CPP";
