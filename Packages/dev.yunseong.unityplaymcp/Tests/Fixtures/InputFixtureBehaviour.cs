@@ -10,20 +10,16 @@ namespace UnityPlayMcp.Tests.Fixtures
     /// under test is a consumer of the package, not the package's own test assembly. A test that
     /// wove itself would prove less than the one thing this fixture exists to prove — that a
     /// game's own `Input` calls come out reading the virtual mouse and keyboard.
+    ///
+    /// It names no UnityPlayMcp type at all, which is what makes it a real game assembly. It once
+    /// carried a `UnityPlayMcpHost` field for the sole purpose of putting `UnityPlayMcp.Runtime`
+    /// into the fixture's IL metadata, because the weaver would not touch an assembly without that
+    /// reference. That field hid the defect in issue #47: the tests passed while every real game
+    /// went unwoven. Do not add one back — the weaver now adds the reference itself when it has a
+    /// call to rewrite.
     /// </remarks>
     public sealed class InputFixtureBehaviour : MonoBehaviour
     {
-        /// <summary>
-        /// The one runtime type this fixture names on purpose.
-        /// </summary>
-        /// <remarks>
-        /// InputMethodWeaver only takes an assembly whose IL actually references `UnityPlayMcp.Runtime`,
-        /// and the IL carries that reference only where a type is used. Drop this field and the
-        /// weaver skips the fixture: every `Input` call below keeps reading the real device, and
-        /// the tests fail while the weaver itself is working.
-        /// </remarks>
-        public UnityPlayMcpHost Manager;
-
         public bool ReadSpaceKeyDown()
         {
             return Input.GetKeyDown(KeyCode.Space);
