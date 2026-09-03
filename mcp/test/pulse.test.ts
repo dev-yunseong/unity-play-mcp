@@ -103,6 +103,53 @@ test("accepted reading replaces statics and changed metadata", () => {
   assert.deepEqual(store.getState()?.changed, ["second"]);
 });
 
+/// `members` 없는 component. #19 가 적어 둔 wire key 어긋남(`members` 대신 `m`)이 실제로
+/// 만드는 모양과 같다 — 이 test 는 그 어긋남 자체가 아니라, 그런 frame 이 왔을 때 fold 가
+/// 죽지 않고 무엇을 못 읽었는지 남기는지를 본다.
+function objectWithoutMembers(id: number, selector: string): PulseObject {
+  return {
+    id,
+    path: `Canvas/${selector}`,
+    selector,
+    by: [{ on: "Widget" }],
+  } as unknown as PulseObject;
+}
+
+test("a frame that cannot be folded is not counted as an arrived reading", () => {
+  let clock = 1_000;
+  const store = new PulseStore(() => clock);
+
+  // 먼저 정상 reading 하나를 성공시킨다. "성공 하나 뒤에 실패 하나" 가 #48 이 고치는 실제
+  // 장면이다 — reading 이 잘 들어오다 멈추는 순간이다.
+  store.fold(pulse({ whole: true, active: [object(1, "Card", 1)] }));
+  assert.equal(store.getLastReadingAt(), 1_000);
+  assert.equal(store.getLastUnreadableFrame(), undefined);
+
+  clock = 2_000;
+  assert.equal(
+    store.fold(pulse({ reading: 2, active: [objectWithoutMembers(1, "Card")] })),
+    false,
+  );
+
+  // 실패한 frame 은 도착한 reading 으로 세지 않는다 — `get_unity_status` 와
+  // `get_scene_state` 가 같은 답을 하려면 이전 성공 상태 그대로 남아야 한다.
+  assert.equal(store.getLastReadingAt(), 1_000);
+  assert.deepEqual(store.getState()?.active.map(({ id }) => id), [1]);
+
+  const unreadable = store.getLastUnreadableFrame();
+  assert.equal(unreadable?.at, 2_000);
+  assert.ok((unreadable?.reason.length ?? 0) > 0);
+});
+
+test("a successful reading clears a prior unreadable-frame mark", () => {
+  const store = new PulseStore();
+  store.fold(pulse({ whole: true, active: [objectWithoutMembers(1, "Card")] }));
+  assert.notEqual(store.getLastUnreadableFrame(), undefined);
+
+  store.fold(pulse({ reading: 2, active: [object(1, "Card", 1)] }));
+  assert.equal(store.getLastUnreadableFrame(), undefined);
+});
+
 test("diagnostics retain the latest performance and device context independently", () => {
   const store = new PulseStore();
   store.fold({ type: "PERFORMANCE", id: 1, fps: 30 });
