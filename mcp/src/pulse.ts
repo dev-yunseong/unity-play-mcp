@@ -341,10 +341,22 @@ function foldInternal(
   return { publicState: toPublicState(pulse, objects, tombstones), objects, tombstones, history };
 }
 
+/// frame 은 도착했지만 접을 수 없었다는 것. `get_unity_status` 가 이걸로 무엇을 못 읽었는지
+/// 말한다.
+export interface UnreadableFrame {
+  at: number;
+  reason: string;
+}
+
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export class PulseStore {
   private pulseState?: InternalPulseState;
   private diagnostics: PulseDiagnostics = {};
   private lastReadingAt?: number;
+  private lastUnreadableFrame?: UnreadableFrame;
 
   /// 시계를 밖에서 받는 이유는 test 가 "pulse 가 얼마나 오래되었는지" 를 실제 시간을 기다리지 않고
   /// 확인하기 위해서다.
@@ -352,10 +364,21 @@ export class PulseStore {
 
   fold(frame: GamePush): boolean {
     if (frame.type === "PULSE") {
+      const previous = this.pulseState;
+      let folded: InternalPulseState | undefined;
+      try {
+        folded = foldInternal(previous, frame);
+      } catch (error) {
+        // 이 frame 은 읽지 못했다. 도착한 reading 으로 세면 `get_unity_status` 와
+        // `get_scene_state` 가 서로 다른 말을 하게 되므로 `lastReadingAt` 은 건드리지 않는다.
+        this.lastUnreadableFrame = { at: this.now(), reason: reasonOf(error) };
+        return false;
+      }
       // 도착했다는 사실 자체가 게임이 돌고 있다는 증거다. 값이 하나도 안 바뀐 pulse 도 마찬가지다.
       this.lastReadingAt = this.now();
-      const previous = this.pulseState;
-      this.pulseState = foldInternal(previous, frame);
+      // 이번 fold 가 성공했으니 지난 실패는 더 이상 최신 사건이 아니다.
+      this.lastUnreadableFrame = undefined;
+      this.pulseState = folded;
       return this.pulseState !== previous;
     }
     if (frame.type === "PERFORMANCE") {
@@ -392,5 +415,11 @@ export class PulseStore {
   /// 마지막 pulse 가 도착한 시각. 아직 하나도 안 왔으면 `undefined`.
   getLastReadingAt(): number | undefined {
     return this.lastReadingAt;
+  }
+
+  /// 마지막으로 시도한 fold 가 실패했고, 그 뒤로 아무 reading 도 성공하지 않았을 때만 값을
+  /// 돌려준다. 성공한 fold 가 하나라도 오면 지워진다.
+  getLastUnreadableFrame(): UnreadableFrame | undefined {
+    return this.lastUnreadableFrame;
   }
 }
