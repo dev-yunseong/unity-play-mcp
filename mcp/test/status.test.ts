@@ -59,6 +59,40 @@ test("status reports the latest reading and how long ago it arrived", () => {
   assert.match(described, /Scene: Main/);
 });
 
+test("status never prints undefined, and says what it could not read, when no reading has arrived yet", () => {
+  const described = describeStatus({
+    connected: true,
+    endpoint: ENDPOINT,
+    lastUnreadableFrame: { at: 900, reason: "incoming is not iterable" },
+    now: 1_000,
+  });
+
+  assert.doesNotMatch(described, /undefined/);
+  assert.match(described, /No scene reading has arrived/);
+  assert.match(described, /A frame arrived but could not be read .*incoming is not iterable/);
+});
+
+test("status keeps reporting a stalled reading alongside the last one that arrived", () => {
+  // 정상 reading 이 들어오다가 그 다음 frame 이 읽히지 않으면 두 값이 동시에 있는 상태가
+  // 정상 경로에서 그대로 만들어진다 — #48 이 고치는 장면이다: reading 이 멈춘 순간에도
+  // 사람이 무엇을 못 읽었는지 알아야 한다.
+  const described = describeStatus({
+    connected: true,
+    endpoint: ENDPOINT,
+    reading: 42,
+    frame: 900,
+    scene: "Main",
+    lastReadingAt: 10_000,
+    lastUnreadableFrame: { at: 13_000, reason: "incoming is not iterable" },
+    now: 13_000,
+  });
+
+  assert.doesNotMatch(described, /undefined/);
+  assert.match(described, /reading 42 on frame 900 arrived 3s ago/);
+  assert.match(described, /Scene: Main/);
+  assert.match(described, /A frame arrived but could not be read just now: incoming is not iterable/);
+});
+
 test("a reading that just arrived does not read as zero seconds ago", () => {
   const described = describeStatus({
     connected: true,

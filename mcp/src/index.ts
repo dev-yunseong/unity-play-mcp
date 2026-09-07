@@ -15,6 +15,9 @@ const connection = new UnityConnection({
   url: process.env.UNITY_PLAY_MCP_URL ?? "ws://127.0.0.1:17311/ws",
   timeoutMilliseconds: parseTimeout(process.env.UNITY_PLAY_MCP_TIMEOUT_MS),
   pulseStore,
+  // stdout 은 MCP JSON-RPC 스트림이라 여기 아무것도 써서는 안 된다. stderr 에는 로그를 남겨도
+  // 된다 — 지금까지는 report 콜백을 아무도 넘기지 않아 버려진 frame 이 전부 조용히 사라졌다.
+  report: (message, error) => console.error(message, error ?? ""),
 });
 const server = new McpServer(
   { name: "unity-play-mcp", version: packageVersion() },

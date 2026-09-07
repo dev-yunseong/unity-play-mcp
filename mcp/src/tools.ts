@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
-import { objectKey, type PulseObject, type PulseStore } from "./pulse.js";
+import { objectKey, type PulseObject, type PulseStore, type UnreadableFrame } from "./pulse.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 
 type ToolContent =
@@ -186,7 +186,13 @@ export interface UnityStatus {
   frame?: number;
   scene?: string;
   lastReadingAt?: number;
+  lastUnreadableFrame?: UnreadableFrame;
   now: number;
+}
+
+function describeAge(now: number, at: number): string {
+  const secondsAgo = Math.max(0, Math.round((now - at) / 1000));
+  return secondsAgo === 0 ? "just now" : `${secondsAgo}s ago`;
 }
 
 /// status tool 이 돌려줄 문장.
@@ -203,19 +209,26 @@ export function describeStatus(status: UnityStatus): string {
   }
 
   const head = `Unity is running and connected at ${status.endpoint}.`;
+  const lines = status.lastReadingAt === undefined
+    ? [head, "No scene reading has arrived yet. Call start_readings before get_scene_state."]
+    : [
+        head,
+        `Readings are running: reading ${status.reading} on frame ${status.frame} `
+        + `arrived ${describeAge(status.now, status.lastReadingAt)}.`,
+        `Scene: ${status.scene}.`,
+      ];
 
-  if (status.lastReadingAt === undefined) {
-    return `${head} No scene reading has arrived yet. Call start_readings before get_scene_state.`;
+  // 마지막으로 읽지 못한 frame 이 있으면(그리고 그 뒤로 정상 reading 이 하나도 안 왔으면 —
+  // `PulseStore` 가 성공할 때마다 이 값을 스스로 지운다) 두 분기 모두에 덧붙인다. reading 이
+  // 아예 안 왔을 때도, 잘 오다가 멈췄을 때도 사람이 무엇을 못 읽었는지 알아야 하기 때문이다.
+  if (status.lastUnreadableFrame !== undefined) {
+    lines.push(
+      `A frame arrived but could not be read ${describeAge(status.now, status.lastUnreadableFrame.at)}: `
+      + `${status.lastUnreadableFrame.reason}.`,
+    );
   }
 
-  const secondsAgo = Math.max(0, Math.round((status.now - status.lastReadingAt) / 1000));
-  const age = secondsAgo === 0 ? "just now" : `${secondsAgo}s ago`;
-
-  return [
-    head,
-    `Readings are running: reading ${status.reading} on frame ${status.frame} arrived ${age}.`,
-    `Scene: ${status.scene}.`,
-  ].join(" ");
+  return lines.join(" ");
 }
 
 async function dispatchOne(
@@ -421,6 +434,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       frame: state?.frame as number | undefined,
       scene: state?.scene as string | undefined,
       lastReadingAt: store.getLastReadingAt(),
+      lastUnreadableFrame: store.getLastUnreadableFrame(),
       now: Date.now(),
     }));
   });
