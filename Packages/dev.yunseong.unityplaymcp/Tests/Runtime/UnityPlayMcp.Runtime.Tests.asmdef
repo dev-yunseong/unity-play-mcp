@@ -4,6 +4,7 @@
   "references": [
     "UnityPlayMcp.Runtime",
     "UnityPlayMcp.Input.Fixtures",
+    "UnityPlayMcp.Input.Fixtures.NoInput",
     "Unity.TextMeshPro",
     "UnityPlayMcp.Affordances.Scan"
   ],

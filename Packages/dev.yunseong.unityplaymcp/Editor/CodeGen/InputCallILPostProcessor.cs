@@ -44,16 +44,10 @@ namespace UnityPlayMcp.CodeGen
 
                 using (var assembly = AssemblyDefinition.ReadAssembly(peStream, reader))
                 {
-                    // WillProcess가 통과시켰다고 해서 위빙할 게 있다는 뜻은 아니다. 거기서 보는
+                    // WillProcess가 통과시켰다고 해서 바꿀 게 있다는 뜻은 아니다. 거기서 보는
                     // 컴파일러 참조 목록에는 autoReferenced 때문에 UnityPlayMcp.Runtime이 항상 들어 있고,
-                    // 실제로 SDK 타입을 쓰는지는 IL 메타데이터를 열어 봐야 안다.
-                    var inputWeaver = InputMethodWeaver.TryCreate(assembly.MainModule);
-                    if (inputWeaver == null)
-                    {
-                        return new ILPostProcessResult(null, diagnostics);
-                    }
-
-                    var changed = inputWeaver.Process();
+                    // 실제로 바꿀 Input 호출이 있는지는 Process가 IL을 훑어 봐야 안다.
+                    var changed = new InputMethodWeaver(assembly.MainModule).Process();
                     if (!changed)
                     {
                         return new ILPostProcessResult(null, diagnostics);
