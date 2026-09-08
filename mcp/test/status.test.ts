@@ -93,6 +93,38 @@ test("status keeps reporting a stalled reading alongside the last one that arriv
   assert.match(described, /A frame arrived but could not be read just now: incoming is not iterable/);
 });
 
+/// #19 이 진짜로 고치는 것은 값이 안 오는 것이고, 이 test 가 보는 것은 **또 어긋났을 때 사람이
+/// 이유를 읽을 수 있는가** 다. 예전에는 `incoming is not iterable` 이 나와 아무것도 가리키지
+/// 않았다.
+test("status names the component and the key when a reading could not be read", () => {
+  const store = new PulseStore(() => 1_000);
+
+  const frame = {
+    type: "PULSE", id: 1, schema: 2, reading: 1, frame: 10, scene: "Main",
+    statics: [], deactive: [], whole: true, watching: 1,
+    unresolved: 0, unwatchable: 0, gone: [], changed: [],
+    active: [{
+      id: 41, path: "Canvas/Card", selector: "Canvas/Card",
+      by: [{ on: "WordVenture.Card", members: [{ member: "count", value: 3 }] }],
+    }],
+  } as unknown as PulseFrame;
+
+  assert.equal(store.fold(frame), false);
+
+  const described = describeStatus({
+    connected: true,
+    endpoint: ENDPOINT,
+    lastUnreadableFrame: store.getLastUnreadableFrame(),
+    now: 1_000,
+  });
+
+  assert.doesNotMatch(described, /undefined/);
+  assert.match(described, /A frame arrived but could not be read just now/);
+  assert.match(described, /1 of 1 PULSE components carried no "m"/);
+  assert.match(described, /first: WordVenture\.Card on Canvas\/Card/);
+  assert.match(described, /may be under: members/);
+});
+
 test("a reading that just arrived does not read as zero seconds ago", () => {
   const described = describeStatus({
     connected: true,

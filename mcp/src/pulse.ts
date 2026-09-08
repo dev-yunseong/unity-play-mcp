@@ -10,7 +10,14 @@ export interface PulseMember {
 
 export interface PulseComponent {
   on: string;
-  members: PulseMember[];
+  /// 이 component 가 지닌 멤버들.
+  ///
+  /// 게임은 이것을 `m` 에 실어 보내고(`LiveState.cs:669`), `readComponents` 가 frame 이 store
+  /// 로 들어오는 자리에서 여기로 옮긴다. 그 아래는 이 이름만 안다.
+  ///
+  /// optional 인 이유는 값이 socket 에서 오기 때문이다. 필수라고 선언해 두면 게임이 키를 또
+  /// 바꿀 때 `for ... of undefined` 하나가 reading 전체를 지운다 — #19 가 그것이었다.
+  members?: PulseMember[];
   [key: string]: JsonValue | PulseMember[] | undefined;
 }
 
@@ -182,14 +189,18 @@ function sameValue(left: JsonValue, right: JsonValue): boolean {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
+/// 두 멤버 목록을 멤버 키로 합친다.
+///
+/// 둘 다 없어도 된다. 멤버 목록이 없는 component 는 이번 reading 에 아무 말도 안 한
+/// component 이므로, 이전에 들고 있던 멤버를 지우지 않고 그대로 돌려준다.
 function mergeMembers(
-  previous: readonly PulseMember[],
-  incoming: readonly PulseMember[],
+  previous: readonly PulseMember[] | undefined,
+  incoming: readonly PulseMember[] | undefined,
   recorder: Recorder,
   on: string,
 ): PulseMember[] {
-  const merged = new Map(previous.map((member) => [memberKey(member), member]));
-  for (const member of incoming) {
+  const merged = new Map((previous ?? []).map((member) => [memberKey(member), member]));
+  for (const member of incoming ?? []) {
     record(recorder, on, member);
     merged.set(memberKey(member), member);
   }
@@ -328,6 +339,87 @@ function toPublicState(
   };
 }
 
+/// 게임이 component 의 멤버 목록을 싣는 키.
+///
+/// `members` 를 줄인 이름이다. component 하나에 6 B 이고 한 문서에 component 가 316개,
+/// reading 은 초당 열 번 — `fd16e70` 이 그만큼을 줄이려고 고른 것이라 게임 쪽은 그대로 둔다.
+/// 대신 frame 이 store 로 들어오는 자리에서 한 번 옮긴다.
+const WIRE_MEMBERS = "m";
+
+/// 멤버를 하나도 읽지 못한 component 와, 그것을 실은 객체의 `path`.
+interface UnreadComponent {
+  on: string;
+  path: string;
+  /// 그 component 가 `on` 말고 들고 온 키들. 비어 있으면 멤버가 없는 component 다.
+  otherKeys: string[];
+}
+
+function readComponent(
+  component: PulseComponent,
+  path: string,
+  unread: UnreadComponent[],
+): PulseComponent {
+  const wire = component[WIRE_MEMBERS];
+  if (!Array.isArray(wire)) {
+    // `m` 이 있는데 배열이 아니면 그 자체가 어긋난 키다. 없는 것과 같이 두면 "아무 말도 안 한
+    // component" 로 조용히 넘어가는데, 그 조용함이 이 issue 가 없애려는 것이다.
+    const otherKeys = Object.keys(component)
+      .filter((key) => key !== "on" && (key !== WIRE_MEMBERS || wire !== undefined));
+    unread.push({ on: component.on, path, otherKeys });
+    return component;
+  }
+  // 멤버 하나하나의 모양은 확인하지 않는다. `isGamePushFrame` 이 top-level 만 보는 것과 같은
+  // 선이고, `record` 는 `value` 가 없어도 던지지 않는다.
+  const members = wire as PulseMember[];
+  // `m` 은 떼고 내보낸다. 두면 같은 멤버 목록이 `members` 와 나란히 두 벌로 접힌 상태에 앉고,
+  // 그대로 `get_scene_state` 응답에 실린다.
+  const { [WIRE_MEMBERS]: dropped, ...rest } = component;
+  return { ...rest, members };
+}
+
+function readObject(object: PulseObject, unread: UnreadComponent[]): PulseObject {
+  if (object.by === undefined) {
+    return object;
+  }
+  const path = typeof object.path === "string" ? object.path : object.selector;
+  return { ...object, by: object.by.map((component) => readComponent(component, path, unread)) };
+}
+
+/// 게임이 보낸 frame 을 store 가 아는 모양으로 옮긴다.
+///
+/// `m` 도 없고 다른 키도 없는 component 는 실패가 아니다. "이번 reading 에 이 component 는
+/// 아무 말도 안 했다" 와 구별할 수 없는 모양이고, 실패로 다루면 그 하나가 나머지 315개를
+/// 함께 버린다. `mergeMembers` 가 이전 멤버를 그대로 든다.
+///
+/// 반대로 `m` 없이 다른 키를 들고 온 component 는 던진다. 게임이 키를 바꾸면 하나가 아니라
+/// 316개 전부가 그렇게 되므로, 값 없는 상태를 조용히 받아 두는 것보다 이 reading 을 못 읽었다고
+/// 말하는 편이 낫다. `fold` 가 그 message 를 `lastUnreadableFrame.reason` 에 넣고
+/// `get_unity_status` 가 그것을 사람에게 그대로 보여 준다.
+function readComponents(pulse: PulseFrame): PulseFrame {
+  const unread: UnreadComponent[] = [];
+  const active = pulse.active.map((object) => readObject(object, unread));
+  const deactive = pulse.deactive.map((object) => readObject(object, unread));
+
+  const mismatched = unread.filter(({ otherKeys }) => otherKeys.length > 0);
+  if (mismatched.length > 0) {
+    throw new Error(describeMismatch(mismatched, countComponents(pulse)));
+  }
+  return { ...pulse, active, deactive };
+}
+
+function countComponents(pulse: PulseFrame): number {
+  return [...pulse.active, ...pulse.deactive]
+    .reduce((total, object) => total + (object.by?.length ?? 0), 0);
+}
+
+function describeMismatch(mismatched: readonly UnreadComponent[], total: number): string {
+  const first = mismatched[0];
+  const keys = [...new Set(mismatched.flatMap(({ otherKeys }) => otherKeys))].sort();
+  return `${mismatched.length} of ${total} PULSE components carried no "${WIRE_MEMBERS}" `
+    + `(first: ${first?.on ?? "?"} on ${first?.path ?? "?"}); `
+    + `their members may be under: ${keys.join(", ")}`;
+}
+
 function foldInternal(
   previous: InternalPulseState | undefined,
   pulse: PulseFrame,
@@ -335,10 +427,14 @@ function foldInternal(
   if (previous !== undefined && pulse.reading <= previous.publicState.reading) {
     return previous;
   }
-  const sceneChanged = previous !== undefined && pulse.scene !== previous.publicState.scene;
-  const replace = pulse.whole || sceneChanged;
-  const { objects, tombstones, history } = indexObjects(pulse, replace, sceneChanged, previous);
-  return { publicState: toPublicState(pulse, objects, tombstones), objects, tombstones, history };
+  // reading 번호를 확인한 뒤에 옮긴다. 이미 지나간 reading 은 복사할 이유가 없다.
+  const readable = readComponents(pulse);
+  const sceneChanged = previous !== undefined && readable.scene !== previous.publicState.scene;
+  const replace = readable.whole || sceneChanged;
+  const { objects, tombstones, history } = indexObjects(readable, replace, sceneChanged, previous);
+  return {
+    publicState: toPublicState(readable, objects, tombstones), objects, tombstones, history,
+  };
 }
 
 /// frame 은 도착했지만 접을 수 없었다는 것. `get_unity_status` 가 이걸로 무엇을 못 읽었는지

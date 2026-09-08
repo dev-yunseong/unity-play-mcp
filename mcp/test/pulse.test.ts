@@ -3,13 +3,16 @@ import test from "node:test";
 
 import { PulseStore, type PulseFrame, type PulseObject } from "../src/pulse.js";
 
+/// 게임이 실제로 내는 모양. `LiveState.cs:568`~`669` 이 component 를
+/// `{"on":<타입>,"m":[...]}` 로 쓰고, 멤버는 `member` 와 값을 들되 `among` 은 같은 타입의
+/// 둘째 component 부터, `asked` 는 `false` 일 때만 싣는다.
 function object(id: number, selector: string, value: number, scene?: string): PulseObject {
   return {
     id,
     path: `Canvas/${selector}`,
     selector,
     ...(scene === undefined ? {} : { scene }),
-    by: [{ on: "Widget", members: [{ member: "value", value }] }],
+    by: [{ on: "Widget", m: [{ member: "value", value }] }],
   };
 }
 
@@ -31,20 +34,20 @@ test("whole reading replaces all held objects", () => {
 test("delta merges members by member and optional among", () => {
   const store = new PulseStore();
   const original = object(1, "Card", 1);
-  original.by = [{ on: "Widget", members: [
-    { member: "label", value: "kept" },
-    { member: "slot", among: 0, value: "zero" },
+  original.by = [{ on: "Widget", m: [
+    { member: "label", asked: false, value: "kept" },
+    { member: "slot", value: "zero" },
     { member: "slot", among: 1, value: "one" },
   ] }];
   const update = object(1, "Card", 2);
-  update.by = [{ on: "Widget", members: [
+  update.by = [{ on: "Widget", m: [
     { member: "slot", among: 1, value: "changed" },
   ] }];
   store.fold(pulse({ whole: true, active: [original] }));
   store.fold(pulse({ reading: 2, active: [update] }));
   assert.deepEqual(store.getState()?.active[0]?.by?.[0]?.members, [
-    { member: "label", value: "kept" },
-    { member: "slot", among: 0, value: "zero" },
+    { member: "label", asked: false, value: "kept" },
+    { member: "slot", value: "zero" },
     { member: "slot", among: 1, value: "changed" },
   ]);
 });
@@ -54,7 +57,7 @@ test("object-level scene override participates in identity", () => {
   store.fold(pulse({ whole: true, active: [object(1, "Card", 1), object(2, "Card", 2, "HUD")] }));
   store.fold(pulse({ reading: 2, active: [object(2, "Card", 3, "HUD")] }));
   assert.deepEqual(store.getState()?.active.map(({ id }) => id), [1, 2]);
-  assert.equal(store.getState()?.active[1]?.by?.[0]?.members[0]?.value, 3);
+  assert.equal(store.getState()?.active[1]?.by?.[0]?.members?.[0]?.value, 3);
 });
 
 test("delta moves bins and retains untouched objects", () => {
@@ -103,16 +106,70 @@ test("accepted reading replaces statics and changed metadata", () => {
   assert.deepEqual(store.getState()?.changed, ["second"]);
 });
 
-/// `members` 없는 component. #19 가 적어 둔 wire key 어긋남(`members` 대신 `m`)이 실제로
-/// 만드는 모양과 같다 — 이 test 는 그 어긋남 자체가 아니라, 그런 frame 이 왔을 때 fold 가
-/// 죽지 않고 무엇을 못 읽었는지 남기는지를 본다.
-function objectWithoutMembers(id: number, selector: string): PulseObject {
+/// #19 이 고치는 것 자체. 게임이 `m` 에 실어 보낸 값이 접힌 상태의 `members` 에 도착해야 한다.
+test("member values arrive under members even though the game sends m", () => {
+  const store = new PulseStore();
+  store.fold(pulse({ whole: true, active: [object(1, "Card", 7)] }));
+
+  const component = store.getState()?.active[0]?.by?.[0];
+  assert.deepEqual(component?.members, [{ member: "value", value: 7 }]);
+  // 옮기고 나면 원래 키는 남지 않는다. 남으면 같은 목록이 두 벌 실려 나간다.
+  assert.equal(component?.m, undefined);
+});
+
+/// 게임은 멤버가 하나도 없는 component 를 내지 않는다 — `LiveState.cs` 가 `count > 0` 일 때만
+/// 쓴다. 그래도 그것이 도착했을 때 reading 전체를 버리지는 않는다. component 하나가 아무 말도
+/// 안 한 것과 구별할 수 없는 모양이기 때문이다.
+test("a component that carries no members keeps the members already held", () => {
+  const store = new PulseStore();
+  store.fold(pulse({ whole: true, active: [object(1, "Card", 3)] }));
+
+  const silent: PulseObject = { id: 1, path: "Canvas/Card", selector: "Card", by: [{ on: "Widget" }] };
+  assert.equal(store.fold(pulse({ reading: 2, active: [silent] })), true);
+
+  assert.equal(store.getLastUnreadableFrame(), undefined);
+  assert.deepEqual(store.getState()?.active[0]?.by?.[0]?.members, [{ member: "value", value: 3 }]);
+});
+
+/// 키가 어긋난 것을 "멤버가 없다" 와 같은 말로 뭉뚱그리지 않는다. reading 을 못 읽었다고 말하되,
+/// 몇 개가 어떤 키를 들고 왔는지 이름을 댄다.
+test("a component whose members sit under another key names that key", () => {
+  const store = new PulseStore();
+  assert.equal(
+    store.fold(pulse({ whole: true, active: [componentWithUnexpectedKey(1, "Card")] })),
+    false,
+  );
+
+  const reason = store.getLastUnreadableFrame()?.reason ?? "";
+  assert.match(reason, /1 of 1 PULSE components carried no "m"/);
+  assert.match(reason, /first: Widget on Canvas\/Card/);
+  assert.match(reason, /may be under: members/);
+});
+
+/// `m` 이 있는데 배열이 아닌 경우. 없는 것과 같이 다루면 멤버가 실려 왔는데도 "아무 말도 안 한
+/// component" 로 조용히 넘어간다.
+test("a component whose m is not an array is not read as an empty component", () => {
+  const store = new PulseStore();
+  const broken = {
+    id: 1, path: "Canvas/Card", selector: "Card",
+    by: [{ on: "Widget", m: { member: "value", value: 1 } }],
+  } as unknown as PulseObject;
+
+  assert.equal(store.fold(pulse({ whole: true, active: [broken] })), false);
+  assert.match(store.getLastUnreadableFrame()?.reason ?? "", /may be under: m/);
+});
+
+/// 멤버 목록이 `m` 이 아니라 다른 키에 실려 온 component.
+///
+/// 그 다른 키를 `members` 로 잡은 것은 의도한 것이다. #19 가 실제로 만든 모양이고, `m` 이
+/// 있는지가 아니라 `members` 가 있는지로 판정하는 순진한 수정이 들어오면 이 fixture 가 잡는다.
+function componentWithUnexpectedKey(id: number, selector: string): PulseObject {
   return {
     id,
     path: `Canvas/${selector}`,
     selector,
-    by: [{ on: "Widget" }],
-  } as unknown as PulseObject;
+    by: [{ on: "Widget", members: [{ member: "value", value: 1 }] }],
+  };
 }
 
 test("a frame that cannot be folded is not counted as an arrived reading", () => {
@@ -127,7 +184,7 @@ test("a frame that cannot be folded is not counted as an arrived reading", () =>
 
   clock = 2_000;
   assert.equal(
-    store.fold(pulse({ reading: 2, active: [objectWithoutMembers(1, "Card")] })),
+    store.fold(pulse({ reading: 2, active: [componentWithUnexpectedKey(1, "Card")] })),
     false,
   );
 
@@ -143,7 +200,7 @@ test("a frame that cannot be folded is not counted as an arrived reading", () =>
 
 test("a successful reading clears a prior unreadable-frame mark", () => {
   const store = new PulseStore();
-  store.fold(pulse({ whole: true, active: [objectWithoutMembers(1, "Card")] }));
+  store.fold(pulse({ whole: true, active: [componentWithUnexpectedKey(1, "Card")] }));
   assert.notEqual(store.getLastUnreadableFrame(), undefined);
 
   store.fold(pulse({ reading: 2, active: [object(1, "Card", 1)] }));
