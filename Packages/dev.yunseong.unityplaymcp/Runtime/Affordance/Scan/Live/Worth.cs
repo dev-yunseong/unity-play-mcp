@@ -46,7 +46,7 @@ namespace UnityPlayMcp.Affordances.Live
 
         /// <summary>객체를 들인 이유. 어느 길로 들어왔는지가 곧 그것이 무엇인지다.</summary>
         /// <remarks>
-        /// 부르는 쪽이 예 아니오만 알면 되던 시절에는 bool 이었다. 지금은 무엇이 몇 개까지 실릴지의 예산을 두 갈래로 나눠야
+        /// 부르는 쪽이 예 아니오만 알면 되던 시절에는 bool 이었다. 지금은 무엇이 몇 개까지 실릴지의 예산을 둘로 나눠야
         /// 하고, 그러려면 이 객체가 근거 때문에 들어왔는지 화면에 무언가를 그려서 들어왔는지를 가려야 한다.
         /// </remarks>
         internal enum Admitted
