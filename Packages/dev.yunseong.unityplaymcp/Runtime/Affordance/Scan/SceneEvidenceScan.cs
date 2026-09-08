@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using UnityPlayMcp.Affordances.Live;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -189,7 +190,14 @@ namespace UnityPlayMcp.Affordances.Scan
                 }
             }
 
-            if (!wrote)
+            // 화면에 무언가를 그리는 컴포넌트를 나르는 객체는 쓸 컴포넌트가 하나도 없어도 쓴다. 리포트와 pulse 가 같은 규칙이어야
+            // 하고(`Worth` 의 remarks), pulse 는 그런 객체를 이제 들인다. 여기서 빼면 pulse 가 이름 댄 객체를 리포트가 없는 것으로
+            // 보고하게 된다.
+            //
+            // 넓어지는 것은 객체 목록뿐이다. 컴포넌트 목록은 안 넓혔다 — 텍스트와 이미지를 컴포넌트로 쓰면 정작 작용 대상인 몇 개가
+            // 그 아래 파묻힌다는 위의 이유가 그대로 유효하다. 그래서 이렇게 들어온 객체는 `label`/`sprite`/`visuals` 를 들고
+            // `components` 는 빈 채로 온다.
+            if (!wrote && !Drawn.Any(subject))
             {
                 return false;
             }

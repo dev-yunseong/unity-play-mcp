@@ -21,6 +21,15 @@ namespace UnityPlayMcp.Affordances.Live
     /// 객체마다 한 번 답하고 기억한다. 컴포넌트의 UnityEvent 필드를 읽는 일은 리플렉션이고, 스캔은 씬마다 한 번 치르는
     /// 값을 이쪽은 매 박자마다 치르게 된다. 타입이 아니라 객체에 대고 기억한다: 한 타입의 Button 둘은 서로 다르게
     /// 연결돼 있고, 그중 하나는 아무것도 가리키지 않을 수 있다.
+    ///
+    /// 네 번째 길이 있고, 그것은 게임 코드에 관한 것이 아니다: <see cref="Drawn"/> 이 아는 컴포넌트 — 라벨, 그림,
+    /// 슬라이더 — 를 단 객체는 감시 멤버가 없어도 쓴다. 앞의 셋은 전부 게임 코드에 관한 것이라 <c>UnityEngine.UI</c> 를
+    /// 하나도 통과시키지 못했고, 그래서 점수를 띄우는 <c>Text</c> 와 체력을 채우는 <c>Image</c> 는 모든 pulse 에서
+    /// 빠졌다. 화면에 무엇이 보이는지를 물을 방법이 없었던 것이 그 이유다.
+    ///
+    /// 이 네 번째 길은 위의 규칙을 옮기므로 리포트의 목록도 같이 넓어진다 — <c>SceneEvidenceScan</c> 의 객체 admission 이
+    /// 같은 물음을 같이 묻는다. 컴포넌트 목록은 안 넓혔다: 라벨과 그림을 컴포넌트로 쓰면 정작 작용 대상인 몇 개가 그
+    /// 아래 파묻힌다는 그쪽의 이유가 그대로 유효하다.
     /// </remarks>
     internal static class Worth
     {
@@ -33,13 +42,30 @@ namespace UnityPlayMcp.Affordances.Live
         /// </remarks>
         private const int MaxRemembered = 4096;
 
-        private static readonly Dictionary<int, bool> Answered = new Dictionary<int, bool>();
+        private static readonly Dictionary<int, Admitted> Answered = new Dictionary<int, Admitted>();
 
-        internal static bool Writing(GameObject subject, Dictionary<Type, List<Watched>> byOwner)
+        /// <summary>객체를 들인 이유. 어느 길로 들어왔는지가 곧 그것이 무엇인지다.</summary>
+        /// <remarks>
+        /// 부르는 쪽이 예 아니오만 알면 되던 시절에는 bool 이었다. 지금은 무엇이 몇 개까지 실릴지의 예산을 두 갈래로 나눠야
+        /// 하고, 그러려면 이 객체가 근거 때문에 들어왔는지 화면에 무언가를 그려서 들어왔는지를 가려야 한다.
+        /// </remarks>
+        internal enum Admitted
+        {
+            /// <summary>아무 길로도 들어오지 못했다.</summary>
+            No,
+
+            /// <summary>게임 코드에 관한 앞의 세 길 중 하나. 감시 멤버, 구운 근거, 인스펙터로 연결된 호출.</summary>
+            Evidence,
+
+            /// <summary>화면에 무언가를 그리는 컴포넌트를 나른다. 그것 말고는 아무 이유도 없다.</summary>
+            Drawn
+        }
+
+        internal static Admitted Writing(GameObject subject, Dictionary<Type, List<Watched>> byOwner)
         {
             if (subject == null)
             {
-                return false;
+                return Admitted.No;
             }
 
             var id = subject.GetInstanceID();
@@ -59,7 +85,7 @@ namespace UnityPlayMcp.Affordances.Live
             return answer;
         }
 
-        private static bool Ask(GameObject subject, Dictionary<Type, List<Watched>> byOwner)
+        private static Admitted Ask(GameObject subject, Dictionary<Type, List<Watched>> byOwner)
         {
             Component[] components;
 
@@ -70,7 +96,7 @@ namespace UnityPlayMcp.Affordances.Live
             catch (Exception)
             {
                 // 스캔은 이것을 씬에 대한 공백으로 보고한다. 여기서는 그저 아무 말도 할 수 없는 객체일 뿐이다.
-                return false;
+                return Admitted.No;
             }
 
             var calls = new List<PersistentCall>();
@@ -86,7 +112,7 @@ namespace UnityPlayMcp.Affordances.Live
 
                 if (byOwner.ContainsKey(type) || AffordanceCatalog.For(type) != null)
                 {
-                    return true;
+                    return Admitted.Evidence;
                 }
 
                 calls.Clear();
@@ -102,11 +128,14 @@ namespace UnityPlayMcp.Affordances.Live
 
                 if (calls.Count > 0)
                 {
-                    return true;
+                    return Admitted.Evidence;
                 }
             }
 
-            return false;
+            // 네 번째 길은 맨 뒤다. 근거를 나르면서 동시에 라벨을 단 객체 — `Image` 를 얹은 `Button` — 는 근거 쪽으로
+            // 세어야 하고, 이것을 앞에 두면 그런 객체가 전부 화면 요소가 되어 예산 구분이 뜻을 잃는다. 값은 객체마다
+            // 한 번이고 그 뒤로는 캐시가 답한다.
+            return Drawn.Any(subject) ? Admitted.Drawn : Admitted.No;
         }
 
         internal static void Forget()

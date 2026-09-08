@@ -36,6 +36,12 @@ namespace UnityPlayMcp.Affordances.Live
         internal string Via;
 
         /// <summary>리플렉션에 물어본 뒤의 필드 그 자체. 그 전까지는 null.</summary>
+        /// <remarks>
+        /// 읽을 때 <c>null</c> 이면 다른 뜻이 하나 있다: <b>컴포넌트 자신에서 <see cref="Member"/> 를 읽으라</b>는 것.
+        /// <see cref="Drawn"/> 이 그런 멤버를 만든다 — <c>Text.text</c> 뒤의 필드는 <c>m_Text</c> 이고 그것은 Unity 버전마다
+        /// 달라질 수 있는 이름이라, 필드가 아니라 프로퍼티를 읽는다. 그 길로 만든 멤버는 전부 인스턴스의 것이므로 static 목록에는
+        /// 닿지 않는다.
+        /// </remarks>
         internal FieldInfo Field;
 
         /// <summary>그것이 사는 타입. 그것을 나르는 인스턴스를 찾기 위한 것.</summary>
