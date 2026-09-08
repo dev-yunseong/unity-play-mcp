@@ -5,6 +5,7 @@ import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
 import { objectKey, type PulseObject, type PulseStore, type UnreadableFrame } from "./pulse.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
+import { visibleElements } from "./visible.js";
 
 type ToolContent =
   | { type: "text"; text: string }
@@ -455,6 +456,45 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     } catch (error) {
       return {
         ...text(failureText("Scene state is unavailable", error)),
+        isError: true,
+      };
+    }
+  });
+
+  server.registerTool("get_visible_elements", {
+    description: [
+      "List the UI elements the player can see right now, and what each one is showing:",
+      "the text of a label, the fill of a bar, the value of a slider or toggle.",
+      "This reads the latest scene reading already in hand, so it costs no round trip to the game.",
+      "Elements that are turned off, off-screen, or covered by something drawn on top of them are left out.",
+      "Set includeHidden to get them back; every element then carries the active, onScreen, and covered",
+      "flags that say why it would have been left out.",
+      "The covered flag is a guess made from overlapping rectangles. It does not know canvas sorting order,",
+      "overrideSorting, transparent images, or masks, so it can be wrong; when you need a reliable answer",
+      "about what is on the screen, call capture_screen.",
+      "UI types a game defined itself by subclassing Image or Button arrive under the game's own type name",
+      "and are not listed here.",
+    ].join(" "),
+    inputSchema: {
+      selector: z.string().min(1).optional(),
+      includeHidden: z.boolean().optional(),
+    },
+  }, async ({ selector, includeHidden }) => {
+    try {
+      await connection.ensureConnected();
+      const state = store.getState();
+      if (state === undefined || state === null) {
+        return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
+      }
+      return text(JSON.stringify({
+        reading: state.reading,
+        frame: state.frame,
+        scene: state.scene,
+        elements: visibleElements(state, { selector, includeHidden }),
+      }, null, 2));
+    } catch (error) {
+      return {
+        ...text(failureText("Visible elements are unavailable", error)),
         isError: true,
       };
     }
