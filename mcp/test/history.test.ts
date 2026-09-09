@@ -9,13 +9,15 @@ const at = (on: string, member: string, among?: number): string =>
     ? `${on}\u0000${member}`
     : `${on}\u0000${member}\u0000${among}`;
 
+/// 게임이 실제로 내는 모양. component 는 `{"on":<타입>,"m":[...]}` 이고(`LiveState.cs:669`),
+/// `among` 은 같은 타입의 둘째 component 부터 실린다 — 첫째 것에는 아예 없다.
 function object(id: number, selector: string, value: number, scene?: string): PulseObject {
   return {
     id,
     path: `Canvas/${selector}`,
     selector,
     ...(scene === undefined ? {} : { scene }),
-    by: [{ on: "Widget", members: [{ member: "value", value }] }],
+    by: [{ on: "Widget", m: [{ member: "value", value }] }],
   };
 }
 
@@ -138,15 +140,15 @@ test("a key that comes back leaves the tombstones", () => {
 test("members that differ only by among keep separate histories", () => {
   const store = new PulseStore();
   const first = object(1, "Card", 0);
-  first.by = [{ on: "Widget", members: [
-    { member: "slot", among: 0, value: "zero" },
+  first.by = [{ on: "Widget", m: [
+    { member: "slot", value: "zero" },
     { member: "slot", among: 1, value: "one" },
   ] }];
   const second = object(1, "Card", 0);
-  second.by = [{ on: "Widget", members: [{ member: "slot", among: 1, value: "changed" }] }];
+  second.by = [{ on: "Widget", m: [{ member: "slot", among: 1, value: "changed" }] }];
   store.fold(pulse({ whole: true, active: [first] }));
   store.fold(pulse({ reading: 2, active: [second] }));
-  assert.deepEqual(valuesAt(store, "Main/Card", at("Widget", "slot", 0)), ["zero"]);
+  assert.deepEqual(valuesAt(store, "Main/Card", at("Widget", "slot")), ["zero"]);
   assert.deepEqual(valuesAt(store, "Main/Card", at("Widget", "slot", 1)), ["one", "changed"]);
 });
 
