@@ -1,4 +1,10 @@
-import type { FoldedPulseState, JsonValue, PulseComponent, PulseObject } from "./pulse.js";
+import type {
+  FoldedPulseState,
+  JsonValue,
+  PulseComponent,
+  PulseMember,
+  PulseObject,
+} from "./pulse.js";
 
 /// 화면에 무언가를 내놓는 컴포넌트가 사는 두 namespace.
 ///
@@ -20,7 +26,11 @@ const SHOWING_NAMESPACES = ["UnityEngine.UI.", "TMPro."];
 ///
 /// 못 잡는 것: 게임이 `Image` 나 `Button` 을 상속해 만든 타입은 제 이름(`MyGame.HealthBar`)
 /// 으로 오므로 접두사에 안 걸린다.
-function shows(component: PulseComponent): boolean {
+///
+/// 반환 타입이 `boolean` 이 아니라 type predicate 인 이유: 이 검사를 지난 컴포넌트는
+/// `members` 를 반드시 지니는데, `boolean` 이면 `tsc` 가 그 사실을 호출한 쪽으로 못 가져가
+/// `elementsOf` 가 같은 검사를 한 번 더 해야 한다. #19 이후 `members` 는 optional 이다.
+function shows(component: PulseComponent): component is PulseComponent & { members: PulseMember[] } {
   if (component.members === undefined || component.members.length === 0) return false;
   return SHOWING_NAMESPACES.some((prefix) => component.on.startsWith(prefix));
 }
