@@ -443,6 +443,11 @@ namespace UnityPlayMcp.Affordances.Live
             var dropped = 0;
             var roots = scene.GetRootGameObjects();
 
+            // 한 요소가 가려졌는지는 그 뒤에 그려지는 것들의 사각형에 달려 있으므로, 한 번 걷는 동안에는 나올 수 없는 값이다.
+            // 그래서 걷기와 쓰기를 나눈다. 씬은 여전히 한 번만 걷는다 — 걷기가 비싼 절반이라는 것이 이 파일의 전제다.
+            var walked = new List<Transform>();
+            var from = new List<int>();
+
             for (var index = 0; index < roots.Length; index++)
             {
                 if (roots[index] == null || roots[index].hideFlags != HideFlags.None)
@@ -458,12 +463,21 @@ namespace UnityPlayMcp.Affordances.Live
                         continue;
                     }
 
-                    if (!Worth.Writing(transform.gameObject, byOwner))
+                    var admitted = Worth.Writing(transform.gameObject, byOwner);
+
+                    if (admitted == Worth.Admitted.No)
                     {
                         continue;
                     }
 
-                    var kind = transform.gameObject.GetType();
+                    // 화면 요소는 제 예산으로 센다. `seen` 은 타입을 키로 세는데 GameObject 는 언제나 한 타입이라 상한은 pulse 하나에
+                    // 객체 256 개이고, `seen` 은 모든 씬이 나눠 쓴다. 화면 요소가 그 예산을 함께 쓰면 canvas 하나가 그것을 다 먹고
+                    // 앞의 세 길로 들어온 객체 — pulse 가 존재하는 이유인 그 객체들 — 가 밀려난다. 키를 갈라 두면 상한 검사는 한
+                    // 줄도 안 바뀌면서 예산만 둘이 된다.
+                    var kind = admitted == Worth.Admitted.Drawn
+                        ? typeof(Drawn)
+                        : transform.gameObject.GetType();
+
                     seen.TryGetValue(kind, out var already);
                     seen[kind] = already + 1;
 
@@ -473,18 +487,26 @@ namespace UnityPlayMcp.Affordances.Live
                         continue;
                     }
 
-                    var said = new StringBuilder(256);
-
-                    if (!Object(said, transform, scene, top, index, byOwner, ledger))
-                    {
-                        continue;
-                    }
-
-                    // 어느 통에 들어가는가가 곧 그 진술이므로, 객체가 같은 말을 하는 플래그를 따로 나르지 않는다. 차이를 쥔 독자는 그 객체가
-                    // 어디로 도착했는지로 꺼져 있음을 알고, 이번 pulse 에 아무 말도 하지 않는 객체는 마지막으로 놓인 자리에 그대로 있다 —
-                    // 그것이 옳다. 그것이 바뀌는 일 자체가 차이이고 그러면 그 객체를 여기로 데려왔을 것이기 때문이다.
-                    (transform.gameObject.activeInHierarchy ? showing : hidden).Add(said);
+                    walked.Add(transform);
+                    from.Add(index);
                 }
+            }
+
+            var sight = Sight.Survey(walked, Screen.width, Screen.height);
+
+            for (var at = 0; at < walked.Count; at++)
+            {
+                var said = new StringBuilder(256);
+
+                if (!Object(said, walked[at], scene, top, from[at], byOwner, ledger, sight))
+                {
+                    continue;
+                }
+
+                // 어느 통에 들어가는가가 곧 그 진술이므로, 객체가 같은 말을 하는 플래그를 따로 나르지 않는다. 차이를 쥔 독자는 그 객체가
+                // 어디로 도착했는지로 꺼져 있음을 알고, 이번 pulse 에 아무 말도 하지 않는 객체는 마지막으로 놓인 자리에 그대로 있다 —
+                // 그것이 옳다. 그것이 바뀌는 일 자체가 차이이고 그러면 그 객체를 여기로 데려왔을 것이기 때문이다.
+                (walked[at].gameObject.activeInHierarchy ? showing : hidden).Add(said);
             }
 
             return dropped;
@@ -503,7 +525,8 @@ namespace UnityPlayMcp.Affordances.Live
             string top,
             int rootIndex,
             Dictionary<Type, List<Watched>> byOwner,
-            Ledger ledger)
+            Ledger ledger,
+            Dictionary<int, string> sight)
         {
             var selector = ScenePath.SelectorOf(transform, rootIndex);
 
@@ -561,6 +584,8 @@ namespace UnityPlayMcp.Affordances.Live
             moved |= Tagged(text, transform, ledger, identity);
 
             moved |= Where(text, transform, ledger, identity);
+
+            moved |= Sighted(text, transform, ledger, identity, sight);
 
             moved |= Offered(text, transform, ledger, identity);
 
@@ -790,7 +815,16 @@ namespace UnityPlayMcp.Affordances.Live
 
             try
             {
-                held = member.Field.GetValue(on);
+                // `Field` 가 null 이면 컴포넌트 자신에서 `Member` 를 읽으라는 뜻이다. `Drawn` 이 그런 멤버를 만든다 —
+                // `Text.text` 뒤의 필드는 `m_Text` 이고 그것은 Unity 버전마다 달라질 수 있는 이름이라 프로퍼티로 읽는다.
+                //
+                // 이 길은 `Along` 이 pulse 마다 `GetProperty` 를 다시 푼다. 필드 쪽은 `Readable` 이 한 번 잡아 둔
+                // `FieldInfo` 를 쓰므로 그만큼이 값이다 — 그려지는 요소마다 초당 열 번 조회 하나. 아래의 `Via` 경로가 이미
+                // 정확히 같은 값을 치르고 있어 새로운 종류는 아니다. `PropertyInfo` 를 멤버에 캐시하는 것은 그것이 실제로
+                // 문제인지 잰 뒤에 할 일이다.
+                held = member.Field == null
+                    ? Along(on, member.Member)
+                    : member.Field.GetValue(on);
 
                 // 근거는 그 필드를 청한 것이 아니라 거기서 닿는 무언가를 청했다 — 목록의 개수이거나, 필드만 걷는 메서드였다면 돌려줬을
                 // 것. 메서드를 부르는 대신 여기서 경로를 따라가는데, 그것이 게임을 감시하는 것과 게임을 하는 것의 차이 전부다.
@@ -1033,6 +1067,39 @@ namespace UnityPlayMcp.Affordances.Live
             var rendered = said.ToString();
 
             if (!ledger.Keep(identity + "|world", rendered))
+            {
+                return false;
+            }
+
+            text.Append(rendered);
+            return true;
+        }
+
+        /// <summary>
+        /// 이 요소가 지금 눈에 닿는가: 화면 안인지, 그리고 뒤에 그려진 것에 가려졌는지.
+        /// </summary>
+        /// <remarks>
+        /// <c>rect</c> 가 어디인지를 말하고 이것이 그 사각형으로 답할 수 없는 둘을 말한다. 화면 밖인지는 <c>Screen</c> 의
+        /// 크기를 아는 SDK 만 답할 수 있고, 가려짐은 그 순간의 모든 요소를 함께 봐야 나온다 — 읽는 쪽은 델타만 쥐고 있어
+        /// 어느 쪽도 스스로 셈할 수 없다.
+        ///
+        /// 보이는 요소만 이것을 나른다. 목록에 없는 객체는 아무 필드도 안 쓴다: 없음은 "안 가려졌다" 가 아니라 "보이는
+        /// 요소가 아니다" 다.
+        ///
+        /// 가려짐은 추측이고 틀릴 수 있다. 무엇을 모르는지는 <see cref="Sight"/> 에 적혀 있고, 읽는 쪽에는 tool 설명이
+        /// 그렇게 말하며 확실한 답으로 화면 캡처를 가리킨다.
+        /// </remarks>
+        /// <returns>이 객체가 보이는 요소였고 그 답이 pulse 에 들어갈 때 참.</returns>
+        private static bool Sighted(
+            StringBuilder text, Transform transform, Ledger ledger, string identity,
+            Dictionary<int, string> sight)
+        {
+            if (!sight.TryGetValue(transform.gameObject.GetInstanceID(), out var rendered))
+            {
+                return false;
+            }
+
+            if (!ledger.Keep(identity + "|sight", rendered))
             {
                 return false;
             }

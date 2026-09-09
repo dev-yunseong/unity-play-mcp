@@ -104,11 +104,22 @@ namespace UnityPlayMcp.Affordances.Live
                 }
             }
 
-            if (!TheGames(type))
+            if (TheGames(type))
             {
-                return members;
+                Fields(members, taken, type);
             }
 
+            // 게임의 것이든 uGUI 의 것이든, 화면에 무언가를 내놓는 컴포넌트는 그것이 보여 주는 것을 낸다. 분기 밖에 두는 이유는
+            // `Image` 를 상속한 게임의 컴포넌트도 여전히 `fillAmount` 를 그리는데, `GetFields` 는 기반 클래스의 private
+            // 필드를 주지 않으므로 그 값이 이 길로만 나오기 때문이다.
+            Drawn.Add(members, taken, type);
+
+            return members;
+        }
+
+        /// <summary>이 타입에서 되읽을 수 있는 필드들을 넣는다.</summary>
+        private static void Fields(List<Watched> into, HashSet<string> taken, Type type)
+        {
             const BindingFlags Flags =
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
@@ -123,7 +134,7 @@ namespace UnityPlayMcp.Affordances.Live
             catch (Exception)
             {
                 // 리플렉션이 열지 못하는 타입은 컴포넌트 하나이지, 객체를 잃을 이유가 아니다.
-                return members;
+                return;
             }
 
             foreach (var field in fields)
@@ -133,7 +144,9 @@ namespace UnityPlayMcp.Affordances.Live
                     continue;
                 }
 
-                members.Add(new Watched
+                taken.Add(field.Name);
+
+                into.Add(new Watched
                 {
                     Declaring = field.DeclaringType == null ? type.FullName : field.DeclaringType.FullName,
                     Member = field.Name,
@@ -145,8 +158,6 @@ namespace UnityPlayMcp.Affordances.Live
                     Asked = false
                 });
             }
-
-            return members;
         }
 
         /// <summary>
