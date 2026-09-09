@@ -1,0 +1,261 @@
+name: Bump release version
+
+# 사람이 release 마다 네 파일(Unity package.json, PackageVersion.cs, mcp/package.json,
+# mcp-server-version.txt)에 손으로 적던 version 값을 여기서 한 번의 dispatch 로 갱신한다.
+# 이 workflow 는 draft pull request 를 여는 데서 끝난다 — develop 에 직접 push 하지 않고,
+# GitHub Release 생성과 tag 발행도 여전히 사람이 한다 (publish-mcp.yml 참고).
+on:
+  workflow_dispatch:
+    inputs:
+      unity_version:
+        description: >
+          Unity package.json 과 PackageVersion.cs 에 반영할 새 version. 비우면 Unity 쪽 두
+          파일은 건드리지 않는다.
+        required: false
+        type: string
+      mcp_version:
+        description: >
+          mcp/package.json 과 mcp-server-version.txt 에 반영할 새 version. 비우면 MCP server
+          쪽 두 파일은 건드리지 않는다. unity_version 과 기본값을 공유하지 않는다 — 두
+          release 주기는 이 저장소에서 실제로 독립적으로 움직인다 (예: PR #46 은 MCP server
+          쪽만 올렸다).
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# 같은 workflow 가 겹쳐 돌면 branch 생성과 push 가 서로 밟을 수 있다. 취소 대신 줄을 세운다 —
+# 취소하면 PR 은 안 열렸는데 원격 branch 만 남는 부분 상태가 생길 수 있어서다.
+concurrency:
+  group: bump-version
+  cancel-in-progress: false
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # dispatch 입력을 shell 안에서 직접 `${{ }}` 로 전개하면 version 문자열에 shell
+      # 특수문자가 섞였을 때 그대로 실행돼 버린다. env var 를 거쳐서만 shell 에 들어오게 한다.
+      UNITY_VERSION: ${{ inputs.unity_version }}
+      MCP_VERSION: ${{ inputs.mcp_version }}
+      DISPATCH_ACTOR: ${{ github.actor }}
+    steps:
+      - name: Require default branch
+        run: |
+          set -euo pipefail
+          # workflow_dispatch 는 default branch 에 있어야 Actions UI 목록에 나타나 실행할 수
+          # 있으므로 사실상 항상 develop 에서 시작한다. 그래도 dispatch UI 에서 다른 ref 를
+          # 고르는 경로가 남아 있어 명시적으로 막는다.
+          if [ "${{ github.ref }}" != "refs/heads/develop" ]; then
+            echo "this workflow only runs from refs/heads/develop, got: ${{ github.ref }}" >&2
+            exit 1
+          fi
+
+      - name: Require at least one version input
+        run: |
+          set -euo pipefail
+          if [ -z "$UNITY_VERSION" ] && [ -z "$MCP_VERSION" ]; then
+            echo "at least one of unity_version or mcp_version must be given" >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Configure git identity for the bump commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          # 이 repository 의 ruleset 은 unattributed commit 에 추가 승인을 요구한다
+          # (require_extra_approval_for_unattributed_changes). 숫자 id 가 없는
+          # "github-actions[bot]@users.noreply.github.com" 은 어떤 계정에도 연결되지 않아
+          # unattributed 로 잡힌다 — 실제 github-actions[bot] 계정의 noreply 주소를 쓴다.
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Set Unity package version
+        if: inputs.unity_version != ''
+        run: .github/scripts/set-package-version.sh "$UNITY_VERSION"
+
+      - name: Set MCP server version
+        if: inputs.mcp_version != ''
+        run: .github/scripts/set-mcp-server-version.sh "$MCP_VERSION"
+
+      - name: Detect changed file groups
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- \
+            Packages/dev.yunseong.unityplaymcp/package.json \
+            Packages/dev.yunseong.unityplaymcp/Runtime/Affordance/Scan/PackageVersion.cs; then
+            echo "unity_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "unity_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          if git diff --quiet -- \
+            mcp/package.json \
+            Packages/dev.yunseong.unityplaymcp/Editor/McpConfig/mcp-server-version.txt; then
+            echo "mcp_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "mcp_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report no-op
+        if: steps.diff.outputs.unity_changed != 'true' && steps.diff.outputs.mcp_changed != 'true'
+        run: echo "::notice::requested version already matches the working tree; nothing to do"
+
+      # "이미 release 됨" 검사는 실제로 바뀐 그룹에 대해서만 돈다. 사람이 mcp_version 에 지금
+      # 값(이미 npm 에 있는 값)을 그대로 다시 넣어 "MCP 는 건드리지 않는다"는 뜻으로 쓰는 경우,
+      # 무조건 검사하면 아무것도 바뀌지 않았는데도 거절당한다.
+      - name: Reject already-released Unity version
+        if: steps.diff.outputs.unity_changed == 'true'
+        run: |
+          set -euo pipefail
+          tag="v${UNITY_VERSION}"
+          set +e
+          # 복수형 "git/refs/tags/<ref>" endpoint 는 prefix 검색이라 "v0.1" 을 물으면
+          # "v0.1.0" 처럼 그 앞에 오는 다른 tag 까지 찾아 200 을 돌려준다(실제로 이 값으로
+          # 확인했다). 단수형 "git/ref/tags/<ref>" 는 정확히 그 이름의 tag 가 있을 때만 200,
+          # 없으면 404 를 돌려줘 오탐이 없다.
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>gh-error.log
+          exit_code=$?
+          set -e
+          if [ "$exit_code" -eq 0 ]; then
+            echo "tag already exists: $tag" >&2
+            exit 1
+          fi
+          if ! grep -q 'HTTP 404' gh-error.log; then
+            cat gh-error.log >&2
+            exit "$exit_code"
+          fi
+
+      - name: Reject already-released MCP server version
+        if: steps.diff.outputs.mcp_changed == 'true'
+        run: |
+          set -euo pipefail
+          set +e
+          npm view "unity-play-mcp@${MCP_VERSION}" version 2>npm-error.log
+          exit_code=$?
+          set -e
+          if [ "$exit_code" -eq 0 ]; then
+            echo "unity-play-mcp@${MCP_VERSION} is already published" >&2
+            exit 1
+          fi
+          if ! grep -q 'E404' npm-error.log; then
+            cat npm-error.log >&2
+            exit "$exit_code"
+          fi
+
+      - name: Open version bump pull request
+        if: steps.diff.outputs.unity_changed == 'true' || steps.diff.outputs.mcp_changed == 'true'
+        env:
+          UNITY_CHANGED: ${{ steps.diff.outputs.unity_changed }}
+          MCP_CHANGED: ${{ steps.diff.outputs.mcp_changed }}
+        run: |
+          set -euo pipefail
+
+          # branch 이름을 실제로 바뀐 그룹만으로 결정적으로 만든다. 같은 조합으로 재시도하면
+          # 같은 branch 로 수렴해 중복 PR 을 줄인다. 입력값이 아니라 diff 결과를 기준으로
+          # 삼는다 — 입력이 있어도 값이 같으면(diff 없음) 그 그룹은 branch 이름에 들어가지
+          # 않는다.
+          branch="bump-version"
+          if [ "$UNITY_CHANGED" = "true" ]; then
+            branch="${branch}/unity-${UNITY_VERSION}"
+          fi
+          if [ "$MCP_CHANGED" = "true" ]; then
+            if [ "$UNITY_CHANGED" = "true" ]; then
+              branch="${branch}-mcp-${MCP_VERSION}"
+            else
+              branch="${branch}/mcp-${MCP_VERSION}"
+            fi
+          fi
+
+          # commit/PR 제목은 이 저장소에서 실제 있었던 release commit 문구(예: "MCP server를
+          # 0.2.0으로 올린다")를 따른다.
+          if [ "$UNITY_CHANGED" = "true" ] && [ "$MCP_CHANGED" = "true" ]; then
+            title="chore: release version을 올린다 (Unity ${UNITY_VERSION}, MCP server ${MCP_VERSION})"
+          elif [ "$UNITY_CHANGED" = "true" ]; then
+            title="chore: Unity package version을 ${UNITY_VERSION}으로 올린다"
+          else
+            title="chore: MCP server version을 ${MCP_VERSION}으로 올린다"
+          fi
+
+          git checkout -b "$branch"
+          add_paths=()
+          if [ "$UNITY_CHANGED" = "true" ]; then
+            add_paths+=(
+              Packages/dev.yunseong.unityplaymcp/package.json
+              Packages/dev.yunseong.unityplaymcp/Runtime/Affordance/Scan/PackageVersion.cs
+            )
+          fi
+          if [ "$MCP_CHANGED" = "true" ]; then
+            add_paths+=(
+              mcp/package.json
+              Packages/dev.yunseong.unityplaymcp/Editor/McpConfig/mcp-server-version.txt
+            )
+          fi
+          git add "${add_paths[@]}"
+          git commit -m "$title"
+          # `actions/checkout` 은 develop 하나만 얕게 fetch 해서, 이 시점에는 "$branch" 의 원격
+          # 상태를 담은 remote-tracking ref 가 로컬에 없다. `--force-with-lease` 는 비교할 기준이
+          # 없으면 "stale info"로 거절하므로, push 전에 그 branch 만 따로 fetch 해 기준을 만든다.
+          # 이전 실행이 없어 그 branch 가 원격에 아직 없으면 fetch 자체가 실패하는데, 그 경우는
+          # 정상이라 무시한다.
+          git fetch origin "$branch" 2>/dev/null || true
+          # 이전 실행이 만든 동명 branch 가 원격에 남아 있을 수 있어 덮어쓴다.
+          # `--force` 대신 `--force-with-lease` 를 써서, 방금 fetch 한 뒤로 다른 무언가가 그
+          # branch 를 또 바꿔 놓았다면(우리가 모르는 변경) 조용히 덮어쓰지 않고 실패하게 한다.
+          git push --force-with-lease origin "$branch"
+
+          existing_pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing_pr" ]; then
+            echo "open pull request already exists for $branch: #$existing_pr, updated it"
+            exit 0
+          fi
+
+          # YAML block scalar 는 모든 줄이 이 step 의 들여쓰기 이상이어야 해서, 여러 줄
+          # heredoc 대신 printf 인자 한 줄에 PR 본문 한 줄씩을 담아 만든다.
+          body="$(printf '%s\n' \
+            "## Why" \
+            "" \
+            "release 절차에서 사람이 손으로 적던 version 값을 workflow_dispatch 입력으로 갱신했다." \
+            "" \
+            "## What Changed" \
+            "" \
+            "- unity_version: \`${UNITY_VERSION:-(변경 없음)}\`" \
+            "- mcp_version: \`${MCP_VERSION:-(변경 없음)}\`" \
+            "" \
+            "## Validation" \
+            "" \
+            "이 workflow 안에서 tag/npm 존재 여부와 파일 diff 를 이미 확인했다." \
+            "" \
+            "**이 pull request 는 GITHUB_TOKEN 이 열었기 때문에 \`pull_request\` trigger 로 도는" \
+            "CI(unity-tests.yml 의 EditMode/PlayMode, PackageVersionTests 포함)가 자동으로" \
+            "돌지 않는다.** merge 하기 전에 빈 commit을 하나 얹거나 PR을 닫았다 다시 열어" \
+            "CI 를 직접 트리거해야 한다." \
+            "" \
+            "## Next steps (사람이 할 일)" \
+            "" \
+            "1. 위 CI 를 직접 트리거하고 통과를 확인한다." \
+            "2. 이 diff 를 review 하고 draft 를 ready 로 바꾼다." \
+            "3. \`develop\`에 merge 한다." \
+            "4. Unity package version 을 올렸다면 그 merge commit 을 가리키는 tag" \
+            "   \`v${UNITY_VERSION}\`로 GitHub Release 를 만든다 (이 workflow 는 만들지 않는다).")"
+
+          gh pr create \
+            --draft \
+            --base develop \
+            --head "$branch" \
+            --title "$title" \
+            --label chore \
+            --assignee "$DISPATCH_ACTOR" \
+            --body "$body"
