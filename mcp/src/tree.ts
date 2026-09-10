@@ -182,6 +182,17 @@ function descend(root: Building, path: string): Building | undefined {
   return node;
 }
 
+/// selector 전체에서 마지막 마디의 표시 이름만 뽑는다 — 형제 순번 없이.
+///
+/// `search.ts`가 이름으로 후보를 좁힐 때 이 마디 분리 규칙을 따로 다시 적으면, selector 마디
+/// 문법이 바뀔 때 이 파일과 그쪽 중 한쪽만 고쳐지고 나머지는 조용히 어긋난다. `selectorSegments`
+/// 와 `nameOf` 는 이미 그 규칙을 쥐고 있으므로 여기서 하나만 더 내보낸다.
+export function leafNameOf(selector: string): string {
+  const segments = selectorSegments(selector);
+  const last = segments[segments.length - 1];
+  return last === undefined ? selector : nameOf(last);
+}
+
 export const UNLIMITED_DEPTH = Number.MAX_SAFE_INTEGER;
 
 /// 객체들을 hierarchy 로 세워 `root` 아래를 `depth` 층까지 낸다.

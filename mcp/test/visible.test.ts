@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { FoldedPulseState, JsonValue, PulseComponent, PulseObject } from "../src/pulse.js";
-import { visibleElements } from "../src/visible.js";
+import { displayedTextOf, visibleElements } from "../src/visible.js";
 
 /// `PulseStore.fold` 를 태우지 않고 `FoldedPulseState` literal 에 대고 돌린다.
 ///
@@ -151,4 +151,23 @@ test("아직 아무 판단도 안 실린 요소는 빼지 않는다", () => {
   ]));
   assert.deepEqual(found.map((element) => element.selector), ["Score"]);
   assert.equal(found[0]?.onScreen, undefined);
+});
+
+test("displayedTextOf 는 화면에 보이는 첫 문자열 멤버를 낸다", () => {
+  const target = object("Label", [component("UnityEngine.UI.Text", { text: "Ready" })]);
+  assert.equal(displayedTextOf(target), "Ready");
+});
+
+test("displayedTextOf 는 문자열이 아닌 값은 건너뛰고 다음 컴포넌트의 문자열을 찾는다", () => {
+  const target = object("Volume", [
+    component("UnityEngine.UI.Slider", { value: 0.8 }),
+    component("TMPro.TextMeshProUGUI", { text: "80%" }),
+  ]);
+  assert.equal(displayedTextOf(target), "80%");
+});
+
+test("displayedTextOf 는 표시하는 문자열이 없으면 undefined 다", () => {
+  assert.equal(displayedTextOf(object("Bar", [component("UnityEngine.UI.Image", { fillAmount: 0.3 })])), undefined);
+  assert.equal(displayedTextOf(object("Empty", [])), undefined);
+  assert.equal(displayedTextOf(object("Game", [component("MyGame.PlayerController", { hp: 3 })])), undefined);
 });
