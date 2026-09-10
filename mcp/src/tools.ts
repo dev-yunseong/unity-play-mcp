@@ -5,6 +5,7 @@ import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
 import { objectKey, type PulseObject, type PulseStore, type UnreadableFrame } from "./pulse.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
+import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { visibleElements } from "./visible.js";
 
 type ToolContent =
@@ -30,6 +31,27 @@ const keySchema = () => z.string().min(1);
 const inputNameSchema = () => z.string().min(1);
 const maxEdgeSchema = () => z.number().int().positive();
 const paddingSchema = () => z.number().int().nonnegative();
+
+/// `wait_for_condition` 의 `memberEquals[].equals` 가 받는 값. 재귀적인 `JsonValue` 전체를
+/// 받지 않는 이유는 두 가지다: 이 tool 이 실제로 겨누는 값들(`IsStreaming` 같은 boolean,
+/// 개수 같은 number, 상태 이름 같은 string)이 전부 primitive 이고, `z.lazy` 로 자기 자신을
+/// 참조하는 recursive schema 는 `zod-to-json-schema` 가 무한 재귀로 죽인다(`schema.test.ts` 가
+/// 이것을 잡는다). `MemberCondition.equals` 의 선언 type 은 여전히 `JsonValue` 다 — primitive
+/// 는 그 부분집합이라 그대로 대입된다.
+const equalsValueSchema = () => z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+const memberEqualsSchema = () => z.object({
+  selector: z.string().min(1),
+  on: z.string().min(1),
+  member: z.string().min(1),
+  among: z.number().int().optional(),
+  equals: equalsValueSchema(),
+}).strict();
+
+/// `timeoutMilliseconds` 를 안 주면 이 값을 쓴다. `wait_for_condition` 이 "절대 무한히 기다리지
+/// 않는다" 를 지키려면 상한도 있어야 하므로 zod schema 에 `WAIT_MAX_TIMEOUT_MS` 를 건다.
+const WAIT_DEFAULT_TIMEOUT_MS = 5_000;
+const WAIT_MAX_TIMEOUT_MS = 30_000;
 
 /// `perform_actions` 가 받는 action 하나.
 ///
@@ -593,7 +615,50 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     async () => dispatchOne(connection, "stop_readings", []));
 
   server.registerTool("perform_actions", {
-    description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}.",
+    description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}. "
+      + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
   }, async ({ actions }) => dispatchActions(connection, actions.map(toWireAction)));
+
+  server.registerTool("wait_for_condition", {
+    description: [
+      "Wait, up to a time limit, for the folded scene state to satisfy a condition: a reading or frame",
+      "newer than a baseline you already hold (from an earlier get_scene_state or get_unity_status),",
+      "a target scene, one or more member values, or several of these together — all given conditions",
+      "must hold at once. Use this after perform_actions when the action's in-game effect may not be",
+      "visible in the very next reading yet, such as a scene transition or a value that settles a moment",
+      "later. This never blocks forever: it always returns within timeoutMilliseconds (default "
+      + `${WAIT_DEFAULT_TIMEOUT_MS}, maximum ${WAIT_MAX_TIMEOUT_MS}), even when nothing changes and`,
+      "Unity therefore sends no pulse at all. Read the returned met, disconnected, and unmet fields —",
+      "a successful action result never guarantees this condition held.",
+    ].join(" "),
+    inputSchema: {
+      sinceReading: z.number().int().nonnegative().optional(),
+      sinceFrame: z.number().int().nonnegative().optional(),
+      scene: z.string().min(1).optional(),
+      memberEquals: z.array(memberEqualsSchema()).min(1).optional(),
+      timeoutMilliseconds: z.number().int().positive().max(WAIT_MAX_TIMEOUT_MS).optional(),
+    },
+  }, async ({ sinceReading, sinceFrame, scene, memberEquals, timeoutMilliseconds }, extra) => {
+    if (sinceReading === undefined && sinceFrame === undefined && scene === undefined && memberEquals === undefined) {
+      return {
+        ...text("wait_for_condition requires at least one of sinceReading, sinceFrame, scene, or memberEquals."),
+        isError: true,
+      };
+    }
+    try {
+      await connection.ensureConnected();
+    } catch (error) {
+      return { ...text(failureText("Unity is unreachable", error)), isError: true };
+    }
+    const outcome = await waitForCondition(store, connection, {
+      sinceReading,
+      sinceFrame,
+      scene,
+      memberEquals,
+      timeoutMilliseconds: timeoutMilliseconds ?? WAIT_DEFAULT_TIMEOUT_MS,
+    }, extra.signal);
+    const { payload, isError } = describeWaitOutcome(outcome, store.getLastUnreadableFrame());
+    return { ...text(JSON.stringify(payload, null, 2)), ...(isError ? { isError: true } : {}) };
+  });
 }
