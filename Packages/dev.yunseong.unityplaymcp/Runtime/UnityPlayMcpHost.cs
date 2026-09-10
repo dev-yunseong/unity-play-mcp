@@ -48,10 +48,23 @@ namespace UnityPlayMcp
         private bool processingActions;
 
         /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
+        /// <remarks>
+        /// play 중 assembly reload 도 이 값을 false 로 되돌린다. serialize 되지 않는 field 라서 그렇고,
+        /// 여기서는 그것이 원하는 바다: 같은 reload 에 함께 사라진 <see cref="frameTimeRecorder"/> 이하를
+        /// 다시 만들라고 <see cref="OnEnable"/> 에게 말하는 것이 이 false 다.
+        /// </remarks>
         private bool ownsRuntime;
 
         /// <summary>Separates the first connection, which is Start's, from a later re-enable.</summary>
-        private bool hasStarted;
+        /// <remarks>
+        /// reload 를 건너야 하는 값이 이 한 bit 뿐이라서 serialize 한다. Unity 는 play 중 assembly reload 에서
+        /// <c>Awake</c> 를 다시 부르지 않고 <c>OnEnable</c> 만 부르며, 되돌려 주는 것은 serialize 된 field
+        /// 뿐이다. 이 표시가 없으면 reload 뒤의 <c>OnEnable</c> 은 아직 <c>Start</c> 를 지나지 않은 host 와
+        /// 구별되지 않아, 되살릴 자리인 줄 모르고 그냥 돌아간다.
+        ///
+        /// inspector 에 내놓을 값은 아니다. 사람이 켜고 끄는 설정이 아니라 host 가 제 이력을 적어 두는 자리다.
+        /// </remarks>
+        [SerializeField, HideInInspector] private bool hasStarted;
 
         public string GameVersion { get; private set; }
         public bool SmoothCursorMovement
@@ -93,24 +106,61 @@ namespace UnityPlayMcp
 
         private void Awake()
         {
+            // 여기 온 host 는 갓 만들어졌거나 갓 로드된 것이고, 어느 쪽도 아직 Start 를 지나지 않았다.
+            // reload 는 Awake 를 부르지 않으므로 이 줄이 reload 를 건너온 표시를 지우는 일은 없다. 지우는
+            // 것은 play 중에 prefab 이나 scene 으로 떠 간 true 뿐이다 — 그런 값이 실려 오면 첫 활성화의
+            // OnEnable 이 Start 보다 먼저 server 를 연다.
+            hasStarted = false;
+
+            if (!ClaimHostSlot())
+            {
+                return;
+            }
+
             // The socket has to outlive the scene it was opened in. A QA run acts
             // on the game, and acting frequently loads another scene — which used
             // to destroy this object mid-run, closing the connection and failing
             // the run at exactly the moment the interesting part began.
-            if (instance != null && instance != this)
-            {
-                // A second manager appears when a scene carrying one is loaded
-                // again. Keeping the first preserves the live connection; the
-                // newcomer would open a second and be rejected as a duplicate.
-                Destroy(gameObject);
-                return;
-            }
-
-            instance = this;
             transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
 
             EnsureRuntime();
+        }
+
+        /// <summary>
+        /// 이 host 가 살아 있는 하나인지 정한다. 자리가 비어 있으면 차지하고, 다른 host 가 이미 들어 있으면
+        /// 이 host 를 파괴하고 false 를 돌려준다.
+        /// </summary>
+        /// <remarks>
+        /// scene 이 들고 온 host 가 다시 로드되면 두 번째 host 가 나타난다. 먼저 있던 쪽을 남기는 것이 살아
+        /// 있는 연결을 지키는 길이다. 새로 온 쪽은 같은 port 에 두 번째 socket 을 열려다 거절당할 뿐이다.
+        ///
+        /// <c>Awake</c> 만이 아니라 <see cref="BeginHosting"/> 도 부른다. assembly reload 는 static 을 전부
+        /// 초기값으로 되돌리므로 reload 를 건넌 host 는 자리를 잃은 채로 깨어나고, 그대로 두면 다음에 로드된
+        /// scene 의 host 가 빈 자리를 차지해 두 host 가 같은 port 를 두고 다툰다.
+        ///
+        /// <c>instance != null</c> 은 Unity 의 비교라서 파괴된 host 를 쥔 자리는 비어 있는 것으로 읽힌다.
+        /// domain reload 를 끈 project 에서 지난 play 세션의 host 가 static 에 남아 있어도 새 host 가 자리를
+        /// 잡는 것은 그 덕이다.
+        /// </remarks>
+        private bool ClaimHostSlot()
+        {
+            if (instance == this)
+            {
+                return true;
+            }
+
+            if (instance != null)
+            {
+                // 끄는 것이 먼저다. Destroy 는 프레임 끝에야 처리되고 그때까지 이 host 의 Update 가 도는데,
+                // 진 host 는 아무것도 만들지 않았으므로 RecordFrameTime 이 그 프레임에 바로 던진다.
+                enabled = false;
+                Destroy(gameObject);
+                return false;
+            }
+
+            instance = this;
+            return true;
         }
 
         /// <summary>
@@ -153,20 +203,62 @@ namespace UnityPlayMcp
             ownsRuntime = true;
         }
 
+        /// <summary>
+        /// 재활성화와 assembly reload 가 함께 지나는 자리. 둘 다 host 가 쥐던 것을 여기서 다시 세운다.
+        /// </summary>
+        /// <remarks>
+        /// play 중 assembly reload 에서 Unity 는 <c>OnDisable</c> → serialize → domain 교체 → deserialize →
+        /// <c>OnEnable</c> 순으로 가고 <c>Awake</c> 는 다시 부르지 않는다. 정리는 그래서 이미 제자리에 있었다 —
+        /// <see cref="OnDisable"/> 이 입력을 놓고 reading 을 끝내고 socket 을 닫는다. 없던 것은 그 반대편이다:
+        /// 다시 만드는 일이 <c>Awake</c> 에만 있어서, reload 를 건넌 host 는 <see cref="frameTimeRecorder"/> 가
+        /// null 인 채로 <see cref="Update"/> 만 돌았고 매 프레임 NullReferenceException 을 냈다 (issue #57).
+        /// </remarks>
         private void OnEnable()
         {
-            // Only a re-enable reaches this. The first connection is Start's, and until Start has
-            // run there is nothing here to repeat.
-            if (hasStarted)
+            // 첫 연결은 Start 의 몫이다. Start 를 지나기 전에는 여기서 되살릴 것이 없다.
+            if (!hasStarted)
             {
-                StartTransport();
+                return;
             }
+
+            BeginHosting();
         }
 
         /// <summary>Opens the WebSocket server after every component has enabled.</summary>
+        /// <remarks>
+        /// 여기서도 <see cref="BeginHosting"/> 을 통째로 부르는 이유는 <c>Awake</c> 와 이 자리 사이에
+        /// assembly reload 가 끼는 경우가 있어서다. scene 이 host 를 <c>enabled = false</c> 로 들고 오면
+        /// <c>Awake</c> 는 그때 돌지만 <c>Start</c> 는 게임이 켤 때까지 오지 않고, 그 사이의 reload 는
+        /// <c>Awake</c> 가 만든 것을 지운다. 그때 <see cref="OnEnable"/> 은 <c>hasStarted</c> 가 아직
+        /// false 라 그냥 돌아가므로, 다시 세울 자리가 여기 말고 없다.
+        /// </remarks>
         private void Start()
         {
             hasStarted = true;
+            BeginHosting();
+        }
+
+        /// <summary>
+        /// 이 host 를 살아 있는 하나로 세우고, 그것이 쥐는 것을 만들고, socket 을 연다.
+        /// </summary>
+        /// <remarks>
+        /// 셋 다 멱등이라 이미 서 있는 host 가 다시 불러도 아무것도 달라지지 않는다. 그것이 이 메서드가
+        /// <c>Start</c> 와 <see cref="OnEnable"/> 양쪽에 있어도 되는 이유이고, reload 뒤에 필요한 것도
+        /// 정확히 이 셋이다 — reload 는 static slot 과 <see cref="ownsRuntime"/> 과
+        /// <see cref="webSocketTransport"/> 를 함께 지운다.
+        ///
+        /// <see cref="EnsureRuntime"/> 이 <c>GetComponent</c> 로 찾는 <see cref="CursorController"/> 와
+        /// <see cref="KeyboardStatusController"/> 는 GameObject 와 함께 살아남으므로 component 가 두 벌이
+        /// 되지 않는다.
+        /// </remarks>
+        private void BeginHosting()
+        {
+            if (!ClaimHostSlot())
+            {
+                return;
+            }
+
+            EnsureRuntime();
             StartTransport();
         }
 
@@ -197,30 +289,43 @@ namespace UnityPlayMcp
         {
             using (ProfilerMarkers.HostUpdate.Auto())
             {
-                RecordFrameTime();
-
                 VirtualInput.AdvanceFrame();
 
-                if (webSocketTransport == null)
-                {
-                    transportWasConnected = false;
-                    return;
-                }
+                PumpTransport();
 
-                NoticeNewConnection();
+                // 성능 수집은 맨 뒤다. 여기서 던지는 것이 같은 프레임의 입력 전진과 요청 처리를 통째로
+                // 막았던 것이 issue #57 이고, 그 순서에는 그럴 값이 없다 — 지표 하나를 잃는 것과 원격
+                // 제어 전체를 잃는 것은 값이 다르다. 예외를 삼키지는 않는다. 삼켰다면 그 결함이 로그에
+                // 남지 않아 아무도 찾지 못했을 것이다.
+                //
+                // 대가는 한 프레임이다. 보고는 이제 이번 프레임의 샘플을 담지 못하고 다음 창으로 민다.
+                // 버려지는 샘플은 없고 창 하나가 60 프레임쯤이라, 어느 창에 실리는지만 달라진다.
+                RecordFrameTime();
+            }
+        }
 
-                using (ProfilerMarkers.HostHandleMessage.Auto())
-                {
-                    while (webSocketTransport.TryDequeueMessage(out var message))
-                    {
-                        HandleMessage(message);
-                    }
-                }
+        /// <summary>연결에서 온 것을 받아 처리하고, 이번 주기의 성능 보고를 내보낸다.</summary>
+        private void PumpTransport()
+        {
+            if (webSocketTransport == null)
+            {
+                transportWasConnected = false;
+                return;
+            }
 
-                using (ProfilerMarkers.HostPerformanceReport.Auto())
+            NoticeNewConnection();
+
+            using (ProfilerMarkers.HostHandleMessage.Auto())
+            {
+                while (webSocketTransport.TryDequeueMessage(out var message))
                 {
-                    SendPerformanceReport();
+                    HandleMessage(message);
                 }
+            }
+
+            using (ProfilerMarkers.HostPerformanceReport.Auto())
+            {
+                SendPerformanceReport();
             }
         }
 
@@ -323,6 +428,17 @@ namespace UnityPlayMcp
 
         /// <summary>라이브 reading 이 돌고 있는지.</summary>
         internal bool Reading => Affordances.Scan.AffordanceBootstrap.Watching;
+
+        /// <summary>server 를 쥐고 있고 그것이 stop 되지 않았는지.</summary>
+        /// <remarks>
+        /// <see cref="Reading"/> 과 같은 이유로 여기에 있다. transport 는 이 class 의 private field 이고,
+        /// 그것이 서 있는지를 바깥에서 물어볼 다른 방법이 없다. reload 뒤 server 가 다시 섰는지를 test 가
+        /// 확인하는 자리다 — 그것을 묻지 못하면 test 는 예외가 없다는 것까지만 말할 수 있다.
+        ///
+        /// 누가 붙었는지는 말하지 않는다. <c>AgentWebSocketServer.IsConnected</c> 가 뜻하는 것은 server
+        /// 객체가 서 있다는 것뿐이고, client 하나 없는 server 도 참으로 답한다.
+        /// </remarks>
+        internal bool TransportOpen => webSocketTransport != null && webSocketTransport.IsConnected;
 
         public void StopTransport()
         {
