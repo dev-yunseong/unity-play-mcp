@@ -6,7 +6,7 @@
 
 ## Goal
 
-Restore deterministic Unity CI by pinning the game-ci CLI to v0.1.56 and refreshing the repository's Unity license secret from the workstation's active license.
+Restore deterministic Unity CI by pinning the game-ci CLI to v0.1.53 and refreshing the repository's Unity license secret from the workstation's active license.
 
 ## Non-goals
 
@@ -17,21 +17,21 @@ Restore deterministic Unity CI by pinning the game-ci CLI to v0.1.56 and refresh
 ## Context / Constraints
 
 - `game-ci/unity-test-runner@v4` currently defaults `cliVersion` to `latest` and the failing runs resolved v0.1.57, released on 2026-09-09.
-- v0.1.56 is the immediately preceding official release.
-- Run 34437174074 resolved v0.1.57 and failed before executing tests. The most recent green develop run is 34297755794, but GitHub no longer retains its job log, so its resolved CLI version cannot be verified; v0.1.56 is selected from the official release order rather than claimed as a previously proven version in this repository.
+- Run 34437174074 resolved v0.1.57 and failed before executing tests. A first pin to v0.1.56 downloaded correctly but selected personal licensing and also failed before tests.
+- The most recent green develop run is 34297755794 at 2026-09-09T01:05:29Z. GitHub no longer retains its job log, but the official release timeline shows v0.1.53 was the newest available CLI then; v0.1.54 was released later at 2026-09-09T12:40:09Z. Pin v0.1.53 as the last version supported by a successful repository run.
 - The failing jobs stop during license activation with `TimeStamp validation failed` before tests execute.
 - The local license is at `C:\ProgramData\Unity\Unity_lic.ulf`; only its contents may be sent to the encrypted GitHub Actions secret.
 - `UNITY_EMAIL` and `UNITY_PASSWORD` already exist, so preflight will remain satisfied.
 
 ## Approach (Checklist)
 - [x] **Step 0: Recon** Confirm the resolved CLI version, failure point, previous release, workflow input, and local license path.
-- [x] **Step 1: Implementation** Add `cliVersion: v0.1.56` to `.github/workflows/unity-tests.yml`. The `v` prefix is required because the runner interpolates the input directly into the GitHub release tag URL. Verify the local ULF exists and is non-empty, then stream it through stdin to `gh secret set UNITY_LICENSE --repo dev-yunseong/unity-play-mcp` without printing or persisting its contents.
+- [x] **Step 1: Implementation** Add `cliVersion: v0.1.53` to `.github/workflows/unity-tests.yml`. The `v` prefix is required because the runner interpolates the input directly into the GitHub release tag URL. Verify the local ULF exists and is non-empty, then stream it through stdin to `gh secret set UNITY_LICENSE --repo dev-yunseong/unity-play-mcp` without printing or persisting its contents.
 - [ ] **Step 2: Tests** Confirm the secret's updated timestamp with `gh secret list`, validate the workflow diff, open the draft PR, and use that PR's EditMode and PlayMode jobs as the gate. Require logs to show CLI v0.1.56, successful activation, actual test execution, and passing results; skipped jobs do not count.
 - [ ] **Step 3: Rollout / Rollback** Merge the CI-fix PR after its requirements are met. Revert the pin to roll back the workflow; rotate `UNITY_LICENSE` to another known-good license if the new secret must be replaced.
 
 ## Validation
 - **Commands to run:** local ULF existence/non-empty check; `gh secret list --repo dev-yunseong/unity-play-mcp`; `git diff --check`; inspect the workflow; CI-fix PR EditMode and PlayMode checks and logs.
-- **Expected output:** refreshed `UNITY_LICENSE` timestamp, clean diff validation, logs showing game-ci CLI v0.1.56 and successful activation, executed tests, and both Unity test modes green.
+- **Expected output:** refreshed `UNITY_LICENSE` timestamp, clean diff validation, logs showing game-ci CLI v0.1.53 and successful activation, executed tests, and both Unity test modes green.
 
 ### Secret update command
 
