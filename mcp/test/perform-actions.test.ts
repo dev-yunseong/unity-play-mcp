@@ -13,6 +13,12 @@ const wireCases: ReadonlyArray<{
   params: unknown[];
 }> = [
   { name: "button_click", action: { method: "button_click", targetId: 42 }, params: [42] },
+  { name: "pointer_click", action: { method: "pointer_click", targetId: -3518 }, params: [-3518] },
+  {
+    name: "pointer_drag",
+    action: { method: "pointer_drag", sourceId: -4102, targetId: -2277 },
+    params: [-4102, -2277],
+  },
   {
     name: "enter_text",
     action: { method: "enter_text", targetId: 7, text: "hello" },
@@ -83,13 +89,20 @@ for (const { name, action, params } of wireCases) {
 
 test("every method the schema accepts is covered by a wire case", () => {
   const covered = new Set(wireCases.map(({ action }) => (action as { method: string }).method));
-  assert.equal(covered.size, 16);
+  assert.equal(covered.size, 18);
 });
 
 const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "an unknown method", action: { method: "quit_game" } },
   { name: "a missing targetId", action: { method: "button_click" } },
   { name: "a fractional targetId", action: { method: "button_click", targetId: 1.5 } },
+  { name: "a fractional pointer_click targetId", action: { method: "pointer_click", targetId: 1.5 } },
+  { name: "a pointer_drag without a sourceId", action: { method: "pointer_drag", targetId: 7 } },
+  { name: "a pointer_drag without a targetId", action: { method: "pointer_drag", sourceId: 7 } },
+  {
+    name: "a pointer_click carrying a mouse button it does not take",
+    action: { method: "pointer_click", targetId: 7, button: 0 },
+  },
   { name: "a mouse button above 2", action: { method: "mouse_down", button: 3 } },
   { name: "a negative mouse button", action: { method: "mouse_up", button: -1 } },
   { name: "an empty key", action: { method: "key_down", key: "" } },

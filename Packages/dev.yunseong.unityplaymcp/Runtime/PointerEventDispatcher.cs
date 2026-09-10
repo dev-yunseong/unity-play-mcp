@@ -191,6 +191,26 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
+        /// 그 화면 좌표에서 uGUI raycast 가 맨 위로 답하는 오브젝트. EventSystem 이 없거나 맞는
+        /// 것이 없으면 null.
+        /// </summary>
+        /// <remarks>
+        /// hover 를 건드리지 않는 것이 이 메서드의 요점이다. ID 로 겨누는 쪽은 커서를 옮기기 전에
+        /// 후보 좌표 여럿을 시험해 보는데, 그때마다 <c>pointerEnter</c> 와 <c>pointerExit</c> 가
+        /// 게임으로 나가면 에이전트가 하지 않은 hover 를 게임이 본 것이 된다.
+        /// </remarks>
+        public GameObject GraphicUnder(Vector2 screenPosition)
+        {
+            var eventSystem = EventSystem.current;
+            if (eventSystem == null)
+            {
+                return null;
+            }
+
+            return Raycast(eventSystem, screenPosition, out _);
+        }
+
+        /// <summary>
         /// Lets go of every button, dispatching the events that go with letting go. A run that ends
         /// mid-drag would otherwise leave the game's handler waiting for an end that never comes.
         /// </summary>
