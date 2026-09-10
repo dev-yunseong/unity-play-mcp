@@ -216,3 +216,38 @@ test("diagnostics retain the latest performance and device context independently
   assert.equal(store.getDiagnostics().performance?.id, 3);
   assert.equal(store.getDiagnostics().deviceContext?.id, 2);
 });
+
+/// `wait.ts` 는 값이 하나도 안 바뀐 pulse 에도 새 `reading` 이 왔다는 신호가 필요하다 —
+/// `sinceReading` 조건은 값이 아니라 번호만 본다.
+test("onReading fires on every successful fold, even one that changes nothing", () => {
+  const store = new PulseStore();
+  const seen: number[] = [];
+  store.onReading((state) => seen.push(state.reading));
+
+  store.fold(pulse({ whole: true, active: [object(1, "A", 1)] }));
+  store.fold(pulse({ reading: 2 }));
+  assert.deepEqual(seen, [1, 2]);
+});
+
+test("onReading does not fire for a frame that could not be folded", () => {
+  const store = new PulseStore();
+  const seen: number[] = [];
+  store.onReading((state) => seen.push(state.reading));
+
+  assert.equal(
+    store.fold(pulse({ whole: true, active: [componentWithUnexpectedKey(1, "Card")] })),
+    false,
+  );
+  assert.deepEqual(seen, []);
+});
+
+test("onReading stops firing once unsubscribed", () => {
+  const store = new PulseStore();
+  const seen: number[] = [];
+  const unsubscribe = store.onReading((state) => seen.push(state.reading));
+
+  store.fold(pulse({ whole: true, active: [object(1, "A", 1)] }));
+  unsubscribe();
+  store.fold(pulse({ reading: 2 }));
+  assert.deepEqual(seen, [1]);
+});

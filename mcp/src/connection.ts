@@ -95,6 +95,9 @@ export class UnityConnection {
   private readonly reconnectMaximumMilliseconds: number;
   private readonly report: (message: string, error?: unknown) => void;
   private readonly pending = new Map<number, PendingAction>();
+  /// `wait.ts` 가 대기 중 연결이 끊기는 것을 알기 위해 건다. 재연결 예약보다 먼저 부른다 —
+  /// 기다리는 쪽은 재연결 성공 여부와 무관하게 "지금 끊겼다" 를 즉시 알아야 한다.
+  private readonly disconnectListeners = new Set<() => void>();
 
   private socket?: WebSocketLike;
   private connectionAttempt?: Promise<WebSocketLike>;
@@ -164,6 +167,12 @@ export class UnityConnection {
     await this.connect();
   }
 
+  /// 연결이 끊길 때마다(재연결을 시도하기 전에) 부른다. 반환값은 구독을 끊는 함수다.
+  onDisconnect(listener: () => void): () => void {
+    this.disconnectListeners.add(listener);
+    return () => this.disconnectListeners.delete(listener);
+  }
+
   close(): void {
     this.disposed = true;
     this.clearReconnectTimer();
@@ -225,6 +234,9 @@ export class UnityConnection {
     }
     this.socket = undefined;
     this.rejectAllPending(error);
+    for (const listener of this.disconnectListeners) {
+      listener();
+    }
     if (this.started && !this.disposed) {
       this.scheduleReconnect();
     }

@@ -41,6 +41,7 @@ test("instructions name every tool they refer to", () => {
     "set_axis",
     "set_button",
     "perform_actions",
+    "wait_for_condition",
     "pause_game",
     "resume_game",
     "reset_game",

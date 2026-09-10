@@ -195,3 +195,32 @@ test("uses single-flight exponential reconnect and resets backoff after success"
   assert.equal(fixture.timers.delays.at(-1), 10);
   fixture.connection.close();
 });
+
+/// `wait.ts` 가 대기 중 연결이 끊기는 것을 알려면 이 신호가 있어야 한다. `#60` 이 요구하는
+/// "연결 해제와 조건 미충족을 구분한다" 는 여기서 시작한다.
+test("onDisconnect fires when the socket closes, before a reconnect is scheduled", async () => {
+  const fixture = createFixture();
+  const seen: number[] = [];
+  fixture.connection.onDisconnect(() => seen.push(1));
+  const connected = fixture.connection.ensureConnected();
+  fixture.sockets[0].open();
+  await connected;
+
+  fixture.sockets[0].close();
+  assert.deepEqual(seen, [1]);
+  fixture.connection.close();
+});
+
+test("onDisconnect stops firing once unsubscribed", async () => {
+  const fixture = createFixture();
+  const seen: number[] = [];
+  const unsubscribe = fixture.connection.onDisconnect(() => seen.push(1));
+  const connected = fixture.connection.ensureConnected();
+  fixture.sockets[0].open();
+  await connected;
+
+  unsubscribe();
+  fixture.sockets[0].close();
+  assert.deepEqual(seen, []);
+  fixture.connection.close();
+});
