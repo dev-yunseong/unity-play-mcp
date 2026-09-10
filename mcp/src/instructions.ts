@@ -12,6 +12,7 @@ export const serverInstructions = [
   "- Call start_readings once before the first get_scene_state. Without it get_scene_state answers that no reading has arrived.",
   "- Readings arrive about once a second. After an action, compare the reading number to confirm you are not looking at the same reading twice, or call wait_for_condition to wait for a scene or member value instead of guessing how long to wait.",
   "- A full scene is large. Narrow it with selector, or pass root and depth to walk the hierarchy instead of the flat list.",
+  "- To find a target by name, displayed text, component, or whether it is actionable, call search_targets for a compact id/selector list, then follow up with get_scene_state.",
   "- Call stop_readings when the user is done, so the game stops paying for readings it does not need.",
   "",
   "Acting on the scene:",

@@ -21,6 +21,38 @@ export interface PulseComponent {
   [key: string]: JsonValue | PulseMember[] | undefined;
 }
 
+/// `Button.onClick` 같은 UnityEvent 에 실제로 걸린 persistent call 하나.
+///
+/// `WatchList.cs`/`LiveState.cs`가 이 객체 자신의 component 에서 읽어 낸 것이라, 클릭했을 때
+/// 정말 무언가가 일어난다는 근거다 — 이 배열이 비어 있으면 `button_click` 을 보내도 아무 일도
+/// 안 날 수 있다.
+export interface OfferedClick {
+  event: string;
+  method: string;
+  on: string;
+}
+
+/// 이 객체가 살아있는 동안 게임 코드가 반응하는 키 하나.
+///
+/// `does` 가 없는 것은 "아무 일도 안 한다" 가 아니라 "분석이 무엇을 하는지 못 읽었다" 이다
+/// (`WatchListJson.cs` 의 `Keys` 주석 참고). 그래서 optional 이고, 비어 있는 배열로 채우지
+/// 않는다.
+export interface OfferedKey {
+  key: string;
+  does?: string[];
+}
+
+/// 이 객체가 조작에 답하는 방법들. 게임이 실제로 짜 둔 배선에서 나온 값이라 추측이 아니다.
+///
+/// 셋 다 optional 인 이유는 `LiveState.cs` 의 `Offered` 가 아무것도 없으면 `offers` 자체를
+/// 안 보내기 때문이다 — 이 타입이 실려 온다는 것 자체가 최소 하나는 있다는 뜻이지만, 어느
+/// 것인지는 타입만으로 못 정해 셋 다 optional 로 둔다.
+export interface PulseOffers {
+  clicks?: OfferedClick[];
+  keys?: OfferedKey[];
+  pointers?: string[];
+}
+
 export interface PulseObject {
   id: number;
   path: string;
@@ -28,9 +60,9 @@ export interface PulseObject {
   scene?: string;
   tag?: string;
   where?: { [key: string]: JsonValue };
-  offers?: JsonValue[];
+  offers?: PulseOffers;
   by?: PulseComponent[];
-  [key: string]: JsonValue | PulseComponent[] | undefined;
+  [key: string]: JsonValue | PulseComponent[] | PulseOffers | undefined;
 }
 
 export interface PulseStatic {

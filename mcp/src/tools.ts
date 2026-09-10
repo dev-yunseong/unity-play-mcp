@@ -4,6 +4,7 @@ import { z } from "zod";
 import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
 import { objectKey, type PulseObject, type PulseStore, type UnreadableFrame } from "./pulse.js";
+import { searchTargets } from "./search.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { visibleElements } from "./visible.js";
@@ -463,7 +464,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
@@ -496,6 +497,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       "about what is on the screen, call capture_screen.",
       "UI types a game defined itself by subclassing Image or Button arrive under the game's own type name",
       "and are not listed here.",
+      "selector here narrows to elements whose full selector path contains that substring, matched",
+      "case-sensitively, the same contract get_scene_state's selector uses.",
     ].join(" "),
     inputSchema: {
       selector: z.string().min(1).optional(),
@@ -517,6 +520,59 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     } catch (error) {
       return {
         ...text(failureText("Visible elements are unavailable", error)),
+        isError: true,
+      };
+    }
+  });
+
+  server.registerTool("search_targets", {
+    description: [
+      "Search Unity scene objects and return a compact candidate list, without get_scene_state's full",
+      "changed/statics payload. Narrow with name (the object's own name, its sibling index stripped),",
+      "displayedText (a string a UI component on the object itself is currently showing, such as a label),",
+      "component (a substring of a type name in the object's own component list, such as \"Button\" or",
+      "\"TMPro\"), and actionable (true keeps only objects offering a click, a key, or a pointer message;",
+      "false keeps only the ones offering none). Every filter given must match; omit a filter to skip it.",
+      "Matching is substring and case-insensitive by default. Set exact for a whole-value match instead of",
+      "substring, and caseSensitive to require exact case; both apply to name, displayedText, and component",
+      "alike. This is a separate, narrower contract from get_scene_state's own selector, which stays an",
+      "unchanged case-sensitive substring match against the full selector path.",
+      "Results are capped at limit (default 20); when more objects matched, truncated is true and total",
+      "carries the real count, even beyond the cap. duplicateNames lists any leaf name shared by two or more",
+      "matching objects, counted before the cap is applied, since those are distinct instances an id or full",
+      "selector is needed to tell apart.",
+      "Follow up on a candidate with get_scene_state({ selector: candidate.selector }) for its full state, or",
+      "click/enter_text with candidate.id to act on it. This tool never creates or guesses objects, and never",
+      "acts on a candidate itself.",
+    ].join(" "),
+    inputSchema: {
+      name: z.string().min(1).optional(),
+      displayedText: z.string().min(1).optional(),
+      component: z.string().min(1).optional(),
+      actionable: z.boolean().optional(),
+      exact: z.boolean().optional(),
+      caseSensitive: z.boolean().optional(),
+      includeInactive: z.boolean().optional(),
+      limit: z.number().int().positive().optional(),
+    },
+  }, async ({ name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit }) => {
+    try {
+      await connection.ensureConnected();
+      const state = store.getState();
+      if (state === undefined || state === null) {
+        return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
+      }
+      return text(JSON.stringify({
+        reading: state.reading,
+        frame: state.frame,
+        scene: state.scene,
+        ...searchTargets(state, {
+          name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit,
+        }),
+      }, null, 2));
+    } catch (error) {
+      return {
+        ...text(failureText("Target search is unavailable", error)),
         isError: true,
       };
     }
