@@ -24,7 +24,19 @@ namespace UnityPlayMcp
         private readonly List<KeyCode> keyboardKeys = new List<KeyCode>();
         private readonly List<KeyCode> pressedKeys = new List<KeyCode>();
         private readonly List<int> heldMouseButtons = new List<int>();
-        private GameObject canvasObject;
+
+        /// <summary>이 controller 가 만든 overlay canvas. reload 를 건너 살아남는 유일한 손잡이다.</summary>
+        /// <remarks>
+        /// play 중 assembly reload 는 GameObject 를 하나도 파괴하지 않으므로 canvas 는 그대로 남고, 그것을
+        /// 가리키던 field 만 사라진다. 그 상태에서 확인 없이 다시 만들면 status panel 이 두 벌이 된다
+        /// (issue #65). 그래서 이 참조 하나만 serialize 한다. <see cref="OnDestroy"/> 가 쓰는 대상은
+        /// 그대로다.
+        ///
+        /// inspector 에 내놓을 값은 아니다. 사람이 고르는 설정이 아니라 controller 가 제가 만든 것을 적어
+        /// 두는 자리다.
+        /// </remarks>
+        [SerializeField, HideInInspector] private GameObject canvasObject;
+
         private Text keyStatusText;
         private Text pointerStatusText;
         private Image panelImage;
@@ -35,13 +47,63 @@ namespace UnityPlayMcp
         private string displayedKeys;
         private string displayedPointer;
 
-        private void Awake()
+        /// <summary>이 domain 에서 GUI 를 만들었는지.</summary>
+        /// <remarks>
+        /// serialize 하지 않는다. reload 를 건너면 false 로 돌아오고, 여기서는 그것이 원하는 바다: 같은
+        /// reload 에 함께 사라진 <see cref="keyStatusText"/> 이하와 비워진 <see cref="keyboardKeys"/> 를
+        /// 다시 채우라고 <see cref="OnEnable"/> 에게 말하는 것이 이 false 다.
+        /// <c>UnityPlayMcpHost.ownsRuntime</c> 이 같은 자리에서 같은 일을 한다.
+        /// </remarks>
+        private bool builtOverlay;
+
+        /// <summary>
+        /// 첫 활성화와 assembly reload 가 함께 지나는 자리. 두 번 불러도 status panel 은 한 벌이다.
+        /// </summary>
+        /// <remarks>
+        /// Unity 는 play 중 assembly reload 에서 <c>OnDisable</c> → serialize → domain 교체 → deserialize
+        /// → <c>OnEnable</c> 순으로 가고 <c>Awake</c> 는 다시 부르지 않는다. 만드는 일이 <c>Awake</c> 에만
+        /// 있던 동안 reload 를 건넌 controller 는 <see cref="keyStatusText"/> 가 null 인 채로
+        /// <see cref="Update"/> 만 돌았고, 표시 문자열이 바뀔 때마다 — 즉 agent 가 무엇을 누를 때마다 —
+        /// <see cref="RefreshText"/> 에서 NullReferenceException 을 냈다 (issue #65).
+        ///
+        /// 그냥 껐다 켜는 길로도 여기 온다. 그때는 <see cref="builtOverlay"/> 가 true 라 아무것도 하지
+        /// 않는다 — 다시 만들면 panel 이 깜빡인다.
+        /// </remarks>
+        private void OnEnable()
         {
+            if (builtOverlay)
+            {
+                return;
+            }
+
+            DiscardOverlay();
             CacheKeyboardKeys();
             darkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey, 1) != 0;
             CreateGui();
             ApplyTheme();
+
+            // 갓 만든 Text 는 빈 문자열이다. 지난 domain 이 남긴 표시 문자열을 그대로 들고 있으면
+            // RefreshText 가 "같다" 고 보고 panel 을 빈 채로 둔다.
+            displayedKeys = null;
+            displayedPointer = null;
             RefreshText();
+
+            builtOverlay = true;
+        }
+
+        /// <summary>reload 를 건너 살아남은 overlay 를 걷어낸다.</summary>
+        private void DiscardOverlay()
+        {
+            if (canvasObject == null)
+            {
+                return;
+            }
+
+            // Destroy 는 프레임 끝에야 처리된다. 먼저 꺼 두지 않으면 새로 만든 panel 과 살아남은 panel 이
+            // 그 한 프레임 동안 겹쳐 그려진다.
+            canvasObject.SetActive(false);
+            Destroy(canvasObject);
+            canvasObject = null;
         }
 
         private void Update()
@@ -138,6 +200,10 @@ namespace UnityPlayMcp
 
         private void CacheKeyboardKeys()
         {
+            // 두 번 불려도 같은 목록이어야 한다. reload 는 이 list 를 비운 채 돌려주지만, 그냥 껐다 켜는
+            // 길이나 앞으로 늘어날 다른 길에서 채워진 채로 여기 들어오면 KeyCode 가 두 벌씩 쌓인다.
+            keyboardKeys.Clear();
+
             var seenValues = new HashSet<int>();
             foreach (KeyCode key in Enum.GetValues(typeof(KeyCode)))
             {
