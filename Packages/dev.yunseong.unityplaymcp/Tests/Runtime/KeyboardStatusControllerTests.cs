@@ -35,8 +35,11 @@ namespace UnityPlayMcp.Tests.Input
             {
                 PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", 1);
                 var controller = host.AddComponent<KeyboardStatusController>();
+
+                // EditMode 에서는 AddComponent 가 OnEnable 을 부르지 않는다. GUI 가 거기서 만들어지므로
+                // 직접 부르지 않으면 찾으려는 panel 이 끝까지 존재하지 않는다.
                 typeof(KeyboardStatusController)
-                    .GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(controller, null);
                 var panel = host.transform
                     .Find("Unity Play MCP Keyboard Status Canvas/Keyboard Status Panel");

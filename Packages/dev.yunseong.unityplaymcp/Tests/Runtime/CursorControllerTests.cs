@@ -189,7 +189,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// EditMode에서는 AddComponent가 Awake를 부르지 않는다. 커서 오브젝트는 Awake에서
+        /// EditMode에서는 AddComponent가 OnEnable을 부르지 않는다. 커서 오브젝트는 OnEnable에서
         /// 만들어지므로 직접 부르지 않으면 MoveTo가 아무것도 하지 않고 빠져나가고, 찾으려는
         /// 커서는 끝까지 존재하지 않는다.
         /// </summary>
@@ -198,7 +198,7 @@ namespace UnityPlayMcp.Tests
             controllerObject = new GameObject("cursor controller");
             var controller = controllerObject.AddComponent<CursorController>();
             typeof(CursorController)
-                .GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(controller, null);
             return controller;
         }
