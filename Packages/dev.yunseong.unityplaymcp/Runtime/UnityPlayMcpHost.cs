@@ -197,30 +197,40 @@ namespace UnityPlayMcp
         {
             using (ProfilerMarkers.HostUpdate.Auto())
             {
-                RecordFrameTime();
-
                 VirtualInput.AdvanceFrame();
 
-                if (webSocketTransport == null)
-                {
-                    transportWasConnected = false;
-                    return;
-                }
+                PumpTransport();
 
-                NoticeNewConnection();
+                // 성능 수집은 맨 뒤다. 여기서 던지는 것이 같은 프레임의 입력 전진과 요청 처리를 통째로
+                // 막았던 것이 issue #57 이고, 그 순서에는 그럴 값이 없다 — 지표 하나를 잃는 것과 원격
+                // 제어 전체를 잃는 것은 값이 다르다. 예외를 삼키지는 않는다. 삼켰다면 그 결함이 로그에
+                // 남지 않아 아무도 찾지 못했을 것이다.
+                RecordFrameTime();
+            }
+        }
 
-                using (ProfilerMarkers.HostHandleMessage.Auto())
-                {
-                    while (webSocketTransport.TryDequeueMessage(out var message))
-                    {
-                        HandleMessage(message);
-                    }
-                }
+        /// <summary>연결에서 온 것을 받아 처리하고, 이번 주기의 성능 보고를 내보낸다.</summary>
+        private void PumpTransport()
+        {
+            if (webSocketTransport == null)
+            {
+                transportWasConnected = false;
+                return;
+            }
 
-                using (ProfilerMarkers.HostPerformanceReport.Auto())
+            NoticeNewConnection();
+
+            using (ProfilerMarkers.HostHandleMessage.Auto())
+            {
+                while (webSocketTransport.TryDequeueMessage(out var message))
                 {
-                    SendPerformanceReport();
+                    HandleMessage(message);
                 }
+            }
+
+            using (ProfilerMarkers.HostPerformanceReport.Auto())
+            {
+                SendPerformanceReport();
             }
         }
 
