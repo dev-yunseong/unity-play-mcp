@@ -87,6 +87,78 @@ namespace UnityPlayMcp.Tests
             Assert.That(VirtualInput.GetMouseButton(0), Is.False, "the button was left held");
         }
 
+        /// <summary>
+        /// collider 가 자식에 앉은 배치. 스프라이트 하나에 빈 부모를 씌우는 흔한 모양이고, scan 이
+        /// 보고하는 id 는 대개 그 부모다. 엔진이 고르는 것은 자식이므로 자식이 답해도 성공이다 —
+        /// 사람이 같은 자리를 클릭해도 같은 자식이 받는다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator PointerClick_ReachesATargetWhoseColliderSitsOnAChild()
+        {
+            CreateRuntime();
+            var child = CreateColliderTarget();
+            var parent = new GameObject("collider parent");
+            spawned.Add(parent);
+            parent.transform.position = Vector3.zero;
+            child.transform.SetParent(parent.transform, true);
+            yield return null;
+
+            var result = default(ActionResultDto);
+            yield return Run("pointer_click", Params(parent.GetInstanceID()), r => result = r);
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            Assert.That(child.Messages, Does.Contain("down"));
+            var hit = result.ReturnValue as PointerHitDto;
+            Assert.That(hit, Is.Not.Null);
+            Assert.That(hit.TargetId, Is.EqualTo(parent.GetInstanceID()));
+            // 청한 것과 답한 것이 다르고, 그 다름이 보고에 남아야 한다.
+            Assert.That(hit.HitId, Is.EqualTo(child.gameObject.GetInstanceID()));
+        }
+
+        /// <summary>
+        /// 겨눌 면적이 없는 대상. collider 도 renderer 도 RectTransform 도 없으면 포인터가 닿을
+        /// 자리가 없고, 그것은 비활성이나 파괴와 다른 실패다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator PointerClick_RefusesATargetWithNothingToAimAt()
+        {
+            CreateRuntime();
+            var cameraObject = new GameObject("main camera", typeof(Camera));
+            cameraObject.tag = "MainCamera";
+            spawned.Add(cameraObject);
+
+            var bare = new GameObject("bare transform");
+            spawned.Add(bare);
+            yield return null;
+
+            var result = default(ActionResultDto);
+            yield return Run("pointer_click", Params(bare.GetInstanceID()), r => result = r);
+
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Error, Does.Contain("no Collider, Collider2D, or Renderer"));
+            Assert.That(result.Error, Does.Contain("bare transform"));
+        }
+
+        /// <summary>화면 밖 대상. 겨눌 좌표가 화면 안에 없다는 것을 그 숫자로 말한다.</summary>
+        [UnityTest]
+        public IEnumerator PointerClick_RefusesATargetThatSitsOffScreen()
+        {
+            CreateRuntime();
+            var offScreen = CreateGraphicTarget("off screen target", 0.5f);
+            // 화면 오른쪽 바깥으로. anchor 가 좌하단이라 이 값이 그대로 픽셀이다.
+            ((RectTransform)offScreen.transform).anchoredPosition =
+                new Vector2(Screen.width + 500f, Screen.height * 0.5f);
+            yield return null;
+
+            var result = default(ActionResultDto);
+            yield return Run("pointer_click", Params(offScreen.gameObject.GetInstanceID()), r => result = r);
+
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Error, Does.Contain("sits outside"));
+            Assert.That(result.Error, Does.Contain("off screen target"));
+            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
+        }
+
         [UnityTest]
         public IEnumerator PointerClick_ReachesAuGuiPointerHandler()
         {

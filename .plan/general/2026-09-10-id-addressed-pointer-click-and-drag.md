@@ -3,7 +3,7 @@
 - Date: 2026-09-10
 - GitHub Issue: [#59](https://github.com/dev-yunseong/unity-play-mcp/issues/59)
 - Branch: `feat/59` (from `origin/develop`, 504d789)
-- Status: Draft
+- Status: Implemented. MCP build clean, 142/142 green. Unity EditMode/PlayMode 미실행 — 이 머신에 editor 가 없어 CI 가 첫 컴파일이다.
 
 ## Goal
 
@@ -63,22 +63,27 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
 
 ## Approach (Checklist)
 
-- [ ] **Step 0: Recon** — 끝냄. 손댈 자리는
+- [x] **Step 0: Recon** — 끝냄. 손댈 자리는
       [ActionExecutor](../../Packages/dev.yunseong.unityplaymcp/Runtime/ActionExecutor.cs),
       [TargetLookup](../../Packages/dev.yunseong.unityplaymcp/Runtime/TargetLookup.cs),
       [PointerEventDispatcher](../../Packages/dev.yunseong.unityplaymcp/Runtime/PointerEventDispatcher.cs),
       [VirtualMouseMessenger](../../Packages/dev.yunseong.unityplaymcp/Runtime/UnityEngine/VirtualMouseMessenger.cs),
       [tools.ts](../../mcp/src/tools.ts).
 
-- [ ] **Step 1: 겨눌 자리를 찾는다.** 새 파일
+- [x] **Step 1: 겨눌 자리를 찾는다.** 새 파일
       `Runtime/PointerTargeting.cs` 에 `PointerAim` 구조체와 `PointerTargeting` 정적 클래스.
 
       - `ColliderUnder(Vector2)` — 엔진이 배달할 그 오브젝트 하나. `VirtualMouseMessenger.Pick`
         의 본문을 여기로 옮기고 messenger 는 이것을 부른다. 규칙(`Camera.main` 에서 쏜 ray,
         2D 와 3D 를 같은 거리로 비교, `Camera.eventMask` 로 거른다)이 한 자리에만 있게 된다.
-      - `Reaches(GameObject subject, GameObject hit)` — hit 이 subject 자신이거나, 그 자손이거나,
-        그 조상일 때 참. uGUI 는 handler 를 위로 걸어 올라가며 찾으므로 조상 hit 도 같은 handler
-        사슬에 닿는다. 자손은 `Button` 의 graphic 이 자식일 때다.
+      - `Reaches(GameObject subject, GameObject hit, bool throughGraphics)` — hit 이 subject
+        자신이거나 그 자손이면 참. 조상은 `throughGraphics` 일 때, 그것도 두 쪽의
+        `GetEventHandler<IPointerClickHandler>` 가 같을 때만 참이다.
+        `VirtualMouseMessenger.Send` 는 맞은 오브젝트 하나에 `SendMessage` 할 뿐 위아래로 걷지
+        않으므로 collider 경로의 조상 hit 은 대상을 가린 것이고, uGUI 는 `ExecuteHierarchy` 로
+        위로 걷지만 "같은 handler 에 닿는다" 를 믿는 대신 실제로 물어본다 — 그러지 않으면
+        `raycastTarget` 이 켜진 전체 화면 부모 panel 이 모든 자식을 가려 놓고도 전부 성공으로
+        보고된다.
       - `TryAim(GameObject target, PointerEventDispatcher graphics, out PointerAim aim, out string error)`
         — 대상의 화면 면적을 구하고(`RectTransform` 이면 네 코너, 아니면 `Collider` /
         `Collider2D` / `Renderer` 의 bounds), 그 안의 후보점 5개(가운데, 그리고 가로세로 25%/75%
@@ -90,16 +95,16 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
       카드에서 실패한다. issue 의 Validation Notes 가 적은 "rect 안의 점에서도 실제 collider hit
       여부가 달라 실패" 가 그 경우다.
 
-- [ ] **Step 2: dispatcher 에게 무엇이 아래 있는지 묻는다.** `PointerEventDispatcher` 에
+- [x] **Step 2: dispatcher 에게 무엇이 아래 있는지 묻는다.** `PointerEventDispatcher` 에
       `internal GameObject GraphicUnder(Vector2 screenPosition)` 을 더한다. 이미 있는 private
       `Raycast` 를 그대로 쓰고 hover 는 건드리지 않는다 — 후보점을 시험하는 동안 엉뚱한 자리로
       `pointerEnter` 가 나가면 안 된다.
 
-- [ ] **Step 3: id 로 GameObject 를 꺼낸다.** `TargetLookup` 에
+- [x] **Step 3: id 로 GameObject 를 꺼낸다.** `TargetLookup` 에
       `public bool TryGetGameObject(int id, out GameObject gameObject)` 를 더하고 기존
       `TryGetTarget` 이 그것을 쓰게 한다. `ScannedTarget` 은 그대로 둔다.
 
-- [ ] **Step 4: 두 coroutine.** 새 파일 `Runtime/PointerActions.cs` 에 `PointerActions` 클래스.
+- [x] **Step 4: 두 coroutine.** 새 파일 `Runtime/PointerActions.cs` 에 `PointerActions` 클래스.
       `ActionExecutor` 는 이미 810줄이고 여기에 더 얹을 이유가 없다. `ActionExecutor` 는 생성자에서
       `PointerActions` 를 하나 만들고 switch 에 case 두 개를 더하는 것으로 끝난다. 누르고 놓는 일은
       `ActionExecutor.SetButton` 하나에만 있어야 하므로 (`Runtime/ActionExecutor.cs:270` 의 주석)
@@ -144,7 +149,7 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
       목적지 좌표에서 확인한 그 오브젝트이지, 놓는 순간 포인터 아래 있던 것이 아니다. DTO 주석에
       그렇게 적는다.
 
-- [ ] **Step 5: 결과 payload 를 타입으로 선언한다.** `Runtime/Protocol/Dto/PointerHitDto.cs` 와
+- [x] **Step 5: 결과 payload 를 타입으로 선언한다.** `Runtime/Protocol/Dto/PointerHitDto.cs` 와
       `Runtime/Protocol/Dto/PointerDragResultDto.cs`.
 
       ```
@@ -156,7 +161,7 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
       에이전트가 그대로 되쓸 수 있다. 이 다섯 field 가 acceptance criteria 의 "실제 hit 대상 및
       처리 결과를 보고" 에 답하는 전부다.
 
-- [ ] **Step 6: 실패를 네 가지로 가른다.** 에러 문장이 원인을 이름과 숫자로 말한다. 비활성
+- [x] **Step 6: 실패를 네 가지로 가른다.** 에러 문장이 원인을 이름과 숫자로 말한다. 비활성
       판정은 `GameObject.activeInHierarchy` 하나로 한다 — 자신이 꺼졌든 부모가 꺼졌든 포인터가
       닿지 못하는 것은 같고, 둘을 가르는 것은 이 action 이 답할 물음이 아니다. 꺼진 `Canvas` 나
       `raycastTarget = false` 는 여기서 걸리지 않고 불일치로 나타난다. 그것이 맞다: 오브젝트는
@@ -167,7 +172,7 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
       - 겨눌 면적 없음: `pointer_click: target -3518 (Enemy) has no Collider, Renderer, or RectTransform to aim at.`
       - 불일치: `pointer_click: the pointer reached Card_Shoot#-4102 instead of Enemy#-3518 at (640, 360). Something is drawn or colliding on top of the target.`
 
-- [ ] **Step 7: MCP 쪽.** 새 module 을 만들지 않는다.
+- [x] **Step 7: MCP 쪽.** 새 module 을 만들지 않는다.
 
       `params` 를 만드는 일이 `[action.targetId]` 와 `[action.sourceId, action.targetId]` 뿐이라
       옮길 로직이 없다. `captureScreenParams` 가 제 파일 값을 하는 것은 세 가지 모양으로 갈리기
@@ -183,7 +188,7 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
       `params` 배열의 계약은 Unity 쪽 `PointerHitDto` 와 `ActionExecutor` 의 switch 가 쥐고,
       TypeScript 쪽에서는 `toWireAction` 이 유일한 자리로 남는다 — 지금과 같다.
 
-- [ ] **Step 8: 테스트.**
+- [x] **Step 8: 테스트.**
 
       PlayMode (`Tests/PlayMode/PointerTargetActionTests.cs`, 새 파일 — 기존 파일에 넣으면 다른
       track 과 충돌 면적이 늘어난다):
@@ -201,8 +206,9 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
       - `pointer_drag` 가 목적지 해석에 실패하면 버튼을 쥐지 않은 채로 끝난다.
       - `pointer_drag` coroutine 이 중단되면 버튼이 놓인다 (`finally`).
 
-      EditMode (`Tests/Runtime/PointerActionParamsTests.cs`, 새 파일):
-      - `pointer_click` / `pointer_drag` 가 params 개수가 모자라면 거절한다.
+      params 거절은 따로 EditMode 파일을 두지 않고 위 PlayMode 파일에 넣었다
+      (`PointerActions_RefuseParamsTheyCannotRead`). executor 를 세우는 준비가 이미 거기
+      있고, 파일 하나를 더 만들 만큼 다른 종류의 검사가 아니다.
 
       MCP:
       - `mcp/test/perform-actions.test.ts` 의 `wireCases` 에 `pointer_click`, `pointer_drag` 를
@@ -215,7 +221,7 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
         `mcp/test/tools.test.ts` 가 `dispatchActions` 에 대고 하는 것과 같은 방식이고, 새
         파일이라 다른 track 과 충돌하지 않는다.
 
-- [ ] **Step 9: Rollout / Rollback** — 되돌리기는 branch revert. 설정도 migration 도 flag 도 없다.
+- [x] **Step 9: Rollout / Rollback** — 되돌리기는 branch revert. 설정도 migration 도 flag 도 없다.
       기존 action 은 하나도 안 바뀌므로 옛 MCP server 와 새 Unity package 를 섞어 써도
       `Unsupported method: pointer_click` 하나만 나온다.
 
@@ -249,6 +255,22 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
   해결이 맞다.
 - **Rollback steps:** branch 의 commit 을 revert 한다. package 밖은 아무것도 안 바뀐다.
 
+## Pair review 에서 접은 것
+
+- **`HitOf` 가 파괴된 `GameObject` 를 읽는다.** 실제 버그였다. 겨눈 뒤 보고까지 세 프레임이
+  지나는데 그 사이 죽는 적을 클릭하거나 소모되는 카드를 드래그하면
+  `MissingReferenceException` 이 coroutine 을 뚫고 나가고, host 의 `ProcessActions` 가
+  `processingActions = true` 인 채로 멈춰 그 세션의 이후 액션이 전부 조용히 버려진다.
+  `PointerAim` 이 겨눌 때 id 와 이름을 베껴 들고, `HitOf` 는 그 값만 읽는다.
+- **`Reaches` 의 조상 허용이 너무 넓다.** 위 Step 1 대로 좁혔다.
+- **면적을 재는 방법과 hit 을 묻는 방법이 갈렸다.** `Canvas` 밖 `RectTransform` 이 corner 로
+  재어지고 collider 로 물어져 엉터리 면적이 나왔다. 둘 다 `AnswersAsGraphic` 하나를 따른다.
+- **`Camera.main` 이 없을 때 대상 탓을 했다.** 그 경우에 제 문장을 준다.
+- **불일치 문장에서 좌표가 빠졌다.** 되살렸다. 물러난 에이전트가 `move_mouse` 로 돌아가려면
+  어디를 겨눴는지 알아야 한다.
+- **테스트 구멍.** collider 가 자식에 앉은 배치, 겨눌 면적 없음, 화면 밖 — 셋을 더했다.
+- **`Pick` 이 한 줄짜리 passthrough 가 되었다.** `Tick` 에 직접 부르고 주석만 남겼다.
+
 ## Rejected feedback
 
 - **비활성 판정을 `target.activeSelf && target.GetComponentInParent<Canvas>().enabled` 로 하라.**
@@ -265,6 +287,13 @@ ID 하나로 collider 대상을 클릭하고, ID 두 개로 드래그한다. 지
 - **glide 중 occluder 가 끼어들면 어떻게 되는가.** pointer capture 가 답이고, 그것을 그대로
   테스트한다: Step 8 의 "포인터가 원본을 떠난 뒤에도 원본이 `drag` 를 계속 받는다". 새로 할 일이
   없다.
+- **`Drag` 의 `finally` 자체를 테스트하라.** 받지 않는다. 지금 `try` 안에서 던질 수 있는 것이
+  없어 그 `finally` 의 유일한 산 경로는 enumerator `Dispose` 이고, 그것이 도는지에 기대지
+  않기로 이미 정했다 (Step 4). 기대지 않는 것을 테스트하면 없는 계약을 있는 것처럼 만든다.
+  **`finally` 는 테스트되지 않는다** — 방어로 남기는 것이고, 눌린 입력을 실제로 푸는 것은
+  `PointerDrag_HoldsNothingWhenTheDestinationCannotBeResolved` 가 덮는 누르기 전 확인과,
+  기존 `PointerActionTests.MouseDown_HeldButtonIsReleasedWhenTheConnectionStops` 가 덮는
+  host 의 `ReleaseAgentInput` 이다.
 
 ## Open Questions
 

@@ -38,7 +38,11 @@ namespace UnityPlayMcp
         /// </summary>
         public void Tick(Vector2 screenPosition, bool buttonHeld)
         {
-            var target = Pick(screenPosition);
+            // 엔진이라면 배달했을 그 오브젝트 하나. 고르는 규칙과 왜 그 규칙인지는
+            // PointerTargeting.ColliderUnder 에 있다 — ID 로 겨누는 쪽이 커서를 옮기기 전에 같은
+            // 규칙으로 확인해야 하기 때문이다. 두 벌이 되면 "확인할 때는 맞았는데 배달은 딴 데로
+            // 간" 클릭이 생긴다.
+            var target = PointerTargeting.ColliderUnder(screenPosition);
             UpdateHover(target);
 
             if (pressed != null)
@@ -101,20 +105,6 @@ namespace UnityPlayMcp
 
             // Every frame it stays there, not once on arrival.
             Send(hovered, MouseOver);
-        }
-
-        /// <summary>
-        /// The one object the engine would deliver to: the nearest hit along a ray from the camera,
-        /// 2D and 3D compared on the same distance, filtered by <see cref="Camera.eventMask"/>.
-        /// </summary>
-        /// <remarks>
-        /// 고르는 규칙 자체는 <see cref="PointerTargeting.ColliderUnder"/> 에 있고, 왜 그 규칙인지도
-        /// 거기 적혀 있다. ID 로 겨누는 쪽이 커서를 옮기기 전에 같은 규칙으로 확인해야 하기
-        /// 때문이다 — 두 벌이 되면 "확인할 때는 맞았는데 배달은 딴 데로 간" 클릭이 생긴다.
-        /// </remarks>
-        private static GameObject Pick(Vector2 screenPosition)
-        {
-            return PointerTargeting.ColliderUnder(screenPosition);
         }
 
         /// <summary>

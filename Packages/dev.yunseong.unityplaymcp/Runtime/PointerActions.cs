@@ -78,6 +78,9 @@ namespace UnityPlayMcp
             yield return cursorController.MoveTo(aim.ScreenPosition, pointerMoved);
             yield return null;
 
+            // Drag 와 달리 try/finally 가 없다. 누름과 놓음 사이에 프레임을 넘기는 것 말고는
+            // 아무 일도 하지 않아 던질 것이 없고, 그래도 남는 중단 경로는 host 의
+            // ReleaseAgentInput 이 덮는다.
             setButton(DrivingButton, true);
             yield return null;
 
@@ -191,13 +194,18 @@ namespace UnityPlayMcp
         /// 겨눈 자리를 보고할 모양으로. 좌표는 여기서 좌상단 기준으로 뒤집는다 — scan 이 보고하고
         /// <c>move_mouse</c> 가 받는 그 좌표계라야 호출자가 그대로 되쓸 수 있다.
         /// </summary>
+        /// <remarks>
+        /// <see cref="PointerAim"/> 이 이미 베껴 둔 값만 읽는다. 여기까지 오는 데 세 프레임이
+        /// 걸리고 그 사이에 대상이 파괴될 수 있어서, 살아 있는 <c>GameObject</c> 를 여기서
+        /// 건드리면 안 된다 — 그 이유는 <see cref="PointerAim.HitId"/> 에 적혀 있다.
+        /// </remarks>
         private static PointerHitDto HitOf(int targetId, PointerAim aim)
         {
             return new PointerHitDto
             {
                 TargetId = targetId,
-                HitId = aim.Hit.GetInstanceID(),
-                Hit = aim.Hit.name,
+                HitId = aim.HitId,
+                Hit = aim.HitName,
                 X = aim.ScreenPosition.x,
                 Y = Screen.height - aim.ScreenPosition.y
             };
