@@ -30,6 +30,9 @@ namespace UnityPlayMcp
         private readonly Action<Vector2> cursorMoved;
         private readonly Action<Vector2> pointerMoved;
 
+        /// <summary>ID 로 겨누는 포인터 클릭과 드래그. 프레임 순서를 쥔 쪽이라 따로 산다.</summary>
+        private readonly PointerActions pointerActions;
+
         // The time scale as it was when pause_time froze the game, so resume_time gives back the
         // speed the game was actually running at rather than assuming 1. Null means not paused.
         private float? scaleBeforePause;
@@ -65,6 +68,11 @@ namespace UnityPlayMcp
                 VirtualInput.MoveMouse(position);
                 pointerEvents.MoveTo(position);
             };
+
+            // SetButton 을 넘기는 것이지 버튼을 미는 두 번째 자리를 만드는 것이 아니다. 미는 일은
+            // 아래 SetButton 한 곳에만 있어야 하고, 그 이유는 그 메서드의 주석에 적혀 있다.
+            pointerActions = new PointerActions(
+                targetLookup, cursorController, pointerEvents, SetButton, pointerMoved);
         }
 
         public IEnumerator Execute(
@@ -77,6 +85,14 @@ namespace UnityPlayMcp
             {
                 case "button_click":
                     yield return ExecuteButtonClick(actionId, parameters, completed);
+                    yield break;
+
+                case "pointer_click":
+                    yield return pointerActions.Click(actionId, parameters, completed);
+                    yield break;
+
+                case "pointer_drag":
+                    yield return pointerActions.Drag(actionId, parameters, completed);
                     yield break;
 
                 case "enter_text":
@@ -149,7 +165,7 @@ namespace UnityPlayMcp
             List<object> parameters,
             Action<ActionResultDto> completed)
         {
-            if (!TryReadId(parameters, out var targetId))
+            if (!TryReadId(parameters, 0, out var targetId))
             {
                 completed(ActionResultDto.Failure(actionId, "button_click requires params [targetId]."));
                 yield break;
@@ -187,7 +203,7 @@ namespace UnityPlayMcp
             List<object> parameters,
             Action<ActionResultDto> completed)
         {
-            if (!TryReadId(parameters, out var targetId) || parameters.Count < 2)
+            if (!TryReadId(parameters, 0, out var targetId) || parameters.Count < 2)
             {
                 completed(ActionResultDto.Failure(actionId, "enter_text requires params [targetId, value]."));
                 yield break;
@@ -760,7 +776,7 @@ namespace UnityPlayMcp
                 return true;
             }
 
-            return TryReadId(parameters, out button) && VirtualMouseState.IsButton(button);
+            return TryReadId(parameters, 0, out button) && VirtualMouseState.IsButton(button);
         }
 
         private static bool TryReadDuration(object value, out float durationSeconds)
@@ -784,27 +800,36 @@ namespace UnityPlayMcp
             return !float.IsInfinity(number) && !float.IsNaN(number);
         }
 
-        private static bool TryReadId(List<object> parameters, out int id)
+        /// <summary>
+        /// 위치 인자 하나를 정수 id 로 읽는다.
+        /// </summary>
+        /// <remarks>
+        /// <c>internal</c> 인 것은 <see cref="PointerActions"/> 도 id 를 읽기 때문이다. wire 는
+        /// 위치 인자라 "몇 번째 자리를 어떻게 정수로 읽는가" 가 계약의 일부이고, 그 계약이 두
+        /// 벌이면 한쪽만 <c>long</c> 을 받는 식으로 갈라진다.
+        /// </remarks>
+        internal static bool TryReadId(List<object> parameters, int index, out int id)
         {
             id = 0;
-            if (parameters == null || parameters.Count == 0 || parameters[0] == null)
+            if (parameters == null || index < 0 || parameters.Count <= index ||
+                parameters[index] == null)
             {
                 return false;
             }
 
-            if (parameters[0] is long longValue)
+            if (parameters[index] is long longValue)
             {
                 id = (int)longValue;
                 return true;
             }
 
-            if (parameters[0] is int intValue)
+            if (parameters[index] is int intValue)
             {
                 id = intValue;
                 return true;
             }
 
-            return int.TryParse(parameters[0].ToString(), out id);
+            return int.TryParse(parameters[index].ToString(), out id);
         }
     }
 }
