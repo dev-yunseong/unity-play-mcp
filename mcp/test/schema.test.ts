@@ -7,7 +7,7 @@ import type { UnityConnection } from "../src/connection.js";
 import { PulseStore } from "../src/pulse.js";
 import { registerTools } from "../src/tools.js";
 
-const REGISTERED_TOOL_COUNT = 18;
+const REGISTERED_TOOL_COUNT = 21;
 
 interface ListedTool {
   name: string;
@@ -142,5 +142,5 @@ test("perform_actions still takes a non-empty action array", async () => {
   assert.equal(schema.properties.actions.type, "array");
   assert.equal(schema.properties.actions.minItems, 1);
   assert.deepEqual(schema.required, ["actions"]);
-  assert.equal(schema.properties.actions.items.anyOf.length, 16);
+  assert.equal(schema.properties.actions.items.anyOf.length, 18);
 });
