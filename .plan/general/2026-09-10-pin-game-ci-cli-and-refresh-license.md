@@ -25,7 +25,7 @@ Restore deterministic Unity CI by pinning the game-ci CLI to v0.1.56 and refresh
 
 ## Approach (Checklist)
 - [x] **Step 0: Recon** Confirm the resolved CLI version, failure point, previous release, workflow input, and local license path.
-- [x] **Step 1: Implementation** Add `cliVersion: 0.1.56` to `.github/workflows/unity-tests.yml`. Verify the local ULF exists and is non-empty, then stream it through stdin to `gh secret set UNITY_LICENSE --repo dev-yunseong/unity-play-mcp` without printing or persisting its contents.
+- [x] **Step 1: Implementation** Add `cliVersion: v0.1.56` to `.github/workflows/unity-tests.yml`. The `v` prefix is required because the runner interpolates the input directly into the GitHub release tag URL. Verify the local ULF exists and is non-empty, then stream it through stdin to `gh secret set UNITY_LICENSE --repo dev-yunseong/unity-play-mcp` without printing or persisting its contents.
 - [ ] **Step 2: Tests** Confirm the secret's updated timestamp with `gh secret list`, validate the workflow diff, open the draft PR, and use that PR's EditMode and PlayMode jobs as the gate. Require logs to show CLI v0.1.56, successful activation, actual test execution, and passing results; skipped jobs do not count.
 - [ ] **Step 3: Rollout / Rollback** Merge the CI-fix PR after its requirements are met. Revert the pin to roll back the workflow; rotate `UNITY_LICENSE` to another known-good license if the new secret must be replaced.
 
