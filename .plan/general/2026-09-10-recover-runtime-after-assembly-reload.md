@@ -2,7 +2,7 @@
 
 - Date: 2026-09-10
 - GitHub Issue: https://github.com/dev-yunseong/unity-play-mcp/issues/57
-- Status: In progress
+- Status: Done
 
 ## Goal
 
@@ -93,14 +93,35 @@ socket 이 열려 있지 않고, 설령 열려 있었어도 `Update` 가 `Record
      ```
      `instance != null` 은 Unity 의 비교라 파괴된 host 를 쥔 자리는 비어 있는 것으로 읽힌다 —
      domain reload 를 끈 설정에서 지난 play 세션의 host 가 static 에 남아도 새 host 가 자리를
-     잡는다.
-  3. `OnEnable` 을 이렇게 만든다.
+     잡는다. 진 host 는 `Destroy` 앞에서 `enabled = false` 로 먼저 꺼진다. `Destroy` 는 프레임
+     끝에야 처리되고 그때까지 그 host 의 `Update` 가 도는데, 아무것도 만들지 않은 host 의
+     `RecordFrameTime` 은 그 프레임에 바로 던진다.
+  3. host 를 세우는 일을 `BeginHosting()` 하나로 모으고 `Start` 와 `OnEnable` 이 함께 부른다.
+     reload 가 지우는 셋이 정확히 이 셋이다.
      ```csharp
-     if (!hasStarted) return;        // 첫 연결은 Start 의 몫
-     if (!ClaimHostSlot()) return;   // reload 는 static 을 지운다
-     EnsureRuntime();                // reload 는 ownsRuntime 을 false 로 되돌린다
-     StartTransport();               // reload 는 transport 를 null 로 되돌린다
+     private void BeginHosting()
+     {
+         if (!ClaimHostSlot()) return;   // reload 는 static slot 을 지운다
+         EnsureRuntime();                // reload 는 ownsRuntime 을 false 로 되돌린다
+         StartTransport();               // reload 는 transport 를 null 로 되돌린다
+     }
+
+     private void OnEnable()
+     {
+         if (!hasStarted) return;        // 첫 연결은 Start 의 몫
+         BeginHosting();
+     }
+
+     private void Start()
+     {
+         hasStarted = true;
+         BeginHosting();
+     }
      ```
+     `Start` 도 통째로 부르는 이유는 `Awake` 와 `Start` 사이에 reload 가 끼는 구성이 있어서다.
+     scene 이 host 를 `enabled = false` 로 들고 오면 `Awake` 는 그때 돌고 `Start` 는 게임이
+     켤 때까지 오지 않는다. 그 사이의 reload 는 `Awake` 가 만든 것을 지우고, `OnEnable` 은
+     `hasStarted` 가 아직 false 라 그냥 돌아간다 — 다시 세울 자리가 `Start` 말고 없다.
      `GetComponent` 로 찾는 `CursorController`/`KeyboardStatusController` 는 살아 있으므로
      component 가 두 벌이 되지 않는다. reload 전 `OnDisable` 이 socket 을 닫고
      `Application.runInBackground` 를 게임 값으로 되돌려 놓았으므로, `StartTransport` 가 다시
@@ -143,14 +164,20 @@ socket 이 열려 있지 않고, 설령 열려 있었어도 `Update` 가 `Record
      붙은 field 는 Unity 가 되돌려 주므로 건너뛰고, `readonly` field 도 건너뛴다 — reflection
      으로 쓰는 것이 runtime 에 따라 거절되고, 지금 걸리는 것은 비어 있는 `actionRequests`
      하나뿐이라 새로 만든 빈 것과 구별되지 않는다.
-     `AffordanceBootstrap`/`Pulse` 의 static 은 건드리지 않는다. `OnDisable` 이 이미 그것들을
-     멈춘 상태로 돌려놓고, 그것이 reload 직전에 실제로 일어나는 일이다.
+     지울 것을 고르는 규칙은 Unity 의 규칙 그대로다: `[NonSerialized]` 면 지우고, public 이거나
+     `[SerializeField]` 가 붙었으면 남긴다. `[SerializeField]` 만 보면 나중에 public field 가
+     하나 늘었을 때 simulation 이 진짜 reload 보다 가혹해져 있지도 않은 결함을 붙잡는다.
+     `AffordanceBootstrap`/`Pulse` 와 `VirtualInput` 의 static 은 건드리지 않는다. `OnDisable` 이
+     이미 그것들을 멈추고 놓은 상태로 돌려놓고, 그것이 reload 직전에 실제로 일어나는 일이다.
   2. `HostReloadRecoveryTests.cs` (새 파일). Unity Test Framework 는 test 중 올라온 예외를
      실패로 치므로, 복구가 안 되면 프레임을 넘기는 것만으로 붉어진다.
      - `RebuildsItsRuntimeAfterAnAssemblyReload`: 복구 뒤 두 프레임을 넘기고
        `frameTimeRecorder` 가 다시 있는지.
-     - `ReopensTheTransportAfterAnAssemblyReload`: 복구 뒤 socket 이 다시 열려 있는지.
-       host 에 `internal bool TransportOpen => webSocketTransport != null;` 를 둔다.
+     - `RebuildsItsRuntimeWhenTheReloadLandsBeforeStart`: 꺼진 채로 들어온 host 가 `Start`
+       전에 reload 를 맞은 경우.
+     - `ReopensTheTransportAfterAnAssemblyReload`: 복구 뒤 server 가 다시 서 있는지.
+       host 에 `internal bool TransportOpen` 을 둔다 — transport 를 쥐고 있고 그것이 stop 되지
+       않았는지를 말하며, 누가 붙었는지는 말하지 않는다.
        `Reading` 이 이미 같은 이유로 `internal` 인 선례다. `StartReadings` 가 참을 돌려주는
        것으로는 대신할 수 없다 — transport 가 null 이면 pulse 는 파일로 떨어지고 그래도 참이다.
      - `AnswersStartReadingsAfterAnAssemblyReload`: 복구 뒤 `StartReadings()` 가 참이고
@@ -159,22 +186,31 @@ socket 이 열려 있지 않고, 설령 열려 있었어도 `Update` 가 `Record
        스스로 물러나고 먼저 있던 쪽이 socket 을 계속 쥔다.
      - `ClaimsTheSlotWhenItStillHoldsADestroyedHost`: domain reload 를 끈 설정에서 지난 세션의
        파괴된 host 가 자리에 남은 경우.
-     - `KeepsRecordingFrameTimesWithNoClientConnected`: server 는 열렸고 붙은 client 는 없는
-       프레임에서도 프레임타임이 쌓이는지. Step 2 의 순서를 지키는 test 다.
+     - `KeepsRecordingFrameTimesWithNoClientConnected`: server 는 섰고 붙은 client 는 없는
+       프레임에서도 프레임타임이 쌓이는지. `RecordFrameTime` 이 "전송 상태와 무관하게 매 프레임"
+       이라는 제 문서를 지키는지를 본다.
+     - `KeepsHandlingRequestsWhenFrameTimeRecordingThrows`: `frameTimeRecorder` 를 null 로 만들고
+       한 프레임을 넘겨, 예외가 로그에 오르면서도 그 프레임의 `PumpTransport` 는 이미 지나갔는지.
+       Step 2 의 순서를 실제로 지키는 test 다 — 순서를 되돌리면 이것만 붉어진다.
+     - `ReopensTheTransportOnAPlainReEnable`: reload 가 아니라 그냥 껐다 켜는 길. `OnEnable` 을
+       통째로 바꿨으므로 기존 동작을 함께 지킨다 (acceptance criterion 4).
      - `ReleasesHeldInputWhenItGoesDown`: 키를 눌러 둔 채 host 를 비활성화하면 놓인다. reload
        직전 `OnDisable` 이 하는 일이고, 이번 변경이 그것을 건드리지 않았다는 증거다.
   3. 두 파일에 `.meta` 를 함께 만든다. 이 package 는 모든 source 옆에 `.meta` 를 커밋한다.
 
-- [ ] **Step 4: 남는 결함을 기록한다**
+- [x] **Step 4: 남는 결함을 기록한다**
   아래 Risks 의 `CursorController`/`KeyboardStatusController` 항목을 issue #57 에 코멘트로
   남기고 PR 의 Risks 에도 적는다. 별도 issue 로 뗄 것을 권한다 — 이 PR 의 write scope 밖이고,
   두 component 가 만든 canvas 를 걷어내고 다시 세우는 일이라 크기도 다르다.
 
-- [ ] **Step 5: Rollout / Rollback**
+- [x] **Step 5: Rollout / Rollback**
   - flag 도 migration 도 없다. package 안의 동작 변경 하나다.
   - rollback 은 `git revert`.
 
 ## Rejected feedback
+
+- **`ClearHosts()` 를 `UnityPlayMcpHostSlot` 으로 모아라** (pair review): 맞는 말이지만 이번
+  변경과 무관한 정리다. 네 fixture 를 함께 건드리면 이 PR 이 고치는 것이 무엇인지 흐려진다.
 
 - **"reload 뒤 `Awake` 가 다시 돌아 `instance = this` 를 하는지 확인하라"** (fast #3, #7):
   전제가 반대다. reload 가 `Awake` 를 부르지 않는다는 것이 이 결함의 원인이고, 부른다면
