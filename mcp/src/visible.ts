@@ -62,6 +62,22 @@ function flagOf(object: PulseObject, name: string): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
+/// 이 객체 자신이 화면에 보이고 있는 문자열 중 첫 번째. `search.ts`가 후보 요약에 쓴다.
+///
+/// `object.by`를 앞에서부터 훑어 `shows`가 참인 첫 component 를 찾고, 그 `members`를
+/// 앞에서부터 훑어 문자열 값을 지닌 첫 멤버를 낸다 — 라벨 글자처럼 사람이 실제로 읽을 만한
+/// 값이 대개 문자열이기 때문이다. `fillAmount`(number)나 `isOn`(boolean) 같은 값은 이 함수가
+/// 찾는 "표시 텍스트"가 아니다. 그런 component/멤버가 하나도 없으면 `undefined`.
+export function displayedTextOf(object: PulseObject): string | undefined {
+  for (const component of object.by ?? []) {
+    if (!shows(component)) continue;
+    for (const member of component.members) {
+      if (typeof member.value === "string") return member.value;
+    }
+  }
+  return undefined;
+}
+
 /// 이 요소를 사람이 지금 볼 수 있는가. 셋 중 하나라도 아니면 기본 응답에서 뺀다.
 function inSight(element: VisibleElement): boolean {
   return element.active && element.onScreen !== false && element.covered !== true;

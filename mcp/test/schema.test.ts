@@ -7,7 +7,7 @@ import type { UnityConnection } from "../src/connection.js";
 import { PulseStore } from "../src/pulse.js";
 import { registerTools } from "../src/tools.js";
 
-const REGISTERED_TOOL_COUNT = 19;
+const REGISTERED_TOOL_COUNT = 21;
 
 interface ListedTool {
   name: string;

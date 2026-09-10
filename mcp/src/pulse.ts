@@ -21,6 +21,38 @@ export interface PulseComponent {
   [key: string]: JsonValue | PulseMember[] | undefined;
 }
 
+/// `Button.onClick` 같은 UnityEvent 에 실제로 걸린 persistent call 하나.
+///
+/// `WatchList.cs`/`LiveState.cs`가 이 객체 자신의 component 에서 읽어 낸 것이라, 클릭했을 때
+/// 정말 무언가가 일어난다는 근거다 — 이 배열이 비어 있으면 `button_click` 을 보내도 아무 일도
+/// 안 날 수 있다.
+export interface OfferedClick {
+  event: string;
+  method: string;
+  on: string;
+}
+
+/// 이 객체가 살아있는 동안 게임 코드가 반응하는 키 하나.
+///
+/// `does` 가 없는 것은 "아무 일도 안 한다" 가 아니라 "분석이 무엇을 하는지 못 읽었다" 이다
+/// (`WatchListJson.cs` 의 `Keys` 주석 참고). 그래서 optional 이고, 비어 있는 배열로 채우지
+/// 않는다.
+export interface OfferedKey {
+  key: string;
+  does?: string[];
+}
+
+/// 이 객체가 조작에 답하는 방법들. 게임이 실제로 짜 둔 배선에서 나온 값이라 추측이 아니다.
+///
+/// 셋 다 optional 인 이유는 `LiveState.cs` 의 `Offered` 가 아무것도 없으면 `offers` 자체를
+/// 안 보내기 때문이다 — 이 타입이 실려 온다는 것 자체가 최소 하나는 있다는 뜻이지만, 어느
+/// 것인지는 타입만으로 못 정해 셋 다 optional 로 둔다.
+export interface PulseOffers {
+  clicks?: OfferedClick[];
+  keys?: OfferedKey[];
+  pointers?: string[];
+}
+
 export interface PulseObject {
   id: number;
   path: string;
@@ -28,9 +60,9 @@ export interface PulseObject {
   scene?: string;
   tag?: string;
   where?: { [key: string]: JsonValue };
-  offers?: JsonValue[];
+  offers?: PulseOffers;
   by?: PulseComponent[];
-  [key: string]: JsonValue | PulseComponent[] | undefined;
+  [key: string]: JsonValue | PulseComponent[] | PulseOffers | undefined;
 }
 
 export interface PulseStatic {
@@ -185,7 +217,10 @@ function record(recorder: Recorder, on: string, member: PulseMember): void {
 ///
 /// `LiveState` 가 멤버를 고정된 키 순서로 직렬화하므로 문자열 비교로 충분하다. 게임이 같은
 /// 멤버를 `reading` 마다 다른 키 순서로 쓰기 시작하면 안 움직인 값이 변경으로 잡힌다.
-function sameValue(left: JsonValue, right: JsonValue): boolean {
+///
+/// `wait.ts` 가 `memberEquals` 조건을 검사할 때 같은 비교를 그대로 쓴다 — 값 비교 규칙은
+/// 하나만 있어야 하므로 export 한다.
+export function sameValue(left: JsonValue, right: JsonValue): boolean {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
@@ -453,6 +488,9 @@ export class PulseStore {
   private diagnostics: PulseDiagnostics = {};
   private lastReadingAt?: number;
   private lastUnreadableFrame?: UnreadableFrame;
+  /// `wait.ts` 가 새 reading 을 기다릴 때 건다. pulse 가 아예 안 오면 여기가 안 불리므로,
+  /// 부르는 쪽이 timeout 을 별도로 걸어야 무한히 기다리지 않는다.
+  private readonly readingListeners = new Set<(state: FoldedPulseState) => void>();
 
   /// 시계를 밖에서 받는 이유는 test 가 "pulse 가 얼마나 오래되었는지" 를 실제 시간을 기다리지 않고
   /// 확인하기 위해서다.
@@ -475,6 +513,14 @@ export class PulseStore {
       // 이번 fold 가 성공했으니 지난 실패는 더 이상 최신 사건이 아니다.
       this.lastUnreadableFrame = undefined;
       this.pulseState = folded;
+      // `foldInternal` 은 실제로는 항상 정의된 상태를 돌려준다(`previous` 를 그대로 돌려주는
+      // 가지도 `previous !== undefined` 를 먼저 확인한 뒤에만 탄다) — 그래도 signature 가
+      // `| undefined` 라 여기서 좁혀 준다.
+      if (folded !== undefined) {
+        for (const listener of this.readingListeners) {
+          listener(folded.publicState);
+        }
+      }
       return this.pulseState !== previous;
     }
     if (frame.type === "PERFORMANCE") {
@@ -517,5 +563,12 @@ export class PulseStore {
   /// 돌려준다. 성공한 fold 가 하나라도 오면 지워진다.
   getLastUnreadableFrame(): UnreadableFrame | undefined {
     return this.lastUnreadableFrame;
+  }
+
+  /// `PULSE` frame 이 성공적으로 접힐 때마다(값이 하나도 안 바뀌어도) 새 상태로 부른다.
+  /// 반환값은 구독을 끊는 함수다.
+  onReading(listener: (state: FoldedPulseState) => void): () => void {
+    this.readingListeners.add(listener);
+    return () => this.readingListeners.delete(listener);
   }
 }

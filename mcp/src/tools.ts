@@ -4,7 +4,9 @@ import { z } from "zod";
 import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
 import { objectKey, type PulseObject, type PulseStore, type UnreadableFrame } from "./pulse.js";
+import { searchTargets } from "./search.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
+import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { visibleElements } from "./visible.js";
 
 type ToolContent =
@@ -30,6 +32,27 @@ const keySchema = () => z.string().min(1);
 const inputNameSchema = () => z.string().min(1);
 const maxEdgeSchema = () => z.number().int().positive();
 const paddingSchema = () => z.number().int().nonnegative();
+
+/// `wait_for_condition` 의 `memberEquals[].equals` 가 받는 값. 재귀적인 `JsonValue` 전체를
+/// 받지 않는 이유는 두 가지다: 이 tool 이 실제로 겨누는 값들(`IsStreaming` 같은 boolean,
+/// 개수 같은 number, 상태 이름 같은 string)이 전부 primitive 이고, `z.lazy` 로 자기 자신을
+/// 참조하는 recursive schema 는 `zod-to-json-schema` 가 무한 재귀로 죽인다(`schema.test.ts` 가
+/// 이것을 잡는다). `MemberCondition.equals` 의 선언 type 은 여전히 `JsonValue` 다 — primitive
+/// 는 그 부분집합이라 그대로 대입된다.
+const equalsValueSchema = () => z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+const memberEqualsSchema = () => z.object({
+  selector: z.string().min(1),
+  on: z.string().min(1),
+  member: z.string().min(1),
+  among: z.number().int().optional(),
+  equals: equalsValueSchema(),
+}).strict();
+
+/// `timeoutMilliseconds` 를 안 주면 이 값을 쓴다. `wait_for_condition` 이 "절대 무한히 기다리지
+/// 않는다" 를 지키려면 상한도 있어야 하므로 zod schema 에 `WAIT_MAX_TIMEOUT_MS` 를 건다.
+const WAIT_DEFAULT_TIMEOUT_MS = 5_000;
+const WAIT_MAX_TIMEOUT_MS = 30_000;
 
 /// `perform_actions` 가 받는 action 하나.
 ///
@@ -446,7 +469,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
@@ -479,6 +502,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       "about what is on the screen, call capture_screen.",
       "UI types a game defined itself by subclassing Image or Button arrive under the game's own type name",
       "and are not listed here.",
+      "selector here narrows to elements whose full selector path contains that substring, matched",
+      "case-sensitively, the same contract get_scene_state's selector uses.",
     ].join(" "),
     inputSchema: {
       selector: z.string().min(1).optional(),
@@ -500,6 +525,59 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     } catch (error) {
       return {
         ...text(failureText("Visible elements are unavailable", error)),
+        isError: true,
+      };
+    }
+  });
+
+  server.registerTool("search_targets", {
+    description: [
+      "Search Unity scene objects and return a compact candidate list, without get_scene_state's full",
+      "changed/statics payload. Narrow with name (the object's own name, its sibling index stripped),",
+      "displayedText (a string a UI component on the object itself is currently showing, such as a label),",
+      "component (a substring of a type name in the object's own component list, such as \"Button\" or",
+      "\"TMPro\"), and actionable (true keeps only objects offering a click, a key, or a pointer message;",
+      "false keeps only the ones offering none). Every filter given must match; omit a filter to skip it.",
+      "Matching is substring and case-insensitive by default. Set exact for a whole-value match instead of",
+      "substring, and caseSensitive to require exact case; both apply to name, displayedText, and component",
+      "alike. This is a separate, narrower contract from get_scene_state's own selector, which stays an",
+      "unchanged case-sensitive substring match against the full selector path.",
+      "Results are capped at limit (default 20); when more objects matched, truncated is true and total",
+      "carries the real count, even beyond the cap. duplicateNames lists any leaf name shared by two or more",
+      "matching objects, counted before the cap is applied, since those are distinct instances an id or full",
+      "selector is needed to tell apart.",
+      "Follow up on a candidate with get_scene_state({ selector: candidate.selector }) for its full state, or",
+      "click/enter_text with candidate.id to act on it. This tool never creates or guesses objects, and never",
+      "acts on a candidate itself.",
+    ].join(" "),
+    inputSchema: {
+      name: z.string().min(1).optional(),
+      displayedText: z.string().min(1).optional(),
+      component: z.string().min(1).optional(),
+      actionable: z.boolean().optional(),
+      exact: z.boolean().optional(),
+      caseSensitive: z.boolean().optional(),
+      includeInactive: z.boolean().optional(),
+      limit: z.number().int().positive().optional(),
+    },
+  }, async ({ name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit }) => {
+    try {
+      await connection.ensureConnected();
+      const state = store.getState();
+      if (state === undefined || state === null) {
+        return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
+      }
+      return text(JSON.stringify({
+        reading: state.reading,
+        frame: state.frame,
+        scene: state.scene,
+        ...searchTargets(state, {
+          name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit,
+        }),
+      }, null, 2));
+    } catch (error) {
+      return {
+        ...text(failureText("Target search is unavailable", error)),
         isError: true,
       };
     }
@@ -608,7 +686,50 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     async () => dispatchOne(connection, "stop_readings", []));
 
   server.registerTool("perform_actions", {
-    description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}.",
+    description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}. "
+      + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
   }, async ({ actions }) => dispatchActions(connection, actions.map(toWireAction)));
+
+  server.registerTool("wait_for_condition", {
+    description: [
+      "Wait, up to a time limit, for the folded scene state to satisfy a condition: a reading or frame",
+      "newer than a baseline you already hold (from an earlier get_scene_state or get_unity_status),",
+      "a target scene, one or more member values, or several of these together — all given conditions",
+      "must hold at once. Use this after perform_actions when the action's in-game effect may not be",
+      "visible in the very next reading yet, such as a scene transition or a value that settles a moment",
+      "later. This never blocks forever: it always returns within timeoutMilliseconds (default "
+      + `${WAIT_DEFAULT_TIMEOUT_MS}, maximum ${WAIT_MAX_TIMEOUT_MS}), even when nothing changes and`,
+      "Unity therefore sends no pulse at all. Read the returned met, disconnected, and unmet fields —",
+      "a successful action result never guarantees this condition held.",
+    ].join(" "),
+    inputSchema: {
+      sinceReading: z.number().int().nonnegative().optional(),
+      sinceFrame: z.number().int().nonnegative().optional(),
+      scene: z.string().min(1).optional(),
+      memberEquals: z.array(memberEqualsSchema()).min(1).optional(),
+      timeoutMilliseconds: z.number().int().positive().max(WAIT_MAX_TIMEOUT_MS).optional(),
+    },
+  }, async ({ sinceReading, sinceFrame, scene, memberEquals, timeoutMilliseconds }, extra) => {
+    if (sinceReading === undefined && sinceFrame === undefined && scene === undefined && memberEquals === undefined) {
+      return {
+        ...text("wait_for_condition requires at least one of sinceReading, sinceFrame, scene, or memberEquals."),
+        isError: true,
+      };
+    }
+    try {
+      await connection.ensureConnected();
+    } catch (error) {
+      return { ...text(failureText("Unity is unreachable", error)), isError: true };
+    }
+    const outcome = await waitForCondition(store, connection, {
+      sinceReading,
+      sinceFrame,
+      scene,
+      memberEquals,
+      timeoutMilliseconds: timeoutMilliseconds ?? WAIT_DEFAULT_TIMEOUT_MS,
+    }, extra.signal);
+    const { payload, isError } = describeWaitOutcome(outcome, store.getLastUnreadableFrame());
+    return { ...text(JSON.stringify(payload, null, 2)), ...(isError ? { isError: true } : {}) };
+  });
 }
