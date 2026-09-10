@@ -25,11 +25,16 @@ namespace UnityPlayMcp.Tests
 
         private GameObject host;
 
+        /// <summary>이 fixture 가 건드리는 유일한 전역. project 의 값을 그대로 돌려주려고 적어 둔다.</summary>
+        private bool projectRunInBackground;
+
         [SetUp]
         public void SetUp()
         {
+            projectRunInBackground = Application.runInBackground;
+
             // 다른 fixture 가 남긴 host 는 port 17311 을 쥐고 있다. 그것을 그대로 두면 여기서 세운 host 가
-            // socket 을 열지 못한다.
+            // server 를 열지 못한다.
             ClearHosts();
         }
 
@@ -45,6 +50,7 @@ namespace UnityPlayMcp.Tests
             }
 
             ClearHosts();
+            Application.runInBackground = projectRunInBackground;
         }
 
         private static void ClearHosts()
@@ -226,6 +232,10 @@ namespace UnityPlayMcp.Tests
             Set(manager, "transportWasConnected", false);
             Set(manager, "frameTimeRecorder", null);
 
+            // 성능 보고도 recorder 를 읽는다. 그쪽 문을 명시적으로 닫아, 이번 프레임에 던지는 자리가
+            // RecordFrameTime 하나임을 우연이 아니라 약속으로 쥔다.
+            Set(manager, "nextPerformanceReportTime", Time.unscaledTime + 60f);
+
             // 예외는 삼키지 않는다. 삼켰다면 이 결함이 로그에 남지 않아 아무도 찾지 못했을 것이다.
             LogAssert.Expect(LogType.Exception, new Regex("NullReferenceException"));
             yield return null;
@@ -235,6 +245,29 @@ namespace UnityPlayMcp.Tests
 
             Assert.That(NoticedTheTransport(manager), Is.True,
                 "성능 수집이 던져도 그 프레임의 요청 처리는 이미 지나갔어야 한다.");
+        }
+
+        /// <remarks>
+        /// server 가 열려 있는 동안만 <c>Application.runInBackground</c> 를 빌리고, 내려갈 때 게임의 값을
+        /// 돌려준다. reload 는 그 사이를 지나가므로 빌린 값을 게임의 값으로 착각할 위험이 여기에 있다 —
+        /// 착각하면 게임은 제가 꺼 둔 설정을 영영 돌려받지 못한다.
+        /// </remarks>
+        [UnityTest]
+        public IEnumerator GivesTheGameItsRunInBackgroundBackAcrossAReload()
+        {
+            Application.runInBackground = false;
+
+            var manager = CreateHost();
+            yield return null;
+            Assert.That(Application.runInBackground, Is.True, "server 가 열린 동안은 빌린다.");
+
+            AssemblyReloadSimulation.Rehearse(manager);
+            Assert.That(Application.runInBackground, Is.True, "reload 뒤에도 server 가 서므로 다시 빌린다.");
+
+            manager.enabled = false;
+
+            Assert.That(Application.runInBackground, Is.False,
+                "reload 를 건너도 게임이 쥐고 있던 값을 잊지 않아야 한다.");
         }
 
         /// <remarks>

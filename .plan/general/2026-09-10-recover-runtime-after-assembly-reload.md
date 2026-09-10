@@ -77,9 +77,12 @@ socket 이 열려 있지 않고, 설령 열려 있었어도 `Update` 가 `Record
     `Tests/PlayMode/MouseMessageActionTests.cs` 에서 fixture 관례를 확인했다.
 
 - [x] **Step 1: 재구성을 `OnEnable` 로 옮긴다** — `Runtime/UnityPlayMcpHost.cs`
-  1. `hasStarted` 에 `[SerializeField, HideInInspector]` 를 붙인다. reload 를 건너야 하는
-     값은 이 한 bit 뿐이다. Unity 가 되돌려 주는 것은 serialize 된 field 뿐이므로, "이 host 는
-     Start 를 지났다"는 사실을 이 field 가 나른다.
+  1. `hasStarted` 에 `[SerializeField, HideInInspector]` 를 붙이고 `Awake` 에서 false 로
+     되돌린다. reload 를 건너야 하는 값은 이 한 bit 뿐이고, Unity 가 되돌려 주는 것은 serialize
+     된 field 뿐이므로 "이 host 는 Start 를 지났다"는 사실을 이 field 가 나른다. `Awake` 는
+     reload 가 부르지 않으므로 그 한 줄이 reload 의 표시를 지우지 않고, play 중에 prefab 이나
+     scene 으로 떠 간 true 만 지운다 — 그런 값이 실려 오면 첫 활성화의 `OnEnable` 이 `Start`
+     보다 먼저 server 를 연다.
   2. `Awake` 의 중복 판정을 `ClaimHostSlot()` 으로 뽑아 `Awake` 와 `OnEnable` 이 함께 쓴다.
      동작은 지금과 같고, 자리가 비어 있을 때 다시 차지할 수 있게 되는 것만 다르다.
      ```csharp
@@ -150,8 +153,9 @@ socket 이 열려 있지 않고, 설령 열려 있었어도 `Update` 가 `Record
   그 검사를 `PumpTransport()` 로 내린다. `RecordFrameTime` 의 문서가 약속하는
   "전송 상태와 무관하게 매 프레임" 이 그렇게 지켜진다. 예외를 삼키지는 않는다 — 삼켰다면
   이번 결함이 로그에 남지 않았을 것이다. `frameTimeRecorder` 는 `Time.unscaledDeltaTime` 을
-  인자로만 받고 그 값은 engine 이 프레임 단위로 정하므로, `Update` 안에서의 호출 위치가 값을
-  바꾸지 않는다.
+  인자로만 받고 그 값은 engine 이 프레임 단위로 정하므로, `Update` 안에서의 호출 위치가 샘플
+  값을 바꾸지 않는다. 바뀌는 것은 창 하나다: 보고가 이번 프레임의 샘플을 담지 못하고 다음
+  창으로 민다. 버려지는 샘플은 없고 창 하나가 60 프레임쯤이라 어느 창에 실리는지만 달라진다.
 
 - [x] **Step 3: test** — `Tests/PlayMode/`
   1. `AssemblyReloadSimulation.cs` (새 파일): reload 가 host 에 남기는 상태를 만든다.
@@ -194,6 +198,13 @@ socket 이 열려 있지 않고, 설령 열려 있었어도 `Update` 가 `Record
        Step 2 의 순서를 실제로 지키는 test 다 — 순서를 되돌리면 이것만 붉어진다.
      - `ReopensTheTransportOnAPlainReEnable`: reload 가 아니라 그냥 껐다 켜는 길. `OnEnable` 을
        통째로 바꿨으므로 기존 동작을 함께 지킨다 (acceptance criterion 4).
+     - `GivesTheGameItsRunInBackgroundBackAcrossAReload`: reload 를 건넌 host 가 제가 빌린
+       `Application.runInBackground` 를 게임의 값으로 착각하지 않는지 (acceptance criterion 4).
+
+     이 중 `Rehearse` 를 부르지 않는 넷 — `KeepsRecordingFrameTimesWithNoClientConnected`,
+     `ReopensTheTransportOnAPlainReEnable`, `ReleasesHeldInputWhenItGoesDown`,
+     `ClaimsTheSlotWhenItStillHoldsADestroyedHost` — 은 reload 결함의 증거가 아니라 기존 동작을
+     지키는 test 다. 수정 전 코드에서도 통과한다.
      - `ReleasesHeldInputWhenItGoesDown`: 키를 눌러 둔 채 host 를 비활성화하면 놓인다. reload
        직전 `OnDisable` 이 하는 일이고, 이번 변경이 그것을 건드리지 않았다는 증거다.
   3. 두 파일에 `.meta` 를 함께 만든다. 이 package 는 모든 source 옆에 `.meta` 를 커밋한다.

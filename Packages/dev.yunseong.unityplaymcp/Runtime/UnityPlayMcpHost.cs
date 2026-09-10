@@ -106,6 +106,12 @@ namespace UnityPlayMcp
 
         private void Awake()
         {
+            // 여기 온 host 는 갓 만들어졌거나 갓 로드된 것이고, 어느 쪽도 아직 Start 를 지나지 않았다.
+            // reload 는 Awake 를 부르지 않으므로 이 줄이 reload 를 건너온 표시를 지우는 일은 없다. 지우는
+            // 것은 play 중에 prefab 이나 scene 으로 떠 간 true 뿐이다 — 그런 값이 실려 오면 첫 활성화의
+            // OnEnable 이 Start 보다 먼저 server 를 연다.
+            hasStarted = false;
+
             if (!ClaimHostSlot())
             {
                 return;
@@ -291,6 +297,9 @@ namespace UnityPlayMcp
                 // 막았던 것이 issue #57 이고, 그 순서에는 그럴 값이 없다 — 지표 하나를 잃는 것과 원격
                 // 제어 전체를 잃는 것은 값이 다르다. 예외를 삼키지는 않는다. 삼켰다면 그 결함이 로그에
                 // 남지 않아 아무도 찾지 못했을 것이다.
+                //
+                // 대가는 한 프레임이다. 보고는 이제 이번 프레임의 샘플을 담지 못하고 다음 창으로 민다.
+                // 버려지는 샘플은 없고 창 하나가 60 프레임쯤이라, 어느 창에 실리는지만 달라진다.
                 RecordFrameTime();
             }
         }
