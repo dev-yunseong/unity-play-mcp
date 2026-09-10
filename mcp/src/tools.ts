@@ -39,6 +39,8 @@ const paddingSchema = () => z.number().int().nonnegative();
 /// `params` 배열은 `toWireAction` 이 만든다.
 export const performActionSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("button_click"), targetId: targetIdSchema() }).strict(),
+  z.object({ method: z.literal("pointer_click"), targetId: targetIdSchema() }).strict(),
+  z.object({ method: z.literal("pointer_drag"), sourceId: targetIdSchema(), targetId: targetIdSchema() }).strict(),
   z.object({ method: z.literal("enter_text"), targetId: targetIdSchema(), text: z.string() }).strict(),
   z.object({ method: z.literal("move_mouse"), x: z.number(), y: z.number() }).strict(),
   z.object({ method: z.literal("mouse_down"), button: mouseButtonSchema() }).strict(),
@@ -97,7 +99,10 @@ function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
 export function toWireAction(action: PerformAction): { method: string; params: unknown[] } {
   switch (action.method) {
     case "button_click":
+    case "pointer_click":
       return { method: action.method, params: [action.targetId] };
+    case "pointer_drag":
+      return { method: action.method, params: [action.sourceId, action.targetId] };
     case "enter_text":
       return { method: action.method, params: [action.targetId, action.text] };
     case "move_mouse":
@@ -532,9 +537,19 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("click", {
-    description: "Click a Unity target by instance id.",
+    description: "Click a Unity UI Button by instance id, by invoking the Button directly. Use pointer_click instead for anything that is not a Button.",
     inputSchema: { targetId: targetIdSchema() },
   }, async ({ targetId }) => dispatchOne(connection, "button_click", [targetId]));
+
+  server.registerTool("pointer_click", {
+    description: "Click a Unity object by instance id by moving the virtual pointer onto it and pressing the left mouse button there. Reaches colliders (OnMouseDown), uGUI pointer handlers, and Buttons. Reports the object the pointer actually hit, and fails with that object's name when something else is on top of the target.",
+    inputSchema: { targetId: targetIdSchema() },
+  }, async ({ targetId }) => dispatchOne(connection, "pointer_click", [targetId]));
+
+  server.registerTool("pointer_drag", {
+    description: "Drag from one Unity object to another by instance id: press the left mouse button on sourceId, glide the pointer to targetId, and release there. Both objects are checked before the button is pressed.",
+    inputSchema: { sourceId: targetIdSchema(), targetId: targetIdSchema() },
+  }, async ({ sourceId, targetId }) => dispatchOne(connection, "pointer_drag", [sourceId, targetId]));
 
   server.registerTool("enter_text", {
     description: "Enter text into a Unity target by instance id.",

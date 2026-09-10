@@ -16,6 +16,7 @@ export const serverInstructions = [
   "",
   "Acting on the scene:",
   "- click, enter_text, and capture_screen take the instance id that get_scene_state reports as each object's id. Read the state first; never guess an id.",
+  "- click only works on a UI Button. For any other id — a collider, an OnMouseDown object, a pointer handler — use pointer_click, or pointer_drag to drag one id onto another.",
   "- For a game that does not use Unity UI, drive it with move_mouse, mouse_button, press_key, set_axis, and set_button instead.",
   "- perform_actions sends several of those in one frame-aligned batch. Use it when the actions must land together, such as holding a key while moving the mouse.",
   "",
