@@ -29,8 +29,6 @@ namespace UnityPlayMcp
         private const string MouseUp = "OnMouseUp";
         private const string MouseUpAsButton = "OnMouseUpAsButton";
 
-        private readonly RaycastHit[] spatialHits = new RaycastHit[8];
-
         private GameObject hovered;
         private GameObject pressed;
 
@@ -110,43 +108,13 @@ namespace UnityPlayMcp
         /// 2D and 3D compared on the same distance, filtered by <see cref="Camera.eventMask"/>.
         /// </summary>
         /// <remarks>
-        /// A ray rather than a 2D overlap test, even though an overlap would find sprites a ray can
-        /// miss. Matching the engine matters more than reaching more: something the engine cannot
-        /// pick is something a person cannot click, and an agent that clicks it anyway reports a
-        /// game working when it does not.
-        /// <para>
-        /// One target, not everything under the pointer — the engine picks a single hit and sends
-        /// to it, which is why a game with overlapping sprites at the same depth resolves the
-        /// ambiguity itself. Only <c>Camera.main</c> is consulted; the engine walks every camera,
-        /// so a scene that renders interactive objects through a second one is not covered.
-        /// </para>
+        /// 고르는 규칙 자체는 <see cref="PointerTargeting.ColliderUnder"/> 에 있고, 왜 그 규칙인지도
+        /// 거기 적혀 있다. ID 로 겨누는 쪽이 커서를 옮기기 전에 같은 규칙으로 확인해야 하기
+        /// 때문이다 — 두 벌이 되면 "확인할 때는 맞았는데 배달은 딴 데로 간" 클릭이 생긴다.
         /// </remarks>
-        private GameObject Pick(Vector2 screenPosition)
+        private static GameObject Pick(Vector2 screenPosition)
         {
-            var camera = Camera.main;
-            if (camera == null)
-            {
-                return null;
-            }
-
-            var ray = camera.ScreenPointToRay(screenPosition);
-            var flat = Physics2D.GetRayIntersection(ray, camera.farClipPlane, camera.eventMask);
-
-            var hitCount = Physics.RaycastNonAlloc(
-                ray, spatialHits, camera.farClipPlane, camera.eventMask);
-
-            var closest = flat.collider == null ? float.MaxValue : flat.distance;
-            var nearest = flat.collider == null ? null : flat.collider.gameObject;
-            for (var index = 0; index < hitCount; index++)
-            {
-                if (spatialHits[index].distance < closest)
-                {
-                    closest = spatialHits[index].distance;
-                    nearest = spatialHits[index].collider.gameObject;
-                }
-            }
-
-            return nearest;
+            return PointerTargeting.ColliderUnder(screenPosition);
         }
 
         /// <summary>
