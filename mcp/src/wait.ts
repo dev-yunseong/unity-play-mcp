@@ -21,6 +21,9 @@ export interface MemberCondition extends MemberTarget {
 /// 아니다. `sinceReading`/`sinceFrame` 은 "그 값보다 큰" 이다. `timeoutMilliseconds` 는
 /// pulse 가 하나도 안 와도 반드시 끝을 내는 상한이다.
 export interface WaitCondition {
+  /// `sinceReading`/`sinceFrame` 기준선을 잡은 reading 의 run. 지금 run 이 이것과 다르면 번호를 비교할 수
+  /// 없고, 그 run 의 reading 은 기준선 뒤에 온 것이므로 둘 다 충족한 것으로 본다.
+  sinceRun?: string;
   sinceReading?: number;
   sinceFrame?: number;
   scene?: string;
@@ -61,16 +64,24 @@ function findMemberValue(
 ///
 /// `state` 가 `undefined` 면(pulse 가 한 번도 안 왔으면) 이유 하나만 돌려준다 — "조건이 안
 /// 맞았다" 와 "애초에 읽을 상태가 없다" 를 응답에서 갈라야 하기 때문이다.
-export function unmetReasons(state: FoldedPulseState | undefined, condition: WaitCondition): string[] {
+///
+/// `newRun` 이 참이면 기다리는 사이 Unity 가 reading 을 새 run 으로 다시 시작했다는 뜻이다. 새 run
+/// 은 `reading` 과 `frame` 을 처음부터 다시 셀 수 있어 기준선과 번호로 비교할 수 없지만, 그 run 의
+/// reading 은 기준선을 잡은 뒤에 온 것이 분명하므로 `sinceReading`/`sinceFrame` 은 충족한 것으로 본다.
+export function unmetReasons(
+  state: FoldedPulseState | undefined,
+  condition: WaitCondition,
+  newRun = false,
+): string[] {
   if (state === undefined) {
     return ["no scene reading has arrived yet; call start_readings"];
   }
 
   const reasons: string[] = [];
-  if (condition.sinceReading !== undefined && state.reading <= condition.sinceReading) {
+  if (!newRun && condition.sinceReading !== undefined && state.reading <= condition.sinceReading) {
     reasons.push(`reading is ${state.reading}, not newer than ${condition.sinceReading}`);
   }
-  if (condition.sinceFrame !== undefined && state.frame <= condition.sinceFrame) {
+  if (!newRun && condition.sinceFrame !== undefined && state.frame <= condition.sinceFrame) {
     reasons.push(`frame is ${state.frame}, not newer than ${condition.sinceFrame}`);
   }
   if (condition.scene !== undefined && state.scene !== condition.scene) {
@@ -115,8 +126,15 @@ export function waitForCondition(
 ): Promise<WaitOutcome> {
   return new Promise((resolve) => {
     const initialState = store.getState();
-    const initialUnmet = unmetReasons(initialState, condition);
-    if (initialUnmet.length === 0) {
+    const initialGeneration = store.getGeneration();
+    const newRun = (state: FoldedPulseState | undefined) =>
+      store.getGeneration() !== initialGeneration
+      || (condition.sinceRun !== undefined && state?.run !== undefined && state.run !== condition.sinceRun);
+    const unmetNow = (state: FoldedPulseState | undefined) =>
+      unmetReasons(state, condition, newRun(state));
+    const initialUnmet = unmetNow(initialState);
+    // 낡은 상태가 조건에 맞는 것은 게임이 그렇다는 말이 아니다. 다음 reading 을 기다린다 (#69).
+    if (initialUnmet.length === 0 && store.getStaleness() === undefined) {
       resolve({ kind: "met", state: initialState as FoldedPulseState });
       return;
     }
@@ -141,18 +159,25 @@ export function waitForCondition(
 
     const onAbort = () => settle({ kind: "cancelled", state: store.getState() });
     const unsubscribeReading = store.onReading((state) => {
-      const unmet = unmetReasons(state, condition);
-      if (unmet.length === 0) {
+      const unmet = unmetNow(state);
+      if (unmet.length === 0 && store.getStaleness() === undefined) {
         settle({ kind: "met", state });
       }
     });
     const unsubscribeDisconnect = connection.onDisconnect(() => {
       const state = store.getState();
-      settle({ kind: "disconnected", state, unmet: unmetReasons(state, condition) });
+      settle({ kind: "disconnected", state, unmet: unmetNow(state) });
     });
     const timeoutTimer = timers.setTimeout(() => {
       const state = store.getState();
-      settle({ kind: "timeout", state, unmet: unmetReasons(state, condition) });
+      const unmet = unmetNow(state);
+      settle({
+        kind: "timeout",
+        state,
+        unmet: unmet.length === 0 && store.getStaleness() !== undefined
+          ? ["the held reading is stale; no fresh reading arrived before the timeout"]
+          : unmet,
+      });
     }, condition.timeoutMilliseconds);
 
     signal.addEventListener("abort", onAbort);

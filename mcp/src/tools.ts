@@ -3,7 +3,14 @@ import { z } from "zod";
 
 import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
-import { objectKey, type PulseObject, type PulseStore, type UnreadableFrame } from "./pulse.js";
+import {
+  objectKey,
+  type FoldedPulseState,
+  type PulseObject,
+  type PulseStore,
+  type Staleness,
+  type UnreadableFrame,
+} from "./pulse.js";
 import { searchTargets } from "./search.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
@@ -216,7 +223,56 @@ export interface UnityStatus {
   scene?: string;
   lastReadingAt?: number;
   lastUnreadableFrame?: UnreadableFrame;
+  staleness?: Staleness;
   now: number;
+}
+
+const STALE_RECOVERY =
+  "Call start_readings and read again; if the state stays stale, call stop_readings and then start_readings.";
+
+/// 낡은 까닭 하나를 agent 가 읽을 문장으로 바꾼다. 무엇을 믿으면 안 되는지와 어떻게 되돌리는지를 함께 말한다.
+function stalenessMessage(staleness: Staleness): string {
+  switch (staleness.reason) {
+    case "restarted":
+      return "Unity restarted its readings and no whole reading of the new run has arrived yet. "
+        + "This state belongs to the previous run: its ids, rects, and scene may no longer exist. "
+        + STALE_RECOVERY;
+    case "disconnected":
+      return "The connection to Unity dropped after this reading, so changes since then may be missing. "
+        + STALE_RECOVERY;
+    case "stopped":
+      return "Readings were stopped with stop_readings, so this state no longer follows the game. "
+        + "Call start_readings to resume.";
+  }
+}
+
+function isoTime(at: number | undefined): string | undefined {
+  return at === undefined ? undefined : new Date(at).toISOString();
+}
+
+/// 모든 읽기 tool 이 상태 앞에 싣는 머리.
+///
+/// 낡았으면 `stale` 을 맨 앞에 둔다. 그래야 응답을 위에서부터 읽는 agent 가 id 를 쓰기 전에 본다.
+/// 낡은 상태를 아예 내주지 않는 쪽은 택하지 않았다 — 직전 장면을 확인하는 데는 여전히 쓸모 있고,
+/// 무엇이 낡았는지 말해 주면 쓸지 말지는 agent 가 정할 수 있다.
+export function readingHeader(store: PulseStore, state: FoldedPulseState): Record<string, unknown> {
+  const staleness = store.getStaleness();
+  return {
+    ...(staleness === undefined
+      ? {}
+      : {
+          stale: {
+            reason: staleness.reason,
+            message: stalenessMessage(staleness),
+            since: isoTime(staleness.at),
+            lastReadingAt: isoTime(staleness.lastReadingAt),
+          },
+        }),
+    ...(state.run === undefined ? {} : { run: state.run }),
+    reading: state.reading,
+    frame: state.frame,
+    scene: state.scene,
+  };
 }
 
 function describeAge(now: number, at: number): string {
@@ -242,10 +298,18 @@ export function describeStatus(status: UnityStatus): string {
     ? [head, "No scene reading has arrived yet. Call start_readings before get_scene_state."]
     : [
         head,
-        `Readings are running: reading ${status.reading} on frame ${status.frame} `
+        `${status.staleness?.reason === "stopped" ? "Readings are stopped" : "Readings are running"}: `
+        + `reading ${status.reading} on frame ${status.frame} `
         + `arrived ${describeAge(status.now, status.lastReadingAt)}.`,
         `Scene: ${status.scene}.`,
       ];
+
+  if (status.lastReadingAt !== undefined && status.staleness !== undefined) {
+    lines.push(
+      `This reading is stale (${status.staleness.reason} ${describeAge(status.now, status.staleness.at)}): `
+      + stalenessMessage(status.staleness),
+    );
+  }
 
   // 마지막으로 읽지 못한 frame 이 있으면(그리고 그 뒤로 정상 reading 이 하나도 안 왔으면 —
   // `PulseStore` 가 성공할 때마다 이 값을 스스로 지운다) 두 분기 모두에 덧붙인다. reading 이
@@ -339,6 +403,7 @@ function stateResponse(
   }
 
   const record = state as unknown as Record<string, unknown>;
+  const header = readingHeader(store, state);
   const matches = (candidate: string): boolean =>
     selector === undefined || candidate.includes(selector);
   const filterObjects = (value: unknown): unknown[] => {
@@ -379,9 +444,7 @@ function stateResponse(
     // 사라지고, 양이 적어 뺄 이유도 없다. `changed` 는 반대다 — 분주한 씬에서 길고, 마디마다
     // 붙는 `lastChangedReading` 이 같은 물음에 tree 모양으로 답한다.
     return text(JSON.stringify({
-      reading: record.reading,
-      frame: record.frame,
-      scene: record.scene,
+      ...header,
       ...(root === undefined ? {} : { root }),
       statics: record.statics ?? [],
       gone: filterGone(record.gone),
@@ -393,9 +456,7 @@ function stateResponse(
   }
 
   const response = {
-    reading: record.reading,
-    frame: record.frame,
-    scene: record.scene,
+    ...header,
     changed: record.changed ?? [],
     statics: record.statics ?? [],
     active,
@@ -464,6 +525,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       scene: state?.scene as string | undefined,
       lastReadingAt: store.getLastReadingAt(),
       lastUnreadableFrame: store.getLastUnreadableFrame(),
+      staleness: store.getStaleness(),
       now: Date.now(),
     }));
   });
@@ -517,9 +579,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
       }
       return text(JSON.stringify({
-        reading: state.reading,
-        frame: state.frame,
-        scene: state.scene,
+        ...readingHeader(store, state),
         elements: visibleElements(state, { selector, includeHidden }),
       }, null, 2));
     } catch (error) {
@@ -568,9 +628,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
       }
       return text(JSON.stringify({
-        reading: state.reading,
-        frame: state.frame,
-        scene: state.scene,
+        ...readingHeader(store, state),
         ...searchTargets(state, {
           name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit,
         }),
@@ -702,15 +760,18 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       + `${WAIT_DEFAULT_TIMEOUT_MS}, maximum ${WAIT_MAX_TIMEOUT_MS}), even when nothing changes and`,
       "Unity therefore sends no pulse at all. Read the returned met, disconnected, and unmet fields —",
       "a successful action result never guarantees this condition held.",
+      "Reading and frame numbers restart when Unity starts a new reading run; pass the run from the same",
+      "response as sinceRun, and any reading of a different run counts as newer. A stale state never meets a condition.",
     ].join(" "),
     inputSchema: {
+      sinceRun: z.string().min(1).optional(),
       sinceReading: z.number().int().nonnegative().optional(),
       sinceFrame: z.number().int().nonnegative().optional(),
       scene: z.string().min(1).optional(),
       memberEquals: z.array(memberEqualsSchema()).min(1).optional(),
       timeoutMilliseconds: z.number().int().positive().max(WAIT_MAX_TIMEOUT_MS).optional(),
     },
-  }, async ({ sinceReading, sinceFrame, scene, memberEquals, timeoutMilliseconds }, extra) => {
+  }, async ({ sinceRun, sinceReading, sinceFrame, scene, memberEquals, timeoutMilliseconds }, extra) => {
     if (sinceReading === undefined && sinceFrame === undefined && scene === undefined && memberEquals === undefined) {
       return {
         ...text("wait_for_condition requires at least one of sinceReading, sinceFrame, scene, or memberEquals."),
@@ -723,6 +784,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       return { ...text(failureText("Unity is unreachable", error)), isError: true };
     }
     const outcome = await waitForCondition(store, connection, {
+      sinceRun,
       sinceReading,
       sinceFrame,
       scene,
