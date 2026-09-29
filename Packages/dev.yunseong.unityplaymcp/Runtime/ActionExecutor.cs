@@ -539,6 +539,7 @@ namespace UnityPlayMcp
             }
 
             Rect? pixelRect = null;
+            Rect? requestedRect = null;
             var clipped = false;
             if (!request.IsFullScreen)
             {
@@ -558,6 +559,7 @@ namespace UnityPlayMcp
                 }
 
                 pixelRect = region.PixelRect;
+                requestedRect = region.Requested;
                 clipped = region.Clipped;
             }
 
@@ -576,6 +578,14 @@ namespace UnityPlayMcp
                 Height = image.Height,
                 TargetId = request.TargetId,
                 Clipped = clipped,
+                Screen = new CaptureScreenSizeDto { Width = image.ScreenWidth, Height = image.ScreenHeight },
+                Region = CaptureRect.TopLeft(image.Source, image.ScreenHeight),
+                RequestedRegion = clipped && requestedRect.HasValue
+                    ? CaptureRect.TopLeft(requestedRect.Value, image.ScreenHeight)
+                    : null,
+                Scale = CaptureRect.Scale(image.Source, image.Width, image.Height),
+                Frame = image.Frame,
+                Scene = image.Scene,
                 Data = Convert.ToBase64String(image.Bytes)
             }));
         }
