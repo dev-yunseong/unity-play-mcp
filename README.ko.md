@@ -24,8 +24,18 @@ https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.un
 특정 release를 설치하려면 package path 뒤에 tag를 붙입니다.
 
 ```text
-https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#v0.1.0
+https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#v0.4.0
 ```
+
+## Version 호환
+
+Unity package와 MCP server는 따로 release되지만, Unity package마다 함께 검증한 server version을 기록하고 설정 페이지가 `npx -y unity-play-mcp@<그 version>`을 씁니다. 아래 짝을 씁니다. 로컬 `mcp/dist` build나 예전 `npx` 항목을 쓰면 version이 섞일 수 있습니다.
+
+| Unity package | MCP server | 비고 |
+| --- | --- | --- |
+| `v0.4.0` | `0.4.0` | reading이 다시 시작되거나 연결이 끊긴 뒤에도 장면을 다시 따라가고, 오래된 reading에 `stale`을 표시합니다(#69). `pointer_hover`(#70), `capture_screen`의 화면 좌표·frame/scene metadata(#71), scene state의 인증 값 가리기(#72)를 더합니다. 0.3.x 이하 server는 이 package의 스크린샷을 invalid capture payload로 거절합니다. |
+| `v0.3.0` | `0.3.0` | `search_targets`, `pointer_click`/`pointer_drag`, `wait_for_condition`, reload 복구를 더합니다. server가 계속 떠 있는 채로 `stop_readings`→`start_readings`, Play Mode 재시작, reload가 일어나면 scene reading이 이전 장면에 머뭅니다(#69). 0.4.0으로 올립니다. |
+| `v0.2.0` | `0.2.0` | 0.2.0 server가 0.2.0 package의 component 멤버를 읽지 못해 scene state가 비어 있습니다. 올립니다. |
 
 ## 0.1.0에서 올라올 때
 

@@ -24,8 +24,18 @@ The `latest` tag follows the latest successful GitHub release. If Unity Package 
 To install a specific release, append its tag after the package path:
 
 ```text
-https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#v0.1.0
+https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#v0.4.0
 ```
+
+## Version compatibility
+
+The Unity package and the MCP server are released separately, but each Unity package records the server version it was tested with, and the settings page writes `npx -y unity-play-mcp@<that version>`. Use the pair below; a local `mcp/dist` build or an older `npx` entry can mix versions.
+
+| Unity package | MCP server | Notes |
+| --- | --- | --- |
+| `v0.4.0` | `0.4.0` | Follows the scene again after readings restart or the connection drops, and marks an old reading `stale` (#69). Adds `pointer_hover` (#70), screen-coordinate and frame/scene metadata on `capture_screen` (#71), and hides credential-like values in scene state (#72). A 0.3.x or older server rejects this package's screenshots as an invalid capture payload. |
+| `v0.3.0` | `0.3.0` | Adds `search_targets`, `pointer_click`/`pointer_drag`, `wait_for_condition`, and reload recovery. After `stop_readings`→`start_readings`, a Play Mode restart, or a reload while the server keeps running, scene readings stay on the previous scene (#69); upgrade to 0.4.0. |
+| `v0.2.0` | `0.2.0` | The 0.2.0 server cannot read component members from the 0.2.0 package, so scene state stays empty. Upgrade. |
 
 ## Upgrading from 0.1.0
 
