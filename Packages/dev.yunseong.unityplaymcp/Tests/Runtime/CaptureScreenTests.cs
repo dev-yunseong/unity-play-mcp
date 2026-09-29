@@ -158,6 +158,10 @@ namespace UnityPlayMcp.Tests
             Assert.That(region.Clipped, Is.True);
             Assert.That(region.PixelRect.xMin, Is.EqualTo(0f).Within(0.5f));
             Assert.That(region.PixelRect.width, Is.EqualTo(60f).Within(0.5f));
+
+            // 잘리기 전에 청한 영역도 남는다. 무엇이 잘렸는지는 이 둘의 차이로만 말할 수 있다.
+            Assert.That(region.Requested.xMin, Is.EqualTo(-20f).Within(0.5f));
+            Assert.That(region.Requested.width, Is.EqualTo(80f).Within(0.5f));
         }
 
         [UnityTest]
@@ -201,7 +205,97 @@ namespace UnityPlayMcp.Tests
             Assert.That(size.y, Is.EqualTo(1));
         }
 
+        // --- coordinates (#71) ---
+
+        /// <summary>
+        /// 관찰된 그 경우. 1920x1080 게임 화면을 1024x576 으로 줄인 스크린샷의 픽셀을 <c>move_mouse</c> 좌표로 되돌린다.
+        /// </summary>
+        [Test]
+        public void Geometry_MapsADownscaledFullScreenBackToScreenPixels()
+        {
+            var source = new Rect(0f, 0f, 1920f, 1080f);
+            var size = CaptureRect.Downscale(1920, 1080, CaptureRequestReader.FullScreenMaxEdge);
+
+            var region = CaptureRect.TopLeft(source, 1080);
+            var scale = CaptureRect.Scale(source, size.x, size.y);
+
+            Assert.That(region.X, Is.EqualTo(0f));
+            Assert.That(region.Y, Is.EqualTo(0f));
+            Assert.That(region.Width, Is.EqualTo(1920f));
+            Assert.That(region.Height, Is.EqualTo(1080f));
+            Assert.That(scale.X, Is.EqualTo(1024f / 1920f).Within(1e-5f));
+            Assert.That(scale.Y, Is.EqualTo(576f / 1080f).Within(1e-5f));
+
+            // 이미지 (512, 288) 은 화면 한가운데 (960, 540) 이다. agent 가 손으로 적용하던 1.875 배가 이것이다.
+            Assert.That(region.X + 512f / scale.X, Is.EqualTo(960f).Within(0.01f));
+            Assert.That(region.Y + 288f / scale.Y, Is.EqualTo(540f).Within(0.01f));
+        }
+
+        /// <summary>해상도가 바뀌면 같은 이미지 크기라도 비율이 달라진다. 이미지 크기만으로는 원본을 알 수 없다는 것이 이것이다.</summary>
+        [Test]
+        public void Geometry_FollowsAResolutionChange()
+        {
+            var source = new Rect(0f, 0f, 1280f, 720f);
+            var size = CaptureRect.Downscale(1280, 720, CaptureRequestReader.FullScreenMaxEdge);
+
+            Assert.That(size.x, Is.EqualTo(1024));
+            Assert.That(size.y, Is.EqualTo(576));
+            var scale = CaptureRect.Scale(source, size.x, size.y);
+            Assert.That(scale.X, Is.EqualTo(0.8f).Within(1e-5f));
+
+            // 1920x1080 에서와 같은 이미지 점 (512, 288) 이 이번에는 (640, 360) 이다.
+            Assert.That(512f / scale.X, Is.EqualTo(640f).Within(0.01f));
+            Assert.That(288f / scale.Y, Is.EqualTo(360f).Within(0.01f));
+        }
+
+        /// <summary>대상 crop 은 원점이 화면 구석이 아니다. 좌하단 Unity 좌표를 좌상단으로 뒤집은 원점을 싣는다.</summary>
+        [Test]
+        public void Geometry_PlacesACropAtItsTopLeftOrigin()
+        {
+            // 화면 1920x1080 에서 아래서 200, 왼쪽에서 100 인 300x100 영역.
+            var source = new Rect(100f, 200f, 300f, 100f);
+
+            var region = CaptureRect.TopLeft(source, 1080);
+            var scale = CaptureRect.Scale(source, 300, 100);
+
+            Assert.That(region.X, Is.EqualTo(100f));
+            Assert.That(region.Y, Is.EqualTo(780f));
+            Assert.That(scale.X, Is.EqualTo(1f));
+
+            // 이미지의 왼쪽 위 픽셀은 화면 (100, 780), 오른쪽 아래는 (400, 880).
+            Assert.That(region.X + 300f / scale.X, Is.EqualTo(400f));
+            Assert.That(region.Y + 100f / scale.Y, Is.EqualTo(880f));
+        }
+
         // --- executor ---
+
+        [Test]
+        public void CaptureScreen_ReportsWhereTheImageSitsOnTheScreenAndWhen()
+        {
+            var executor = ExecutorWith(new FakeScreenCapturer(new CapturedImage
+            {
+                Bytes = new byte[] { 1, 2, 3, 4 },
+                Width = 1024,
+                Height = 576,
+                ScreenWidth = 1920,
+                ScreenHeight = 1080,
+                Source = new Rect(0f, 0f, 1920f, 1080f),
+                Frame = 4321,
+                Scene = "GameScene"
+            }));
+
+            var result = Run(executor, new List<object>());
+
+            Assert.That(result.IsSuccess, Is.True, result.Error);
+            var returned = (CaptureResultDto)result.ReturnValue;
+            Assert.That(returned.Screen.Width, Is.EqualTo(1920));
+            Assert.That(returned.Screen.Height, Is.EqualTo(1080));
+            Assert.That(returned.Region.Width, Is.EqualTo(1920f));
+            Assert.That(returned.Scale.X, Is.EqualTo(1024f / 1920f).Within(1e-5f));
+            Assert.That(returned.Frame, Is.EqualTo(4321));
+            Assert.That(returned.Scene, Is.EqualTo("GameScene"));
+            Assert.That(returned.RequestedRegion, Is.Null, "a full screen is never clipped");
+        }
 
         [Test]
         public void CaptureScreen_ReturnsTheImageBytesInline()
@@ -275,6 +369,31 @@ namespace UnityPlayMcp.Tests
             Assert.That(json, Does.Contain("\"targetId\":7"));
             Assert.That(json, Does.Contain("\"clipped\":true"));
             Assert.That(json, Does.Contain("\"data\":\"AQIDBA==\""));
+        }
+
+        [Test]
+        public void Serialize_CarriesTheCoordinateMetadata()
+        {
+            var json = new NewtonsoftJsonCodec().Serialize(ActionResultDto.Success(3, new CaptureResultDto
+            {
+                MimeType = "image/jpeg",
+                Width = 1024,
+                Height = 576,
+                Clipped = false,
+                Screen = new CaptureScreenSizeDto { Width = 1920, Height = 1080 },
+                Region = new CaptureAreaDto { X = 0f, Y = 0f, Width = 1920f, Height = 1080f },
+                Scale = new CaptureScaleDto { X = 0.5f, Y = 0.5f },
+                Frame = 12,
+                Scene = "Lobby",
+                Data = "AQIDBA=="
+            }));
+
+            Assert.That(json, Does.Contain("\"screen\":{\"width\":1920,\"height\":1080}"));
+            Assert.That(json, Does.Contain("\"region\":{"));
+            Assert.That(json, Does.Contain("\"scale\":{\"x\":0.5,\"y\":0.5}"));
+            Assert.That(json, Does.Contain("\"frame\":12"));
+            Assert.That(json, Does.Contain("\"scene\":\"Lobby\""));
+            Assert.That(json, Does.Not.Contain("requestedRegion"));
         }
 
         // --- helpers ---
