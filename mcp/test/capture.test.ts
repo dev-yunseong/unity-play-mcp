@@ -174,3 +174,16 @@ test("a 0.2.x package capture without metadata still returns the image and says 
   assert.equal(result.content[0]?.type, "image");
   assert.match(result.content[1]?.text ?? "", /does not report the capture's screen size/);
 });
+
+test("a stale held reading carries its stale marker next to the capture", async () => {
+  const store = new PulseStore();
+  store.fold(reading("GameScene", 12, 4_940));
+  store.markInterrupted("disconnected");
+
+  const result = await captureThroughTool(fullScreen(), store);
+  const parsed = JSON.parse((result.content[1]?.text ?? "").split("\n").slice(1).join("\n")) as {
+    reading?: { stale?: { reason: string } };
+  };
+
+  assert.equal(parsed.reading?.stale?.reason, "disconnected");
+});

@@ -526,6 +526,7 @@ export interface CaptureDescription {
     scene: string;
     relation: string;
     sameScene?: boolean;
+    stale?: unknown;
   };
 }
 
@@ -771,7 +772,13 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         return { ...text("Screenshot failed: Unity returned an invalid capture payload."), isError: true };
       }
       // 첫 줄은 예전 모양 그대로 둔다. 그 뒤에 좌표 변환과 reading 관계를 JSON 으로 싣는다.
-      const description = describeCapture(capture, store.getState());
+      const state = store.getState();
+      const description = describeCapture(capture, state);
+      // 낡은 reading 은 frame 이 가까워도 이 화면의 상태가 아니다. `readingHeader` 와 같은 `stale` 을 관계에 싣는다 (#69).
+      const stale = state === undefined ? undefined : readingHeader(store, state).stale;
+      if (description.reading !== undefined && stale !== undefined) {
+        description.reading = { ...description.reading, stale };
+      }
       return { content: [
         { type: "image", data: capture.data, mimeType: capture.mimeType },
         {
