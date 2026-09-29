@@ -91,6 +91,74 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
+        /// 버튼을 누르지 않고 포인터를 대상 위에 올린다.
+        /// </summary>
+        /// <remarks>
+        /// 클릭과 같은 겨누기(<see cref="TryAim"/>)와 같은 이동(<c>pointerMoved</c>)을 쓴다. 그래서 uGUI 의
+        /// <c>OnPointerEnter</c>/<c>OnPointerExit</c> 는 <c>PointerEventDispatcher.MoveTo</c> 가, collider 의
+        /// <c>OnMouseEnter</c>/<c>OnMouseOver</c> 는 가상 마우스 위치를 읽는 <c>VirtualMouseMessenger</c> 가 게임의 입력 경로로
+        /// 보낸다 — 게임 메서드를 직접 부르지 않는다.
+        ///
+        /// 옮긴 뒤 한 프레임을 넘기고 그 자리에서 다시 묻는다. 툴팁을 띄우는 게임 코드는 그 프레임에 돌고, 그 사이 대상이 가려지거나
+        /// 파괴되면 그것을 성공으로 보고하지 않는다. 포인터는 그 자리에 남는다 — hover 는 머무는 상태이고, 다음 입력이 옮길 때까지가
+        /// 그것의 수명이다.
+        /// </remarks>
+        public IEnumerator Hover(
+            int actionId, List<object> parameters, Action<ActionResultDto> completed)
+        {
+            if (!ActionExecutor.TryReadId(parameters, 0, out var targetId))
+            {
+                completed(ActionResultDto.Failure(
+                    actionId, "pointer_hover requires params [targetId]."));
+                yield break;
+            }
+
+            if (!TryAim("pointer_hover", targetId, out var aim, out var error))
+            {
+                completed(ActionResultDto.Failure(actionId, error));
+                yield break;
+            }
+
+            yield return cursorController.MoveTo(aim.ScreenPosition, pointerMoved);
+            yield return null;
+
+            if (!targetLookup.TryGetGameObject(targetId, out var target))
+            {
+                completed(ActionResultDto.Failure(
+                    actionId,
+                    "pointer_hover: target #" + targetId +
+                    " was destroyed while the pointer moved onto it."));
+                yield break;
+            }
+
+            if (!target.activeInHierarchy)
+            {
+                completed(ActionResultDto.Failure(
+                    actionId,
+                    "pointer_hover: target " + PointerTargeting.Describe(target, targetId) +
+                    " was deactivated while the pointer moved onto it."));
+                yield break;
+            }
+
+            if (!PointerTargeting.StillReaches(target, aim.ScreenPosition, pointerEvents, out var hovered))
+            {
+                completed(ActionResultDto.Failure(
+                    actionId,
+                    string.Format(
+                        "pointer_hover: the pointer rests on {0} instead of {1} at ({2:0}, {3:0}). "
+                        + "The target moved or something was drawn on top of it after it was aimed at.",
+                        hovered == null ? "nothing" : PointerTargeting.Describe(hovered, hovered.GetInstanceID()),
+                        PointerTargeting.Describe(target, targetId),
+                        aim.ScreenPosition.x,
+                        Screen.height - aim.ScreenPosition.y)));
+                yield break;
+            }
+
+            completed(ActionResultDto.Success(actionId, HitOf(
+                targetId, new PointerAim(aim.ScreenPosition, hovered.GetInstanceID(), hovered.name))));
+        }
+
+        /// <summary>
         /// 원본 위에서 버튼을 누르고, 목적지까지 활강한 뒤 놓는다.
         /// </summary>
         /// <remarks>
