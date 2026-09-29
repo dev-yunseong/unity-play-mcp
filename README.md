@@ -2,16 +2,21 @@
 
 [한국어](README.ko.md) | English
 
-Unity Play MCP lets a coding agent read the current Unity scene, perform player actions, and capture screenshots while the game is running.
+An MCP server that lets an AI coding agent see and play your running Unity game. The agent can read the current scene, click buttons, type text, and capture the screen.
+
+Things you can ask for:
+
+- "What's in the scene right now?"
+- "Click Start and capture the screen."
+- "Play through the tutorial and tell me where it gets stuck."
 
 ## Requirements
 
 - Unity 2022.3 or later
 - Node.js 22.14 or later
 - A supported agent: Claude Code, Cursor, Visual Studio Code, or Codex
-- Network access the first time `npx` downloads the MCP server
 
-## Install the Unity package
+## Install
 
 In Unity, open **Window > Package Manager**, select **Add package from git URL**, and enter:
 
@@ -19,143 +24,95 @@ In Unity, open **Window > Package Manager**, select **Add package from git URL**
 https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#latest
 ```
 
-The `latest` tag follows the latest successful GitHub release. If Unity Package Manager keeps an older cached version, select **Update** or remove and add the package again.
+To pin a version, replace `latest` at the end with a release tag such as `v0.4.0`.
 
-To install a specific release, append its tag after the package path:
+### Version compatibility
 
-```text
-https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#v0.4.0
-```
-
-## Version compatibility
-
-The Unity package and the MCP server are released separately, but each Unity package records the server version it was tested with, and the settings page writes `npx -y unity-play-mcp@<that version>`. Use the pair below; a local `mcp/dist` build or an older `npx` entry can mix versions.
+Each Unity package release records the MCP server version it was tested with, and **Add** on the settings page writes `npx -y unity-play-mcp@<that version>`. Keep that pair. A local `mcp/dist` build or an entry added by an older package can mix versions.
 
 | Unity package | MCP server | Notes |
 | --- | --- | --- |
-| `v0.4.0` | `0.4.0` | Follows the scene again after readings restart or the connection drops, and marks an old reading `stale` (#69). Adds `pointer_hover` (#70), screen-coordinate and frame/scene metadata on `capture_screen` (#71), and hides credential-like values in scene state (#72). A 0.3.x or older server rejects this package's screenshots as an invalid capture payload. |
-| `v0.3.0` | `0.3.0` | Adds `search_targets`, `pointer_click`/`pointer_drag`, `wait_for_condition`, and reload recovery. After `stop_readings`→`start_readings`, a Play Mode restart, or a reload while the server keeps running, scene readings stay on the previous scene (#69); upgrade to 0.4.0. |
-| `v0.2.0` | `0.2.0` | The 0.2.0 server cannot read component members from the 0.2.0 package, so scene state stays empty. Upgrade. |
-
-## Upgrading from 0.1.0
-
-Release 0.2.0 renames every namespace, assembly, and type from `Artel` to `UnityPlayMcp`. Code that referred to the package by its old names no longer compiles.
-
-| Was | Now |
-| --- | --- |
-| namespace `Artel.*` | `UnityPlayMcp.*` |
-| assembly `Artel.Runtime` | `UnityPlayMcp.Runtime` |
-| `ArtelManager` | `UnityPlayMcpHost` |
-| `ArtelInput` | `VirtualInput` |
-| `ArtelWebSocketServer` | `AgentWebSocketServer` |
-
-Nothing written under the old names is migrated or read. The package writes the new names and leaves the old artifacts where they are, so delete these when you no longer want them:
-
-- `<persistentDataPath>/artel-pulse.jsonl` and `<persistentDataPath>/artel-affordances.json` — written again under `unity-play-mcp-` names
-- `Library/ArtelScope` — a cache, rebuilt on the next scan
-- the `Artel.DarkTheme` PlayerPrefs entry — the overlay theme falls back to its default once, then remembers again
-
-Profiler captures taken before the upgrade carry `Artel.Manager.*` marker names. The new ones are `UnityPlayMcp.Host.*`, so old and new captures do not line up.
+| `v0.4.0` | `0.4.0` | Keeps following the scene after readings restart or the connection drops, and marks an old reading `stale`. Adds hovering over an object by id, screen coordinates and the frame/scene on screenshots, and hides values that look like credentials. A 0.3.x or older server rejects this package's screenshots. |
+| `v0.3.0` | `0.3.0` | Adds target search, clicking and dragging objects by id, waiting for a condition, and recovery after script reloads. If readings restart while the server keeps running (stop and start readings, re-entering Play Mode, a reload), the scene can stay on the previous screen. Upgrade to 0.4.0. |
+| `v0.2.0` | `0.2.0` | The 0.2.0 server cannot read the 0.2.0 package's component values, so scene state stays empty. Upgrade. |
 
 ## Connect your agent
 
-1. In Unity, open **Edit > Project Settings > Unity Play MCP**.
-2. Choose a **Configuration scope**: **Project** (default) or **User**. Unity remembers the chosen scope for this project.
-3. Find your agent and select **Add**.
-4. Check that the row says **Configured**.
-5. Restart the agent if it was already running.
-6. Enter Play Mode in Unity.
-7. Ask the agent to inspect the current scene or capture the game screen.
+1. Open **Edit > Project Settings > Unity Play MCP**.
+2. Select **Add** next to your agent.
+3. Check that the status changes to **Configured**.
+4. Restart the agent if it was running.
+5. Enter Play Mode in Unity.
+6. Ask the agent to "read the current scene".
 
-The settings page writes the `unity-play` entry to the configuration file for the selected scope. **Add**, **Remove**, and the **Configured** status apply only to that scope's file.
+The MCP server is downloaded by `npx` the first time it runs, so the first connection needs internet access and may take a moment.
 
-**Project scope** (under the Unity project directory):
+To disconnect, select **Remove** on the same page. Your other MCP servers are left alone.
 
-| Agent | Configuration file |
-| --- | --- |
-| Claude Code | `<Unity project>/.mcp.json` |
-| Cursor | `<Unity project>/.cursor/mcp.json` |
-| Visual Studio Code | `<Unity project>/.vscode/mcp.json` |
-| Codex | `<Unity project>/.codex/config.toml` * |
+### Configuration scope
 
-**User scope** (under your home directory, shared by every project on this account):
+Use **Configuration scope** at the top of the settings page to choose where the entry is saved:
 
-| Agent | Configuration file |
-| --- | --- |
-| Claude Code | `~/.claude.json` |
-| Cursor | `~/.cursor/mcp.json` |
-| Visual Studio Code | Windows `%APPDATA%\Code\User\mcp.json`, macOS `~/Library/Application Support/Code/User/mcp.json`, Linux `~/.config/Code/User/mcp.json` |
-| Codex | `~/.codex/config.toml` |
+- **Project** (default): only this Unity project.
+- **User**: every project on your account.
 
-\* Codex reads `$CODEX_HOME/config.toml`, and `CODEX_HOME` defaults to `~/.codex`. The project-scope file above applies only when you run `codex` with `CODEX_HOME` set to `<Unity project>/.codex`.
-
-Switching scope does not move or delete an existing entry — there is no automatic migration. **Project** is the default scope, so a Codex entry that an earlier version of this package wrote to `~/.codex/config.toml` stays there after you upgrade. To remove it, switch the scope to **User** and select **Remove**.
-
-When a local build exists at `mcp/dist/index.js`, the settings page uses that build. A package installed from a Git URL normally has no local server, so the page writes `npx -y unity-play-mcp@<compatible version>` instead. The compatible server version is included in the Unity package.
-
-To remove only the Unity Play MCP entry, return to the same settings page and select **Remove**. Other servers and unrelated configuration remain in the file.
-
-## Verify the connection
-
-Enter Play Mode before calling a tool. Unity opens a local WebSocket server at `ws://127.0.0.1:17311/ws`; the MCP server connects to it from the same computer.
-
-Useful first requests include:
-
-- “Read the current Unity scene.”
-- “Capture the game screen.”
-- “Click the Start button.”
-
-Ask “Is Unity running?” and the agent calls `get_unity_status`. It answers whether the game is reachable, whether readings have started, and which reading arrived last. Every other tool, when it cannot reach Unity, answers that the game is not running and that Play Mode has to be started — not a socket error.
-
-The MCP server hands the agent a short set of instructions when the agent connects, so you do not have to explain how the tools fit together. It states that Unity must be in Play Mode, that `start_readings` comes before the first `get_scene_state`, and that `click` and `enter_text` take the instance id reported by `get_scene_state`.
-
-## Ready-made requests
-
-The MCP server registers four prompts. In an agent that surfaces them, they appear as commands you pick rather than sentences you type; Claude Code lists them as `/unity-play:<name>`.
-
-| Prompt | What it does | Arguments |
+| Agent | Project | User |
 | --- | --- | --- |
-| `inspect_scene` | Reads the scene and reports what is on it and which objects can be acted on. | `selector` (optional) |
-| `review_screen` | Captures the game screen and reviews layout, readability, and anything that looks wrong. | `focus` (optional) |
-| `run_steps` | Performs a described sequence of player actions and reports the first step that diverged. | `steps`, `expectation` (optional) |
-| `track_value` | Watches how an object's members move across readings, optionally while an action runs. | `selector`, `action` (optional) |
+| Claude Code | `.mcp.json` | `~/.claude.json` |
+| Cursor | `.cursor/mcp.json` | `~/.cursor/mcp.json` |
+| Visual Studio Code | `.vscode/mcp.json` | Windows: `%APPDATA%\Code\User\mcp.json`<br>macOS: `~/Library/Application Support/Code/User/mcp.json`<br>Linux: `~/.config/Code/User/mcp.json` |
+| Codex | `.codex/config.toml` * | `~/.codex/config.toml` |
 
-A prompt is something you choose. What the agent has to work out on its own — that Unity must be in Play Mode, what order the tools go in — is in the instructions the server sends on connect instead.
+Project paths are relative to your Unity project folder.
 
-## Reading interval
+\* By default Codex only reads `~/.codex/config.toml`. The project file applies only if you run `codex` with `CODEX_HOME` set to `<Unity project>/.codex`.
 
-While an agent watches the running game, Unity Play MCP reads the members the scan named at a fixed interval and sends only what changed. The default interval is 1 second.
+Changing the scope does not move or delete an entry you already added. To remove it, switch back to the scope you added it under and select **Remove**.
 
-To change it, open **Edit > Project Settings > Unity Play MCP** and set **Reading interval (s)**. Unity remembers the value for this project. Values from 0.02 to 10 seconds are accepted; a value outside that range is clamped to the nearest end, and a value that cannot be read as a number falls back to 1 second. A new interval applies the next time watching starts, not to a run already in progress.
+## Using it
 
-What the interval buys and costs:
+With Play Mode running, just ask the agent in plain language. Unity opens a local connection on `127.0.0.1:17311`, and the MCP server on the same computer connects to it.
 
-- **Shorter** catches a value that rises and falls again between two readings. At 1 second, a counter that goes up and comes back down inside that second never appears to have moved.
-- **Longer** costs the game less. Every reading walks the watched members while the game runs, so 0.1 second means ten of those every second — enough to slow Play Mode noticeably, which makes what the agent sees stop matching how the game really runs.
+To check the connection, ask "Is Unity running?" The agent reports whether it can reach the game and when it last received data. If you ask for anything else while Unity is not in Play Mode, the agent tells you to start Play Mode.
 
-Shorten it only while chasing a value that moves faster than 1 second, and put it back afterwards.
+### Ready-made requests
+
+Four common requests are registered as commands in your agent. In Claude Code, they appear as `/unity-play:<name>`.
+
+| Name | What it does | Arguments |
+| --- | --- | --- |
+| `inspect_scene` | Summarizes what is in the scene and which objects can be interacted with. | `selector` (optional) |
+| `review_screen` | Captures the screen and reviews layout, readability, and anything that looks off. | `focus` (optional) |
+| `run_steps` | Performs the player actions you describe, in order, and reports the first step that didn't match what you expected. | `steps`, `expectation` (optional) |
+| `track_value` | Watches how an object's values change over time, optionally while an action runs. | `selector`, `action` (optional) |
+
+### Reading interval
+
+While an agent is watching the game, Unity Play MCP reads values every second and sends only what changed. If you need to catch values that change faster than that, shorten the interval under **Edit > Project Settings > Unity Play MCP > Reading interval (s)**.
+
+- Accepted range is 0.02 to 10 seconds. Values outside it are adjusted to the nearest limit.
+- A new interval applies the next time watching starts.
+- Very short intervals can slow the game down enough to distort what the agent sees. Shorten it only when you need to, then set it back.
 
 ## Troubleshooting
 
-### The agent does not show `unity-play`
+### The agent doesn't show `unity-play`
 
-Select **Refresh** in the Unity settings page, select **Add** again, and restart the agent. Confirm that Node.js is available with `node --version` and that `npx` is available with `npx --version`.
+Select **Refresh** on the settings page, select **Add** again, and restart the agent. Also check that `node --version` and `npx --version` work in a terminal.
 
-### The first connection takes time
+### The first connection is slow
 
-`npx` downloads the compatible MCP server on first use. Keep network access available, then restart the agent after the download completes.
+`npx` may still be downloading the MCP server. Stay online until the download finishes, then restart the agent.
 
-### The MCP server cannot connect to Unity
+### It can't connect to Unity
 
-Ask the agent to call `get_unity_status`; it names the address it is trying and whether anything answers there. Confirm that the correct Unity project is open and in Play Mode. The connection is local only; remote agents and containers need explicit access to the host loopback address.
+Ask the agent to check Unity's status. It tells you which address it tried and what answered. Make sure the right project is open and in Play Mode. The connection only works on the same computer; if your agent runs in a container or on a remote machine, it needs access to the host's loopback address.
 
-### The settings page reports an unreadable configuration
+### The settings page says it can't read a file
 
-The page refuses to rewrite a configuration it cannot preserve safely. Fix the syntax shown in the error and select **Refresh**. Visual Studio Code configuration files containing comments are intentionally refused because rewriting them as JavaScript Object Notation would remove the comments.
+If a configuration file has a syntax error, the page won't touch it because it can't keep your content safe. Fix the error shown and select **Refresh**. A Visual Studio Code file that contains comments is also left alone, because saving it would erase them.
 
-## Local development
-
-Clone the repository and build the server:
+## Contributing
 
 ```bash
 cd mcp
@@ -164,19 +121,7 @@ npm run build
 npm test
 ```
 
-When the Unity package is linked from this checkout, the settings page prefers the local `mcp/dist/index.js`, so server changes are available without publishing.
-
-Package tests run through a generated Unity test project. See [project testing instructions](.agents/docs/project.md#running-package-tests) for the exact commands.
-
-## Release procedure
-
-1. Check which version is not released yet: the Unity package version lives in `Packages/dev.yunseong.unityplaymcp/package.json`, and the tag `v<version>` marks a Unity release; the MCP server version lives in `mcp/package.json`, and `npm view unity-play-mcp versions` shows what is already published.
-2. In the GitHub Actions tab, run **Bump release version** (`workflow_dispatch`) with `unity_version` and/or `mcp_version`. The two inputs are independent — leave one empty to leave that side untouched. The workflow rejects a version that is already released (an existing git tag for `unity_version`, or an existing npm package version for `mcp_version`).
-3. Review the diff on the draft pull request the workflow opens, mark it ready for review, and merge it into `develop`.
-4. If `unity_version` was bumped, create a GitHub Release from the merge commit with tag `v<unity_version>`. The workflow does not create the release or the tag — a human still does this step.
-5. `.github/workflows/publish-mcp.yml` reacts to `release: published`, validates the version files against the tag, and publishes `mcp/` to npm when it changed since the previous release.
-
-The workflow needs the repository setting **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"** turned on. If it is off, step 2 fails when the workflow tries to open the pull request.
+When the package is linked from this repository, the settings page prefers the local build (`mcp/dist/index.js`), so server changes take effect without publishing. For Unity package tests, see [how to run tests](.agents/docs/project.md#running-package-tests). The release process is in [RELEASING.md](RELEASING.md).
 
 ## License
 
