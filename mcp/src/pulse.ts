@@ -1,3 +1,5 @@
+import { redactSecrets } from "./secrets.js";
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
@@ -405,7 +407,14 @@ function readComponent(
   }
   // 멤버 하나하나의 모양은 확인하지 않는다. `isGamePushFrame` 이 top-level 만 보는 것과 같은
   // 선이고, `record` 는 `value` 가 없어도 던지지 않는다.
-  const members = wire as PulseMember[];
+  //
+  // 비밀처럼 보이는 값은 여기서 가린다. 이 아래의 상태·이력·tree·검색·대기는 모두 가린 값만 본다 (#72).
+  const members = (wire as PulseMember[]).map((member) => ({
+    ...member,
+    // 이름은 멤버 이름만 본다. 타입의 namespace 낱말(`Game.TokenShop`, `Company.Auth`)까지 보면 그 타입의 모든
+    // 문자열이 가려진다.
+    value: redactSecrets(member.member, member.value),
+  }));
   // `m` 은 떼고 내보낸다. 두면 같은 멤버 목록이 `members` 와 나란히 두 벌로 접힌 상태에 앉고,
   // 그대로 `get_scene_state` 응답에 실린다.
   const { [WIRE_MEMBERS]: dropped, ...rest } = component;
@@ -439,7 +448,18 @@ function readComponents(pulse: PulseFrame): PulseFrame {
   if (mismatched.length > 0) {
     throw new Error(describeMismatch(mismatched, countComponents(pulse)));
   }
-  return { ...pulse, active, deactive };
+  // static 은 어느 객체에도 매달리지 않아 선언 타입이 곧 맥락이다. `SceneContext.JwtToken` 이 여기로 온다.
+  //
+  // 선언 타입은 namespace 를 떼고 단순 이름만 본다(`SceneContext`). 모양이 어긋난 항목은 건드리지 않고 넘긴다 —
+  // 예전에도 그대로 흘렀고, 하나 때문에 reading 전체를 버릴 이유가 없다.
+  const statics = pulse.statics.map((declared) => (typeof declared === "object" && declared !== null
+    ? {
+        ...declared,
+        value: redactSecrets(
+          `${String(declared.declaring ?? "").split(".").at(-1) ?? ""}.${declared.member}`, declared.value),
+      }
+    : declared));
+  return { ...pulse, statics, active, deactive };
 }
 
 function countComponents(pulse: PulseFrame): number {
