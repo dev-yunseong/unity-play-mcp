@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 
 import { UnityConnection } from "../src/connection.js";
+import type { ReadingInterruption } from "../src/pulse.js";
 
 class FakeSocket extends EventEmitter {
   readyState = 0;
@@ -62,9 +63,13 @@ function createFixture() {
   const sockets: FakeSocket[] = [];
   const timers = new FakeTimers();
   const folded: unknown[] = [];
+  const interruptions: ReadingInterruption[] = [];
   const reports: string[] = [];
   const connection = new UnityConnection({
-    pulseStore: { fold: (frame: unknown) => { folded.push(frame); } } as never,
+    pulseStore: {
+      fold: (frame: unknown) => { folded.push(frame); return true; },
+      markInterrupted: (reason: ReadingInterruption) => { interruptions.push(reason); },
+    } as never,
     createWebSocket: () => {
       const socket = new FakeSocket();
       sockets.push(socket);
@@ -75,7 +80,7 @@ function createFixture() {
     reconnectBaseMilliseconds: 10,
     report: (message) => reports.push(message),
   });
-  return { connection, folded, reports, sockets, timers };
+  return { connection, folded, interruptions, reports, sockets, timers };
 }
 
 test("connects lazily once and correlates only by requestId", async () => {
@@ -222,5 +227,39 @@ test("onDisconnect stops firing once unsubscribed", async () => {
   unsubscribe();
   fixture.sockets[0].close();
   assert.deepEqual(seen, []);
+  fixture.connection.close();
+});
+
+/// 끊긴 동안의 차이는 아무도 받지 못한다. 그 사이 store 가 든 상태를 최신이라고 말하면 #69 가 된다.
+test("a dropped socket marks the held reading as interrupted", async () => {
+  const fixture = createFixture();
+  const connected = fixture.connection.ensureConnected();
+  fixture.sockets[0].open();
+  await connected;
+
+  fixture.sockets[0].close();
+  assert.deepEqual(fixture.interruptions, ["disconnected"]);
+  fixture.connection.close();
+});
+
+test("a successful stop_readings marks the held reading as stopped; a failed one does not", async () => {
+  const fixture = createFixture();
+  const stopped = fixture.connection.sendActions([{ id: 1, method: "stop_readings", params: [] }]);
+  fixture.sockets[0].open();
+  await Promise.resolve();
+  fixture.sockets[0].message({
+    type: "ACTION_RESULT", id: 9, requestId: 1, frame: 5, results: [{ id: 1, success: true }],
+  });
+  await stopped;
+  assert.deepEqual(fixture.interruptions, ["stopped"]);
+
+  const failed = fixture.connection.sendActions([{ id: 2, method: "stop_readings", params: [] }]);
+  await Promise.resolve();
+  fixture.sockets[0].message({
+    type: "ACTION_RESULT", id: 10, requestId: 2, frame: 6,
+    results: [{ id: 2, success: false, error: "This build cannot take live readings." }],
+  });
+  await failed;
+  assert.deepEqual(fixture.interruptions, ["stopped"]);
   fixture.connection.close();
 });

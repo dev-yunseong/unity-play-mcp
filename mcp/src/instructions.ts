@@ -10,6 +10,7 @@ export const serverInstructions = [
   "Reading the scene:",
   "- Call start_readings once before the first get_scene_state.",
   "- Readings arrive about once a second. After an action, compare reading numbers or call wait_for_condition for a scene or member value.",
+  "- A result with stale holds an old reading; do not act on its ids. Call start_readings and read again.",
   "- Narrow large scenes with selector, or use root and depth for a hierarchy.",
   "- Use search_targets to find compact ids/selectors by name, text, component, or actionability, then call get_scene_state.",
   "- Call stop_readings when done.",
