@@ -24,7 +24,17 @@ In Unity, open **Window > Package Manager**, select **Add package from git URL**
 https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#latest
 ```
 
-To pin a version, replace `latest` at the end with a release tag such as `v0.2.0`.
+To pin a version, replace `latest` at the end with a release tag such as `v0.4.0`.
+
+### Version compatibility
+
+Each Unity package release records the MCP server version it was tested with, and **Add** on the settings page writes `npx -y unity-play-mcp@<that version>`. Keep that pair. A local `mcp/dist` build or an entry added by an older package can mix versions.
+
+| Unity package | MCP server | Notes |
+| --- | --- | --- |
+| `v0.4.0` | `0.4.0` | Keeps following the scene after readings restart or the connection drops, and marks an old reading `stale`. Adds hovering over an object by id, screen coordinates and the frame/scene on screenshots, and hides values that look like credentials. A 0.3.x or older server rejects this package's screenshots. |
+| `v0.3.0` | `0.3.0` | Adds target search, clicking and dragging objects by id, waiting for a condition, and recovery after script reloads. If readings restart while the server keeps running (stop and start readings, re-entering Play Mode, a reload), the scene can stay on the previous screen. Upgrade to 0.4.0. |
+| `v0.2.0` | `0.2.0` | The 0.2.0 server cannot read the 0.2.0 package's component values, so scene state stays empty. Upgrade. |
 
 ## Connect your agent
 

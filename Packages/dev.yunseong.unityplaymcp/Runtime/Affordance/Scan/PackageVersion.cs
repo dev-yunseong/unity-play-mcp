@@ -17,6 +17,6 @@ namespace UnityPlayMcp.Affordances.Scan
     /// </remarks>
     internal static class PackageVersion
     {
-        internal const string Value = "0.3.0";
+        internal const string Value = "0.4.0";
     }
 }

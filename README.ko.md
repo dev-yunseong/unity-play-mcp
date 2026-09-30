@@ -24,7 +24,17 @@ Unity에서 **Window > Package Manager**를 열고 **Add package from git URL**�
 https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#latest
 ```
 
-특정 버전을 설치하려면 끝의 `latest`를 release tag(예: `v0.2.0`)로 바꿉니다.
+특정 버전을 설치하려면 끝의 `latest`를 release tag(예: `v0.4.0`)로 바꿉니다.
+
+### 버전 호환
+
+Unity package release마다 함께 검증한 MCP server 버전을 기록하고, 설정 페이지의 **Add**가 `npx -y unity-play-mcp@<그 버전>`을 씁니다. 이 짝을 유지하세요. 로컬 `mcp/dist` build나 이전 package가 추가한 항목을 쓰면 버전이 섞일 수 있습니다.
+
+| Unity package | MCP server | 비고 |
+| --- | --- | --- |
+| `v0.4.0` | `0.4.0` | reading이 다시 시작되거나 연결이 끊긴 뒤에도 장면을 계속 따라가고, 오래된 reading에 `stale`을 표시합니다. id로 객체 위에 포인터 올리기, 스크린샷의 화면 좌표와 frame/scene, 인증 값처럼 보이는 값 가리기를 더합니다. 0.3.x 이하 server는 이 package의 스크린샷을 거절합니다. |
+| `v0.3.0` | `0.3.0` | 대상 검색, id로 클릭·드래그, 조건 대기, script reload 뒤 복구를 더합니다. server가 떠 있는 채로 reading이 다시 시작되면(reading 중지 후 재시작, Play Mode 재진입, reload) 장면이 이전 화면에 머물 수 있습니다. 0.4.0으로 올리세요. |
+| `v0.2.0` | `0.2.0` | 0.2.0 server가 0.2.0 package의 component 값을 읽지 못해 scene state가 비어 있습니다. 올리세요. |
 
 ## Agent 연결
 
