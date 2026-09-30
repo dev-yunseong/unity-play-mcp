@@ -893,7 +893,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
         /// 여러 case 가 한 블록을 공유할 수 있어(<c>case 4:</c> <c>case 5:</c>) 결과는 case 들의 OR 다. case 가 0 에서
         /// 시작하지 않으면 앞에 뺄셈이 붙어 컴파일되므로 그만큼 보정한다.
         ///
-        /// fall-through(default) 경로는 비교 한 쌍으로 쓴다. IL switch 는 부호 없이 비교하므로 음수도 default 로 간다.
+        /// fall-through(default) 경로는 범위 아래와 위를 잇는 비교 한 쌍으로 쓴다. IL switch 는 부호 없이 비교하므로 음수도 default 로 간다.
         /// </remarks>
         private static Condition SwitchCase(BasicBlock decision, BasicBlock taken, ControlFlowGraph graph)
         {
@@ -956,11 +956,11 @@ namespace UnityPlayMcp.Affordances.CodeGen
             }
 
             // 어느 case 도 아니면 default 경로다.
-            return Condition.Every(new[]
+            return Condition.Either(new[]
             {
                 Condition.FromTest(new Precondition
                 {
-                    Left = name, Operator = ">=", Right = offset.ToString(),
+                    Left = name, Operator = "<", Right = offset.ToString(),
                     Context = where, SubjectLost = lost, Offset = decision.Last.Offset
                 }),
                 Condition.FromTest(new Precondition
