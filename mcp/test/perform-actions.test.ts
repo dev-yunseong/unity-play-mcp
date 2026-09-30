@@ -12,8 +12,6 @@ const wireCases: ReadonlyArray<{
   action: unknown;
   params: unknown[];
 }> = [
-  { name: "button_click", action: { method: "button_click", targetId: 42 }, params: [42] },
-  { name: "pointer_click", action: { method: "pointer_click", targetId: -3518 }, params: [-3518] },
   { name: "pointer_hover", action: { method: "pointer_hover", targetId: -3518 }, params: [-3518] },
   {
     name: "pointer_drag",
@@ -82,6 +80,8 @@ for (const { name, action, params } of wireCases) {
     const parsed = performActionSchema.safeParse(action);
     assert.ok(parsed.success, `schema rejected ${JSON.stringify(action)}`);
 
+    assert.notEqual(parsed.data.method, "click", "click is expanded by expandActions, see click.test.ts");
+    if (parsed.data.method === "click") return;
     const wire = toWireAction(parsed.data);
     assert.equal(wire.method, (action as { method: string }).method);
     assert.deepEqual(wire.params, params);
@@ -90,14 +90,14 @@ for (const { name, action, params } of wireCases) {
 
 test("every method the schema accepts is covered by a wire case", () => {
   const covered = new Set(wireCases.map(({ action }) => (action as { method: string }).method));
-  assert.equal(covered.size, 19);
+  assert.equal(covered.size, 17);
 });
 
 const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "an unknown method", action: { method: "quit_game" } },
-  { name: "a missing targetId", action: { method: "button_click" } },
-  { name: "a fractional targetId", action: { method: "button_click", targetId: 1.5 } },
-  { name: "a fractional pointer_click targetId", action: { method: "pointer_click", targetId: 1.5 } },
+  { name: "a fractional pointer_hover targetId", action: { method: "pointer_hover", targetId: 1.5 } },
+  { name: "the removed button_click", action: { method: "button_click", targetId: 42 } },
+  { name: "the removed pointer_click", action: { method: "pointer_click", targetId: 42 } },
   { name: "a pointer_hover without a targetId", action: { method: "pointer_hover" } },
   {
     name: "a pointer_hover carrying coordinates it does not take",
@@ -106,9 +106,14 @@ const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "a pointer_drag without a sourceId", action: { method: "pointer_drag", targetId: 7 } },
   { name: "a pointer_drag without a targetId", action: { method: "pointer_drag", sourceId: 7 } },
   {
-    name: "a pointer_click carrying a mouse button it does not take",
-    action: { method: "pointer_click", targetId: 7, button: 0 },
+    name: "a click carrying a mouse button it does not take",
+    action: { method: "click", targetId: 7, button: 0 },
   },
+  { name: "a click with no target", action: { method: "click" } },
+  { name: "a click with two targets", action: { method: "click", targetId: 7, selector: "A[0]" } },
+  { name: "a click with only x", action: { method: "click", x: 5 } },
+  { name: "a click with an id and a coordinate", action: { method: "click", targetId: 7, x: 5, y: 6 } },
+  { name: "a click with an empty selector", action: { method: "click", selector: "" } },
   { name: "a mouse button above 2", action: { method: "mouse_down", button: 3 } },
   { name: "a negative mouse button", action: { method: "mouse_up", button: -1 } },
   { name: "an empty key", action: { method: "key_down", key: "" } },
@@ -123,7 +128,7 @@ const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "padding without a targetId", action: { method: "capture_screen", padding: 8 } },
   { name: "a zero maxEdge", action: { method: "capture_screen", targetId: 3, maxEdge: 0 } },
   { name: "a negative padding", action: { method: "capture_screen", targetId: 3, padding: -1 } },
-  { name: "the old positional params shape", action: { method: "button_click", params: [42] } },
+  { name: "the old positional params shape", action: { method: "pointer_hover", params: [42] } },
 ];
 
 for (const { name, action } of rejectedCases) {

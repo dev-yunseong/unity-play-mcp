@@ -2,7 +2,7 @@
 
 - Date: 2026-09-30
 - GitHub Issue: None
-- Status: Draft
+- Status: Implemented. MCP build clean, 238/238 green. Unity EditMode/PlayMode 미실행 — 이 머신에 editor 가 없어 CI 가 첫 컴파일이다.
 
 ## Goal
 
@@ -44,25 +44,25 @@ batch 로 연달아 보낸다. `Button.onClick` 을 직접 부르는 경로(`but
   `get_scene_state` 로 확인한다.
 
 ## Approach (Checklist)
-- [ ] **Step 0: Recon** — 완료. `mcp/src/tools.ts:868`(click/pointer_click 등록, `performActionSchema`),
+- [x] **Step 0: Recon** — 완료. `mcp/src/tools.ts:868`(click/pointer_click 등록, `performActionSchema`),
   `ActionExecutor.cs`(`button_click`/`pointer_click` 분기, `ExecuteMouseButton`),
   `PointerActions.cs`(`Click`), `mcp/src/pulse.ts`/`visible.ts`(`rect`, `covered`, `onScreen`).
-- [ ] **Step 1: 대상 해석** — `mcp/src/click-target.ts` 새 module: `{targetId}|{selector}|{x,y}` →
+- [x] **Step 1: 대상 해석** — `mcp/src/click-target.ts` 새 module: `{targetId}|{selector}|{x,y}` →
   `{x, y}` 또는 사람이 읽을 실패 문장. selector 정확 일치, id 조회, rect 중심, 상태 검사.
-- [ ] **Step 2: click tool** — `tools.ts` 의 `click`/`pointer_click` 등록을 하나로. 입력 schema 는
+- [x] **Step 2: click tool** — `tools.ts` 의 `click`/`pointer_click` 등록을 하나로. 입력 schema 는
   `z.union` 이 아니라 optional 필드 셋 + `superRefine`(정확히 하나의 방식만; `x`·`y` 는 함께)로 한다
   (draft 2020-12 `$ref` 문제 회피, `targetIdSchema` 주석 참고). dispatch 는
   `move_mouse` → `mouse_down`(0) → `mouse_up`(0) 한 batch.
-- [ ] **Step 3: perform_actions** — `performActionSchema` 에서 `button_click`, `pointer_click` 제거.
+- [x] **Step 3: perform_actions** — `performActionSchema` 에서 `button_click`, `pointer_click` 제거.
   이 자리에 `click` action 을 둘지(같은 해석 module 재사용)는 구현 때 정한다: 두면 tool 과 batch
   가 같은 계약이 된다.
-- [ ] **Step 4: Unity 정리** — `ActionExecutor` 의 `button_click`/`pointer_click` 분기,
+- [x] **Step 4: Unity 정리** — `ActionExecutor` 의 `button_click`/`pointer_click` 분기,
   `ExecuteButtonClick`, `PointerActions.Click`, `ScannedTarget.Click`(다른 곳에서 안 쓰면) 삭제.
   `ExecuteMouseButton` 이 한 프레임을 넘기게 한다.
-- [ ] **Step 5: 문서/테스트** — `instructions.ts`, README, `instructions.test.ts`(tool 목록),
+- [x] **Step 5: 문서/테스트** — `instructions.ts`, README, `instructions.test.ts`(tool 목록),
   `pointer-tools.test.ts`/`perform-actions.test.ts` 갱신. `PointerActionTests`,
   `PointerTargetActionTests` 중 click 을 부르는 것은 `mouse_down`/`mouse_up` 경로 검증으로 바꾼다.
-- [ ] **Step 6: Rollout / Rollback** — MCP 와 Unity package 를 같이 배포해야 한다(action 이름이
+- [x] **Step 6: Rollout / Rollback** — MCP 와 Unity package 를 같이 배포해야 한다(action 이름이
   사라진다). 쪽이 어긋나면 옛 tool 이 "unknown method" 로 실패한다. 릴리스 노트에 명시.
 
 ## Validation
@@ -85,5 +85,5 @@ batch 로 연달아 보낸다. `Button.onClick` 을 직접 부르는 경로(`but
 - **Rollback steps:** `git revert` 한 번. Unity/MCP 를 같이 되돌린다.
 
 ## Open Questions
-- `perform_actions` 에도 `click` 을 둘까, 아니면 tool 만 둘까? (기본: 둔다 — 계약을 하나로.)
+- (결정됨) `perform_actions` 에도 `click` 을 둔다. `expandActions` 가 tool 과 같은 해석을 쓴다.
 - selector 가 둘 이상 일치할 때 "실패 + 후보 나열" 로 충분한가?

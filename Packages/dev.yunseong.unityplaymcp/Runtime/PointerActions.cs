@@ -7,11 +7,11 @@ using UnityEngine;
 namespace UnityPlayMcp
 {
     /// <summary>
-    /// ID 로 받은 대상을 실제 입력 경로로 클릭하고 드래그한다.
+    /// ID 로 받은 대상 위에 포인터를 올리고 드래그한다. 클릭은 MCP 의 <c>click</c> 이 좌표로 풀어
+    /// <c>move_mouse</c>, <c>mouse_down</c>, <c>mouse_up</c> 으로 보낸다.
     /// </summary>
     /// <remarks>
-    /// <c>button_click</c> 처럼 <c>Button.onClick</c> 을 직접 부르지 않는다. 가상 마우스를 대상
-    /// 위로 옮기고 버튼을 눌렀다 놓아, <see cref="VirtualMouseMessenger"/> 의 <c>OnMouse*</c> 와
+    /// 가상 마우스를 대상 위로 옮기고 버튼을 눌러, <see cref="VirtualMouseMessenger"/> 의 <c>OnMouse*</c> 와
     /// <see cref="PointerEventDispatcher"/> 의 uGUI 이벤트가 게임에 닿게 한다. collider 로만
     /// 입력을 받는 2D 게임이 ID 로 조작될 수 있는 유일한 경로다.
     /// <para>
@@ -46,48 +46,6 @@ namespace UnityPlayMcp
             this.pointerEvents = pointerEvents;
             this.setButton = setButton;
             this.pointerMoved = pointerMoved;
-        }
-
-        /// <summary>
-        /// 대상 위로 포인터를 옮기고 왼쪽 버튼을 눌렀다 놓는다.
-        /// </summary>
-        /// <remarks>
-        /// 프레임을 세 번 넘기는 것이 이 코루틴의 전부다. uGUI 이벤트는 <c>setButton</c> 을 부른
-        /// 그 자리에서 동기로 나가지만 <c>OnMouse*</c> 는 그렇지 않다 —
-        /// <see cref="VirtualMouseMessenger"/> 를 미는 것은 host 의 <c>Update</c> 안
-        /// <c>VirtualInput.AdvanceFrame</c> 이고, <c>VirtualMouseState.Press</c> 는 눌린 프레임의
-        /// <b>다음</b> 프레임부터 눌린 것으로 답한다. 누름과 놓음 사이에 프레임을 두지 않으면
-        /// messenger 는 눌린 적이 없는 것으로 보고 <c>OnMouseDown</c> 이 통째로 빠진다.
-        /// </remarks>
-        public IEnumerator Click(
-            int actionId, List<object> parameters, Action<ActionResultDto> completed)
-        {
-            if (!ActionExecutor.TryReadId(parameters, 0, out var targetId))
-            {
-                completed(ActionResultDto.Failure(
-                    actionId, "pointer_click requires params [targetId]."));
-                yield break;
-            }
-
-            if (!TryAim("pointer_click", targetId, out var aim, out var error))
-            {
-                completed(ActionResultDto.Failure(actionId, error));
-                yield break;
-            }
-
-            yield return cursorController.MoveTo(aim.ScreenPosition, pointerMoved);
-            yield return null;
-
-            // Drag 와 달리 try/finally 가 없다. 누름과 놓음 사이에 프레임을 넘기는 것 말고는
-            // 아무 일도 하지 않아 던질 것이 없고, 그래도 남는 중단 경로는 host 의
-            // ReleaseAgentInput 이 덮는다.
-            setButton(DrivingButton, true);
-            yield return null;
-
-            setButton(DrivingButton, false);
-            yield return null;
-
-            completed(ActionResultDto.Success(actionId, HitOf(targetId, aim)));
         }
 
         /// <summary>

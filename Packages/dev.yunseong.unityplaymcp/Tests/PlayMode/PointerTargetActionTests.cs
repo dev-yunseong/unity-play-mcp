@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// ID 로 겨누는 <c>pointer_click</c> 과 <c>pointer_drag</c>.
+    /// ID 로 겨누는 <c>pointer_drag</c>, 그리고 MCP <c>click</c> 이 보내는 <c>move_mouse</c>/<c>mouse_down</c>/<c>mouse_up</c>.
     /// </summary>
     /// <remarks>
     /// 에디트 모드로 내려올 수 없다. <c>OnMouse*</c> 를 배달하는 것은 host 의 <c>Update</c> 안
@@ -70,17 +70,17 @@ namespace UnityPlayMcp.Tests
         /// <c>Target is not a Button</c> 으로 끝나던 자리다.
         /// </summary>
         [UnityTest]
-        public IEnumerator PointerClick_ReachesTheOnMouseHandlersOfAColliderTarget()
+        public IEnumerator Click_ReachesTheOnMouseHandlersOfAColliderTarget()
         {
             CreateRuntime();
             var target = CreateColliderTarget();
             yield return null;
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(target.gameObject.GetInstanceID()), r => result = r);
+            yield return ClickOn(target.gameObject, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
-            Assert.That(target.Messages, Does.Contain("down"), "pointer_click did not reach OnMouseDown");
+            Assert.That(target.Messages, Does.Contain("down"), "click did not reach OnMouseDown");
             Assert.That(target.Messages, Does.Contain("up"));
             // 누른 그 오브젝트 위에서 놓였으므로 엔진이라면 여기서 버튼 클릭을 알린다.
             Assert.That(target.Messages, Does.Contain("upAsButton"));
@@ -93,7 +93,7 @@ namespace UnityPlayMcp.Tests
         /// 사람이 같은 자리를 클릭해도 같은 자식이 받는다.
         /// </summary>
         [UnityTest]
-        public IEnumerator PointerClick_ReachesATargetWhoseColliderSitsOnAChild()
+        public IEnumerator Click_ReachesATargetWhoseColliderSitsOnAChild()
         {
             CreateRuntime();
             var child = CreateColliderTarget();
@@ -104,63 +104,14 @@ namespace UnityPlayMcp.Tests
             yield return null;
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(parent.GetInstanceID()), r => result = r);
+            yield return ClickOn(parent, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(child.Messages, Does.Contain("down"));
-            var hit = result.ReturnValue as PointerHitDto;
-            Assert.That(hit, Is.Not.Null);
-            Assert.That(hit.TargetId, Is.EqualTo(parent.GetInstanceID()));
-            // 청한 것과 답한 것이 다르고, 그 다름이 보고에 남아야 한다.
-            Assert.That(hit.HitId, Is.EqualTo(child.gameObject.GetInstanceID()));
-        }
-
-        /// <summary>
-        /// 겨눌 면적이 없는 대상. collider 도 renderer 도 RectTransform 도 없으면 포인터가 닿을
-        /// 자리가 없고, 그것은 비활성이나 파괴와 다른 실패다.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator PointerClick_RefusesATargetWithNothingToAimAt()
-        {
-            CreateRuntime();
-            var cameraObject = new GameObject("main camera", typeof(Camera));
-            cameraObject.tag = "MainCamera";
-            spawned.Add(cameraObject);
-
-            var bare = new GameObject("bare transform");
-            spawned.Add(bare);
-            yield return null;
-
-            var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(bare.GetInstanceID()), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("no Collider, Collider2D, or Renderer"));
-            Assert.That(result.Error, Does.Contain("bare transform"));
-        }
-
-        /// <summary>화면 밖 대상. 겨눌 좌표가 화면 안에 없다는 것을 그 숫자로 말한다.</summary>
-        [UnityTest]
-        public IEnumerator PointerClick_RefusesATargetThatSitsOffScreen()
-        {
-            CreateRuntime();
-            var offScreen = CreateGraphicTarget("off screen target", 0.5f);
-            // 화면 오른쪽 바깥으로. anchor 가 좌하단이라 이 값이 그대로 픽셀이다.
-            ((RectTransform)offScreen.transform).anchoredPosition =
-                new Vector2(Screen.width + 500f, Screen.height * 0.5f);
-            yield return null;
-
-            var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(offScreen.gameObject.GetInstanceID()), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("sits outside"));
-            Assert.That(result.Error, Does.Contain("off screen target"));
-            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
         }
 
         [UnityTest]
-        public IEnumerator PointerClick_ReachesAuGuiPointerHandler()
+        public IEnumerator Click_ReachesAuGuiPointerHandler()
         {
             CreateRuntime();
             var target = CreateGraphicTarget("click target", 0.5f);
@@ -168,18 +119,18 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(target.gameObject.GetInstanceID()), r => result = r);
+            yield return ClickOn(target.gameObject, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(target.Events, Is.EqualTo(new[] { "down", "up", "click" }));
         }
 
         /// <summary>
-        /// <c>Button</c> 도 실제 입력으로 닿는다. <c>button_click</c> 처럼 <c>onClick</c> 을 직접
+        /// <c>Button</c> 도 실제 입력으로 닿는다. <c>onClick</c> 을 직접
         /// 부르는 것이 아니라 포인터가 눌러서 나는 클릭이다.
         /// </summary>
         [UnityTest]
-        public IEnumerator PointerClick_PressesAButtonThroughTheRealInputPath()
+        public IEnumerator Click_PressesAButtonThroughTheRealInputPath()
         {
             CreateRuntime();
             var target = CreateGraphicTarget("button target", 0.5f);
@@ -191,89 +142,10 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(target.gameObject.GetInstanceID()), r => result = r);
+            yield return ClickOn(target.gameObject, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(clicks, Is.EqualTo(1));
-        }
-
-        [UnityTest]
-        public IEnumerator PointerClick_ReportsTheObjectItActuallyHit()
-        {
-            CreateRuntime();
-            var target = CreateGraphicTarget("reported target", 0.5f);
-            yield return null;
-            IsolateFixtureRaycaster();
-
-            var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(target.gameObject.GetInstanceID()), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.True, result.Error);
-            var hit = result.ReturnValue as PointerHitDto;
-            Assert.That(hit, Is.Not.Null, "pointer_click returned no PointerHitDto");
-            Assert.That(hit.TargetId, Is.EqualTo(target.gameObject.GetInstanceID()));
-            Assert.That(hit.HitId, Is.EqualTo(target.gameObject.GetInstanceID()));
-            Assert.That(hit.Hit, Is.EqualTo("reported target"));
-            // 좌상단 기준으로 보고한다. 그래야 이 값을 그대로 move_mouse 로 되쓸 수 있다.
-            Assert.That(hit.X, Is.GreaterThanOrEqualTo(0f).And.LessThanOrEqualTo(Screen.width));
-            Assert.That(hit.Y, Is.GreaterThanOrEqualTo(0f).And.LessThanOrEqualTo(Screen.height));
-        }
-
-        /// <summary>
-        /// 비활성과 파괴는 에이전트가 서로 다르게 대응해야 하는 실패다. 하나는 게임을 움직여
-        /// 켜야 하고, 하나는 씬을 다시 읽어야 한다.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator PointerClick_TellsAnInactiveTargetApartFromADestroyedOne()
-        {
-            CreateRuntime();
-            var inactive = CreateGraphicTarget("inactive target", 0.3f);
-            var doomed = CreateGraphicTarget("doomed target", 0.7f);
-            yield return null;
-
-            var inactiveId = inactive.gameObject.GetInstanceID();
-            var doomedId = doomed.gameObject.GetInstanceID();
-            inactive.gameObject.SetActive(false);
-            Object.DestroyImmediate(doomed.gameObject);
-            yield return null;
-
-            var whenInactive = default(ActionResultDto);
-            yield return Run("pointer_click", Params(inactiveId), r => whenInactive = r);
-            var whenDestroyed = default(ActionResultDto);
-            yield return Run("pointer_click", Params(doomedId), r => whenDestroyed = r);
-
-            Assert.That(whenInactive.IsSuccess, Is.False);
-            Assert.That(whenInactive.Error, Does.Contain("not active in the scene"));
-            Assert.That(whenInactive.Error, Does.Contain("inactive target"));
-
-            Assert.That(whenDestroyed.IsSuccess, Is.False);
-            Assert.That(whenDestroyed.Error, Does.Contain("no live object has id"));
-            Assert.That(whenDestroyed.Error, Does.Not.Contain("not active in the scene"));
-        }
-
-        /// <summary>
-        /// 가려진 대상은 불일치로 거절하고, 무엇이 가렸는지 이름으로 말한다. 그 이름이 없으면
-        /// 에이전트는 무엇을 치워야 하는지 모른다.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator PointerClick_RefusesACoveredTargetAndNamesWhatCoveredIt()
-        {
-            CreateRuntime();
-            var covered = CreateGraphicTarget("covered target", 0.5f);
-            var coverer = CreateGraphicTarget("coverer", 0.5f);
-            // 나중에 그려지는 형제가 raycast 를 먼저 답한다.
-            coverer.transform.SetAsLastSibling();
-            yield return null;
-            IsolateFixtureRaycaster();
-
-            var result = default(ActionResultDto);
-            yield return Run("pointer_click", Params(covered.gameObject.GetInstanceID()), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("coverer"));
-            Assert.That(result.Error, Does.Contain("covered target"));
-            Assert.That(covered.Events, Is.Empty, "a refused click must not touch the game");
-            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
         }
 
         [UnityTest]
@@ -368,13 +240,9 @@ namespace UnityPlayMcp.Tests
         {
             CreateRuntime();
 
-            var click = default(ActionResultDto);
-            yield return Run("pointer_click", new List<object>(), r => click = r);
             var drag = default(ActionResultDto);
             yield return Run("pointer_drag", Params(7), r => drag = r);
 
-            Assert.That(click.IsSuccess, Is.False);
-            Assert.That(click.Error, Does.Contain("pointer_click requires params [targetId]."));
             Assert.That(drag.IsSuccess, Is.False);
             Assert.That(drag.Error, Does.Contain("pointer_drag requires params [sourceId, targetId]."));
         }
@@ -394,6 +262,25 @@ namespace UnityPlayMcp.Tests
 
             executor = new ActionExecutor(
                 new TargetLookup(), cursorController, new PointerEventDispatcher());
+        }
+
+        /// <summary>
+        /// MCP 의 <c>click</c> 이 보내는 그 세 action 으로 대상의 겨눌 자리를 누른다. 자리는
+        /// <see cref="PointerTargeting.TryAim"/> 이 고르고, 좌표는 <c>move_mouse</c> 가 받는 좌상단 기준이다.
+        /// </summary>
+        private IEnumerator ClickOn(GameObject target, System.Action<ActionResultDto> completed)
+        {
+            var aimed = PointerTargeting.TryAim(
+                "click", target.GetInstanceID(), target, new PointerEventDispatcher(), out var aim, out var error);
+            Assert.That(aimed, Is.True, error);
+
+            var failure = default(ActionResultDto);
+            yield return Run("move_mouse", Params((double)aim.ScreenPosition.x, (double)(Screen.height - aim.ScreenPosition.y)),
+                r => failure = failure ?? (r.IsSuccess ? null : r));
+            yield return Run("mouse_down", Params(0d), r => failure = failure ?? (r.IsSuccess ? null : r));
+            yield return Run("mouse_up", Params(0d), r => failure = failure ?? (r.IsSuccess ? null : r));
+
+            completed(failure ?? ActionResultDto.Success(0));
         }
 
         private IEnumerator Run(

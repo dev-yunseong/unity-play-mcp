@@ -12,6 +12,7 @@ import {
   type Staleness,
   type UnreadableFrame,
 } from "./pulse.js";
+import { clickTargetIssue, clickWireActions, resolveClickPoint, type ClickTarget } from "./click-target.js";
 import { REDACTED_TEXT } from "./secrets.js";
 import { searchTargets } from "./search.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
@@ -70,8 +71,13 @@ const WAIT_MAX_TIMEOUT_MS = 30_000;
 /// schema 를 `prefixItems` 로만 받으므로 Anthropic API 가 tool 목록 전체를 400 으로 거절한다.
 /// `params` 배열은 `toWireAction` 이 만든다.
 export const performActionSchema = z.discriminatedUnion("method", [
-  z.object({ method: z.literal("button_click"), targetId: targetIdSchema() }).strict(),
-  z.object({ method: z.literal("pointer_click"), targetId: targetIdSchema() }).strict(),
+  z.object({
+    method: z.literal("click"),
+    targetId: targetIdSchema().optional(),
+    selector: z.string().min(1).optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+  }).strict(),
   z.object({ method: z.literal("pointer_drag"), sourceId: targetIdSchema(), targetId: targetIdSchema() }).strict(),
   z.object({ method: z.literal("pointer_hover"), targetId: targetIdSchema() }).strict(),
   z.object({ method: z.literal("enter_text"), targetId: targetIdSchema(), text: z.string() }).strict(),
@@ -95,6 +101,11 @@ export const performActionSchema = z.discriminatedUnion("method", [
     padding: paddingSchema().optional(),
   }).strict(),
 ]).superRefine((action, ctx) => {
+  if (action.method === "click") {
+    const issue = clickTargetIssue(action);
+    if (issue !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: issue });
+    return;
+  }
   // `maxEdge` 와 `padding` 은 잘라낼 대상을 두고 하는 말이라 `targetId` 없이는 뜻이 없다.
   // capture_screen tool 이 같은 조합을 거절하는 것과 같은 규칙이다.
   if (action.method !== "capture_screen") return;
@@ -108,6 +119,37 @@ export const performActionSchema = z.discriminatedUnion("method", [
 });
 
 export type PerformAction = z.infer<typeof performActionSchema>;
+
+/// batch 를 Unity 로 보낼 wire action 으로 편다. `click` 은 대상을 푸는 데 reading 이 필요하고 셋으로
+/// 펴지므로 `toWireAction` 이 아니라 여기서 한다. 푸는 데 실패하면 아무것도 보내지 않고 그 이유를 낸다.
+///
+/// 같은 batch 안의 `click` 은 batch 가 돌기 전의 reading 으로 푼다. 앞선 action 이 대상을 옮기더라도
+/// 그 결과는 보지 못하므로, 그런 순서는 batch 를 나누라는 뜻이다.
+export function expandActions(
+  actions: readonly PerformAction[],
+  store: PulseStore,
+): { ok: true; wire: Array<{ method: string; params: unknown[] }> } | { ok: false; error: string } {
+  const wire: Array<{ method: string; params: unknown[] }> = [];
+  for (const action of actions) {
+    if (action.method !== "click") {
+      wire.push(toWireAction(action));
+      continue;
+    }
+    const resolution = resolveClickTarget(action, store);
+    if (!resolution.ok) return resolution;
+    wire.push(...clickWireActions(resolution.point));
+  }
+  return { ok: true, wire };
+}
+
+function resolveClickTarget(target: ClickTarget, store: PulseStore) {
+  const staleness = store.getStaleness();
+  return resolveClickPoint(
+    target,
+    store.getState(),
+    staleness === undefined ? undefined : stalenessMessage(staleness),
+  );
+}
 
 interface CaptureScreenArguments {
   targetId?: number;
@@ -129,10 +171,8 @@ function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
 /// 이름 있는 field 를 Unity 가 받는 위치 인자 배열로 되돌린다.
 ///
 /// 배열의 순서와 값은 Unity 쪽 protocol 이라 바꿀 수 없다. 이 함수가 그 계약이 적힌 유일한 자리다.
-export function toWireAction(action: PerformAction): { method: string; params: unknown[] } {
+export function toWireAction(action: Exclude<PerformAction, { method: "click" }>): { method: string; params: unknown[] } {
   switch (action.method) {
-    case "button_click":
-    case "pointer_click":
     case "pointer_hover":
       return { method: action.method, params: [action.targetId] };
     case "pointer_drag":
@@ -866,14 +906,23 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("click", {
-    description: "Click a Unity UI Button by instance id, by invoking the Button directly. Use pointer_click instead for anything that is not a Button.",
-    inputSchema: { targetId: targetIdSchema() },
-  }, async ({ targetId }) => dispatchOne(connection, "button_click", [targetId]));
-
-  server.registerTool("pointer_click", {
-    description: "Click a Unity object by instance id by moving the virtual pointer onto it and pressing the left mouse button there. Reaches colliders (OnMouseDown), uGUI pointer handlers, and Buttons. Reports the object the pointer actually hit, and fails with that object's name when something else is on top of the target.",
-    inputSchema: { targetId: targetIdSchema() },
-  }, async ({ targetId }) => dispatchOne(connection, "pointer_click", [targetId]));
+    description: "Click a Unity object or screen position with the virtual mouse: move the pointer there, press the left button, release it. "
+      + "Give exactly one of targetId (instance id from get_scene_state), selector (the exact selector from get_scene_state or search_targets, e.g. \"Canvas[0]/Panel[1]/Button[0]\"), or x and y (game screen pixels from the top left, the same space as move_mouse). "
+      + "It goes through the game's own input path, so Buttons, uGUI pointer handlers, and colliders (OnMouseDown) all respond, and something drawn on top of the target takes the click. "
+      + "id and selector aim at the center of the last reading's rect and fail without clicking when the target is inactive, off screen, covered, or the reading is stale. A successful result only means the input was sent; read the state again to see the effect.",
+    inputSchema: {
+      targetId: targetIdSchema().optional(),
+      selector: z.string().min(1).optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+    },
+  }, async (target) => {
+    const issue = clickTargetIssue(target);
+    if (issue !== undefined) return { ...text(issue), isError: true };
+    const resolution = resolveClickTarget(target, store);
+    if (!resolution.ok) return { ...text(resolution.error), isError: true };
+    return dispatchActions(connection, clickWireActions(resolution.point));
+  });
 
   server.registerTool("pointer_drag", {
     description: "Drag from one Unity object to another by instance id: press the left mouse button on sourceId, glide the pointer to targetId, and release there. Both objects are checked before the button is pressed.",
@@ -945,7 +994,11 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}. "
       + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
-  }, async ({ actions }) => dispatchActions(connection, actions.map(toWireAction)));
+  }, async ({ actions }) => {
+    const expanded = expandActions(actions, store);
+    if (!expanded.ok) return { ...text(expanded.error), isError: true };
+    return dispatchActions(connection, expanded.wire);
+  });
 
   server.registerTool("wait_for_condition", {
     description: [

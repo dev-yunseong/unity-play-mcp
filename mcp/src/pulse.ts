@@ -26,7 +26,7 @@ export interface PulseComponent {
 /// `Button.onClick` 같은 UnityEvent 에 실제로 걸린 persistent call 하나.
 ///
 /// `WatchList.cs`/`LiveState.cs`가 이 객체 자신의 component 에서 읽어 낸 것이라, 클릭했을 때
-/// 정말 무언가가 일어난다는 근거다 — 이 배열이 비어 있으면 `button_click` 을 보내도 아무 일도
+/// 정말 무언가가 일어난다는 근거다 — 이 배열이 비어 있으면 `click` 을 보내도 아무 일도
 /// 안 날 수 있다.
 export interface OfferedClick {
   event: string;

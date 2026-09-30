@@ -30,7 +30,7 @@ namespace UnityPlayMcp
         private readonly Action<Vector2> cursorMoved;
         private readonly Action<Vector2> pointerMoved;
 
-        /// <summary>ID 로 겨누는 포인터 클릭과 드래그. 프레임 순서를 쥔 쪽이라 따로 산다.</summary>
+        /// <summary>ID 로 겨누는 포인터 드래그와 hover. 프레임 순서를 쥔 쪽이라 따로 산다.</summary>
         private readonly PointerActions pointerActions;
 
         // The time scale as it was when pause_time froze the game, so resume_time gives back the
@@ -60,7 +60,7 @@ namespace UnityPlayMcp
             startupScenePath = startupScene.path;
 
             // Moving onto a target keeps the reported pointer under the drawn cursor, but stays a
-            // silent move: firing hover events out of button_click would change what an existing
+            // silent move: firing hover events out of enter_text would change what an existing
             // caller does to the game. Only move_mouse claims the pointer outright.
             cursorMoved = VirtualInput.MoveMouse;
             pointerMoved = position =>
@@ -83,14 +83,6 @@ namespace UnityPlayMcp
         {
             switch (method)
             {
-                case "button_click":
-                    yield return ExecuteButtonClick(actionId, parameters, completed);
-                    yield break;
-
-                case "pointer_click":
-                    yield return pointerActions.Click(actionId, parameters, completed);
-                    yield break;
-
                 case "pointer_drag":
                     yield return pointerActions.Drag(actionId, parameters, completed);
                     yield break;
@@ -108,11 +100,11 @@ namespace UnityPlayMcp
                     yield break;
 
                 case "mouse_down":
-                    completed(ExecuteMouseButton(actionId, method, parameters, true));
+                    yield return ExecuteMouseButton(actionId, method, parameters, true, completed);
                     yield break;
 
                 case "mouse_up":
-                    completed(ExecuteMouseButton(actionId, method, parameters, false));
+                    yield return ExecuteMouseButton(actionId, method, parameters, false, completed);
                     yield break;
 
                 case "key_click":
@@ -162,44 +154,6 @@ namespace UnityPlayMcp
             }
 
             completed(ActionResultDto.Failure(actionId, "Unsupported method: " + method));
-        }
-
-        private IEnumerator ExecuteButtonClick(
-            int actionId,
-            List<object> parameters,
-            Action<ActionResultDto> completed)
-        {
-            if (!TryReadId(parameters, 0, out var targetId))
-            {
-                completed(ActionResultDto.Failure(actionId, "button_click requires params [targetId]."));
-                yield break;
-            }
-
-            if (!targetLookup.TryGetTarget(targetId, out var target))
-            {
-                completed(ActionResultDto.Failure(actionId, "Unknown target id: " + targetId));
-                yield break;
-            }
-
-            if (!target.CanClick)
-            {
-                completed(ActionResultDto.Failure(actionId, "Target is not a Button: " + targetId));
-                yield break;
-            }
-
-            if (!target.IsClickInteractable)
-            {
-                completed(ActionResultDto.Failure(actionId, NotInteractable(targetId)));
-                yield break;
-            }
-
-            yield return cursorController.MoveTo(target.RectTransform, cursorMoved);
-
-            // The target was a live Button before the cursor moved, so a refusal now means the game
-            // locked or tore it down while the cursor was on its way.
-            completed(target.Click()
-                ? ActionResultDto.Success(actionId)
-                : ActionResultDto.Failure(actionId, NotInteractable(targetId)));
         }
 
         private IEnumerator ExecuteEnterText(
@@ -265,18 +219,35 @@ namespace UnityPlayMcp
             completed(ActionResultDto.Success(actionId));
         }
 
-        private ActionResultDto ExecuteMouseButton(
-            int actionId, string method, List<object> parameters, bool press)
+        /// <summary>
+        /// 버튼을 누르거나 놓고, 한 프레임을 넘긴 뒤에 완료를 알린다.
+        /// </summary>
+        /// <remarks>
+        /// 프레임을 넘기는 이유는 <c>click</c> 이 <c>move_mouse</c>, <c>mouse_down</c>, <c>mouse_up</c> 을
+        /// 한 batch 로 잇기 때문이다. <c>VirtualMouseState.Press</c> 는 눌린 프레임의 <b>다음</b>
+        /// 프레임부터 눌린 것으로 답하므로, 누름 직후 같은 프레임에 놓으면
+        /// <see cref="VirtualMouseMessenger"/> 는 눌린 적이 없는 것으로 보고 <c>OnMouseDown</c> 이 빠진다.
+        /// 놓은 뒤에도 넘기는 것은 <c>OnMouseUp</c>/<c>OnMouseUpAsButton</c> 이 그 프레임에 배달되고,
+        /// 뒤따르는 action 이 그것을 앞지르지 않게 하려는 것이다.
+        /// </remarks>
+        private IEnumerator ExecuteMouseButton(
+            int actionId,
+            string method,
+            List<object> parameters,
+            bool press,
+            Action<ActionResultDto> completed)
         {
             if (!TryReadMouseButton(parameters, out var button))
             {
-                return ActionResultDto.Failure(
+                completed(ActionResultDto.Failure(
                     actionId,
-                    method + " requires params [] or [button], where button is 0, 1, or 2.");
+                    method + " requires params [] or [button], where button is 0, 1, or 2."));
+                yield break;
             }
 
             SetButton(button, press);
-            return ActionResultDto.Success(actionId);
+            yield return null;
+            completed(ActionResultDto.Success(actionId));
         }
 
         /// <summary>
