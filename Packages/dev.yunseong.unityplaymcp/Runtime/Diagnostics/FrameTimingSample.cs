@@ -1,13 +1,11 @@
 namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
-    /// 한 프레임의 CPU·GPU 분해 reading 값.
+    /// 한 프레임의 CPU·GPU 시간 분해.
     ///
-    /// 단위는 밀리초다. Unity의 <c>FrameTiming</c>이 이미 ms로 주므로 이 경계에서 환산하지 않는다.
-    /// 초 단위로 모으는 <c>FrameTimeStatistics</c>와 헷갈리지 말 것.
+    /// 단위는 <c>FrameTiming</c> 과 같은 밀리초다. 초 단위인 <c>FrameTimeStatistics</c> 와 다르다.
     ///
-    /// 값이 0이나 음수로 오는 항목이 있다. 드라이버·플랫폼에 따라 GPU 타이밍이 채워지지 않고,
-    /// 렌더 스레드가 없는 구성에서는 렌더 스레드 시간이 0이다. 집계 쪽에서 미수집으로 다룬다.
+    /// 드라이버·플랫폼에 따라 GPU 시간이나 렌더 스레드 시간이 0 이하로 온다. 집계 쪽에서 미수집으로 다룬다.
     /// </summary>
     internal readonly struct FrameTimingSample
     {

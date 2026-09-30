@@ -3,8 +3,7 @@ namespace UnityPlayMcp.Diagnostics
     /// <summary>
     /// 한 집계 구간의 프레임타임 분포.
     ///
-    /// 평균만으로는 체감 끊김이 설명되지 않는다. 평균 60fps여도 구간에 120ms 프레임이
-    /// 몇 개 끼면 사용자는 끊긴다고 느끼므로, 백분위와 최악 프레임 기준값을 함께 담는다.
+    /// 평균만으로는 끊김이 드러나지 않으므로 백분위와 최악 프레임 값을 함께 담는다.
     /// </summary>
     internal readonly struct FrameTimeStatistics
     {
@@ -42,8 +41,7 @@ namespace UnityPlayMcp.Diagnostics
         /// <summary>
         /// 집계된 프레임타임의 합.
         ///
-        /// 집계 주기와 다르다. 구간의 일부만 포커스를 가졌다면 5초 주기에 0.2초만 담길 수 있고,
-        /// 이 값이 없으면 소비자가 "5초 동안 12프레임"과 "0.2초 동안 12프레임"을 구분하지 못한다.
+        /// 집계 주기와 다르다. 포커스를 잃은 프레임은 빠지므로 5초 주기에 0.2초만 담길 수 있다.
         /// </summary>
         public float SampledSeconds { get; }
 
@@ -59,9 +57,8 @@ namespace UnityPlayMcp.Diagnostics
         /// <summary>
         /// 최악 0.1% 프레임의 평균 프레임타임을 FPS로 환산한 값.
         ///
-        /// 대상 프레임 수는 <c>max(1, ceil(FrameCount / 1000))</c>이다. 5초 × 60fps면 약 300
-        /// 샘플뿐이라 대상이 1프레임으로 떨어져 <see cref="MaxSeconds"/>의 역수와 같아진다.
-        /// 통계의 오류가 아니라 창 길이의 한계다.
+        /// 대상 프레임 수는 <c>max(1, ceil(FrameCount / 1000))</c>이다. 샘플이 1000 개 이하면
+        /// <see cref="MaxSeconds"/>의 역수와 같다.
         /// </summary>
         public float PointOnePercentLowFps { get; }
 
@@ -71,8 +68,7 @@ namespace UnityPlayMcp.Diagnostics
         public float HitchThresholdSeconds { get; }
 
         /// <summary>
-        /// 이 구간에 적용한 프레임 예산. 같은 프레임타임이라도 30fps 캡이 걸린 빌드와 144Hz
-        /// 모니터에서 의미가 다르므로, 해석 근거로 함께 싣는다.
+        /// 이 구간에 적용한 프레임 예산. 같은 프레임타임도 예산에 따라 의미가 달라 함께 싣는다.
         /// </summary>
         public float BudgetSeconds { get; }
     }

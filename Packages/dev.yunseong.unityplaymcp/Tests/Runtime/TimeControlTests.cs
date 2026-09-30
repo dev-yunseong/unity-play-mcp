@@ -7,8 +7,8 @@ using UnityEngine;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// pause_time and resume_time, which are the only actions that change state the game keeps
-    /// after the SDK is done with it. What they must never do is leave it changed.
+    /// pause_time and resume_time change state the game keeps after the SDK is done, so they must
+    /// always restore it.
     /// </summary>
     public sealed class TimeControlTests
     {

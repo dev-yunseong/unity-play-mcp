@@ -11,8 +11,7 @@ import {
   type WaitTimerApi,
 } from "../src/wait.js";
 
-/// `PulseStore.fold` 는 게임이 실제로 보내는 wire 모양(`m`)만 읽는다 — `readComponent` 가
-/// `members` 는 어긋난 키로 본다. `pulse.test.ts` 의 같은 이름 helper 와 같은 이유다.
+/// `PulseStore.fold` 는 게임이 보내는 `m` 만 읽고 `members` 는 어긋난 키로 본다.
 function object(id: number, selector: string, value: number): PulseObject {
   return {
     id,
@@ -34,9 +33,7 @@ function condition(overrides: Partial<WaitCondition> = {}): WaitCondition {
   return { timeoutMilliseconds: 1_000, ...overrides };
 }
 
-/// `waitForCondition` 이 거는 timeout 하나를 손으로 쥐고 있다가 원할 때 터뜨리는 가짜 시계.
-/// `connection.test.ts` 의 `FakeTimers` 와 같은 모양이지만, 여기서는 `wait.ts` 가 거는 timer
-/// 하나만 있으면 되므로 실제 시간을 전혀 재우지 않는다.
+/// `waitForCondition` 의 timeout 을 원할 때 실행하는 가짜 시계. 실제 시간을 기다리지 않는다.
 class FakeTimers implements WaitTimerApi {
   private nextId = 1;
   private readonly callbacks = new Map<number, () => void>();
@@ -157,8 +154,7 @@ test("cancelling the signal ends the wait as cancelled and cleans up every subsc
   assert.equal(timers.pendingCount, 0);
   assert.equal(connection.listenerCount, 0);
 
-  // 취소 뒤에 온 신호는 이미 끝난 대기를 다시 resolve 하지 않는다. reading 이나 timeout 이
-  // 더 온다 해도 조용히 무시되어야 한다 — 구독을 이미 뗐으므로 store.fold 는 아무도 못 듣는다.
+  // 취소 뒤에 온 reading 이나 timeout 은 끝난 대기를 다시 resolve 하지 않아야 한다.
   store.fold(pulse({ whole: true, scene: "Story" }));
   assert.equal((await waiting).kind, "cancelled");
 });
@@ -220,7 +216,7 @@ test("unmetReasons matches memberEquals by exact selector, on, member, and among
     memberEquals: [{ selector: "Dialogue", on: "DialogueBox", member: "IsStreaming", equals: true }],
   })), []);
 
-  // `among` 을 안 주면 `among` 이 없는 멤버에만 맞는다 — among:1 짜리 "slot" 은 못 찾는다.
+  // `among` 을 안 주면 `among` 이 없는 멤버에만 맞으므로 among:1 인 "slot" 은 찾지 못한다.
   assert.deepEqual(unmetReasons(state, condition({
     memberEquals: [{ selector: "Dialogue", on: "DialogueBox", member: "slot", equals: "one" }],
   })), ["Dialogue.DialogueBox.slot was not found in the current reading"]);

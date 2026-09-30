@@ -5,14 +5,12 @@ namespace UnityPlayMcp
 {
     /// <summary>
     /// The axis values the agent is holding, keyed by Input Manager axis name. The legacy Input
-    /// Manager exposes no runtime API for its axis-to-key bindings, so a virtual key press cannot
-    /// reach <c>GetAxis</c>. The agent names the axis and states the value instead.
+    /// Manager has no runtime API for axis-to-key bindings, so a virtual key press cannot reach
+    /// <c>GetAxis</c>.
     /// </summary>
     /// <remarks>
-    /// A button is an axis in Unity: <c>Jump</c> is an axis entry whose positive button is a key,
-    /// and the same entry reads as a bool through <c>GetButton</c> and as a float through
-    /// <c>GetAxis</c>. One store therefore serves both, and a positive value is what "the button is
-    /// down" means here.
+    /// In Unity a button is an axis entry read through both <c>GetButton</c> and <c>GetAxis</c>,
+    /// so one store serves both. A positive value means the button is down.
     /// </remarks>
     internal sealed class VirtualAxisState
     {
@@ -20,9 +18,8 @@ namespace UnityPlayMcp
             new Dictionary<string, AxisHold>(StringComparer.Ordinal);
 
         /// <summary>
-        /// Holds an axis until <see cref="Release"/> asks for it back. Setting an axis that is
-        /// already held changes the value and keeps the original start frame, so a caller repeating
-        /// the same request does not make <see cref="GetButtonDown"/> fire a second time.
+        /// Holds an axis until <see cref="Release"/>. Re-setting a held axis keeps its start frame,
+        /// so <see cref="GetButtonDown"/> does not fire twice.
         /// </summary>
         public void Set(string axisName, float value, int currentFrame)
         {
@@ -37,9 +34,8 @@ namespace UnityPlayMcp
                 return;
             }
 
-            // The frame after the request, matching the virtual keyboard and mouse: the action is
-            // handled in the manager's Update, and a consumer polling in its own Update must not
-            // miss it because of script execution order.
+            // Starts next frame, like the virtual keyboard and mouse, so a consumer polling in
+            // Update does not miss it due to script execution order.
             holds[axisName] = new AxisHold(value, currentFrame + 1);
         }
 
@@ -60,8 +56,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// False when the agent is not driving this axis, which is what lets the proxy fall through
-        /// to the real value.
+        /// False when the agent is not driving this axis, so the proxy falls back to the real value.
         /// </summary>
         public bool TryGetValue(string axisName, int frame, out float value)
         {
@@ -91,9 +86,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Drops holds whose up edge has already been read. The list is allocated only once
-        /// something has actually expired, because this runs on every frame and an empty list per
-        /// frame is garbage nobody asked for.
+        /// Drops holds whose up edge has passed. Runs every frame, so the list is allocated only when needed.
         /// </summary>
         public void Refresh(int frame)
         {
@@ -134,14 +127,11 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// The hold in force on this frame, or null. A hold scheduled for a later frame is not in
-        /// force yet, and a release scheduled for a later frame leaves it in force until then.
+        /// The hold in force on this frame (from its start frame until its release frame), or null.
         /// </summary>
         /// <remarks>
-        /// Button edges come from the hold starting and being released, not from the value crossing
-        /// zero. Driving an axis from 1 to -1 through <c>Set</c> leaves <see cref="GetButton"/>
-        /// correct — it reads false — but reports no <see cref="GetButtonUp"/> for the crossing.
-        /// Button-shaped callers hold and release, which does produce both edges.
+        /// Button edges come from hold start and release, not from the value crossing zero. Moving
+        /// from 1 to -1 via <c>Set</c> reports no <see cref="GetButtonUp"/>.
         /// </remarks>
         private AxisHold HoldOn(string axisName, int frame)
         {

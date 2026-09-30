@@ -11,16 +11,14 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// ID 로 겨누는 <c>pointer_click</c> 과 <c>pointer_drag</c>.
+    /// id 로 대상을 지정하는 <c>pointer_click</c> 과 <c>pointer_drag</c> 를 확인한다.
     /// </summary>
     /// <remarks>
-    /// 에디트 모드로 내려올 수 없다. <c>OnMouse*</c> 를 배달하는 것은 host 의 <c>Update</c> 안
-    /// <c>VirtualInput.AdvanceFrame</c> 이고, uGUI 는 <c>OnEnable</c> 에서야 graphic 을 raycast
-    /// 대상으로 등록한다.
+    /// <c>OnMouse*</c> 는 host <c>Update</c> 의 <c>VirtualInput.AdvanceFrame</c> 이 배달하고, uGUI 는
+    /// <c>OnEnable</c> 에서 graphic 을 raycast 대상으로 등록하므로 play mode 에서만 돈다.
     /// <para>
-    /// host 는 프레임을 돌리는 데만 쓰고 액션은 이 테스트가 만든 <see cref="ActionExecutor"/> 로
-    /// 직접 돌린다. 결과 DTO 를 읽어야 하는데 host 의 배치 실행은 결과를 소켓으로만 내보내기
-    /// 때문이고, 덤으로 host 의 private 메서드에 reflection 으로 손을 넣지 않게 된다.
+    /// host 의 batch 실행은 결과를 socket 으로만 보내므로, host 는 프레임만 돌리고 action 은
+    /// 이 test 가 만든 <see cref="ActionExecutor"/> 로 실행해 결과 DTO 를 읽는다.
     /// </para>
     /// </remarks>
     public sealed class PointerTargetActionTests
@@ -35,8 +33,7 @@ namespace UnityPlayMcp.Tests
         [SetUp]
         public void SetUp()
         {
-            // 씬을 넘어 살아남는 host 가 하나라도 남아 있으면 아래에서 만드는 것이 중복이 되고,
-            // 중복은 Awake 에서 스스로를 파괴한다. 파괴된 host 는 프레임을 돌리지 않는다.
+            // 남은 host 가 있으면 새 host 가 중복으로 Awake 에서 스스로를 파괴해 프레임을 돌리지 않는다.
             foreach (var stale in Object.FindObjectsOfType<UnityPlayMcpHost>(true))
             {
                 Object.DestroyImmediate(stale.gameObject);
@@ -46,8 +43,7 @@ namespace UnityPlayMcp.Tests
         [TearDown]
         public void TearDown()
         {
-            // 가상 입력은 정적이라 테스트 사이를 넘어간다. 버튼을 쥔 채 끝난 테스트가 다음
-            // 테스트를 엉뚱한 곳에서 실패시킨다.
+            // 가상 입력은 static 이라, 버튼을 쥔 채 끝난 test 가 다음 test 를 실패시킨다.
             VirtualInput.ReleaseAllVirtualInput();
 
             foreach (var alive in spawned)
@@ -66,8 +62,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// issue #59 그 자체. collider 로만 입력을 받는 오브젝트를 ID 로 클릭한다. 예전에는
-        /// <c>Target is not a Button</c> 으로 끝나던 자리다.
+        /// collider 로만 입력을 받는 오브젝트를 id 로 클릭한다 (#59).
         /// </summary>
         [UnityTest]
         public IEnumerator PointerClick_ReachesTheOnMouseHandlersOfAColliderTarget()
@@ -82,15 +77,14 @@ namespace UnityPlayMcp.Tests
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(target.Messages, Does.Contain("down"), "pointer_click did not reach OnMouseDown");
             Assert.That(target.Messages, Does.Contain("up"));
-            // 누른 그 오브젝트 위에서 놓였으므로 엔진이라면 여기서 버튼 클릭을 알린다.
+            // 누른 오브젝트 위에서 놓았으므로 upAsButton 도 와야 한다.
             Assert.That(target.Messages, Does.Contain("upAsButton"));
             Assert.That(VirtualInput.GetMouseButton(0), Is.False, "the button was left held");
         }
 
         /// <summary>
-        /// collider 가 자식에 앉은 배치. 스프라이트 하나에 빈 부모를 씌우는 흔한 모양이고, scan 이
-        /// 보고하는 id 는 대개 그 부모다. 엔진이 고르는 것은 자식이므로 자식이 답해도 성공이다 —
-        /// 사람이 같은 자리를 클릭해도 같은 자식이 받는다.
+        /// collider 가 자식에 있는 경우. scan 이 보고하는 id 는 보통 부모지만 엔진은 자식을 고르므로
+        /// 자식이 받아도 성공이다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerClick_ReachesATargetWhoseColliderSitsOnAChild()
@@ -111,13 +105,12 @@ namespace UnityPlayMcp.Tests
             var hit = result.ReturnValue as PointerHitDto;
             Assert.That(hit, Is.Not.Null);
             Assert.That(hit.TargetId, Is.EqualTo(parent.GetInstanceID()));
-            // 청한 것과 답한 것이 다르고, 그 다름이 보고에 남아야 한다.
+            // 요청한 대상과 실제로 맞은 대상이 다르면 그 차이가 결과에 남아야 한다.
             Assert.That(hit.HitId, Is.EqualTo(child.gameObject.GetInstanceID()));
         }
 
         /// <summary>
-        /// 겨눌 면적이 없는 대상. collider 도 renderer 도 RectTransform 도 없으면 포인터가 닿을
-        /// 자리가 없고, 그것은 비활성이나 파괴와 다른 실패다.
+        /// collider, renderer, RectTransform 이 모두 없는 대상은 비활성이나 파괴와 다른 오류로 거절한다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerClick_RefusesATargetWithNothingToAimAt()
@@ -139,13 +132,13 @@ namespace UnityPlayMcp.Tests
             Assert.That(result.Error, Does.Contain("bare transform"));
         }
 
-        /// <summary>화면 밖 대상. 겨눌 좌표가 화면 안에 없다는 것을 그 숫자로 말한다.</summary>
+        /// <summary>화면 밖 대상은 좌표가 화면 밖이라는 오류로 거절한다.</summary>
         [UnityTest]
         public IEnumerator PointerClick_RefusesATargetThatSitsOffScreen()
         {
             CreateRuntime();
             var offScreen = CreateGraphicTarget("off screen target", 0.5f);
-            // 화면 오른쪽 바깥으로. anchor 가 좌하단이라 이 값이 그대로 픽셀이다.
+            // anchor 가 좌하단이라 이 값이 그대로 픽셀 좌표다.
             ((RectTransform)offScreen.transform).anchoredPosition =
                 new Vector2(Screen.width + 500f, Screen.height * 0.5f);
             yield return null;
@@ -175,8 +168,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// <c>Button</c> 도 실제 입력으로 닿는다. <c>button_click</c> 처럼 <c>onClick</c> 을 직접
-        /// 부르는 것이 아니라 포인터가 눌러서 나는 클릭이다.
+        /// <c>Button</c> 은 <c>onClick</c> 직접 호출이 아니라 실제 pointer 입력으로 클릭된다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerClick_PressesAButtonThroughTheRealInputPath()
@@ -214,14 +206,13 @@ namespace UnityPlayMcp.Tests
             Assert.That(hit.TargetId, Is.EqualTo(target.gameObject.GetInstanceID()));
             Assert.That(hit.HitId, Is.EqualTo(target.gameObject.GetInstanceID()));
             Assert.That(hit.Hit, Is.EqualTo("reported target"));
-            // 좌상단 기준으로 보고한다. 그래야 이 값을 그대로 move_mouse 로 되쓸 수 있다.
+            // 좌상단 기준으로 보고해 move_mouse 에 그대로 쓸 수 있게 한다.
             Assert.That(hit.X, Is.GreaterThanOrEqualTo(0f).And.LessThanOrEqualTo(Screen.width));
             Assert.That(hit.Y, Is.GreaterThanOrEqualTo(0f).And.LessThanOrEqualTo(Screen.height));
         }
 
         /// <summary>
-        /// 비활성과 파괴는 에이전트가 서로 다르게 대응해야 하는 실패다. 하나는 게임을 움직여
-        /// 켜야 하고, 하나는 씬을 다시 읽어야 한다.
+        /// 비활성과 파괴는 에이전트의 대응이 다르므로 다른 오류로 보고한다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerClick_TellsAnInactiveTargetApartFromADestroyedOne()
@@ -252,8 +243,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 가려진 대상은 불일치로 거절하고, 무엇이 가렸는지 이름으로 말한다. 그 이름이 없으면
-        /// 에이전트는 무엇을 치워야 하는지 모른다.
+        /// 가려진 대상은 거절하고, 가린 오브젝트의 이름을 오류에 넣는다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerClick_RefusesACoveredTargetAndNamesWhatCoveredIt()
@@ -261,7 +251,7 @@ namespace UnityPlayMcp.Tests
             CreateRuntime();
             var covered = CreateGraphicTarget("covered target", 0.5f);
             var coverer = CreateGraphicTarget("coverer", 0.5f);
-            // 나중에 그려지는 형제가 raycast 를 먼저 답한다.
+            // 나중에 그려지는 형제가 raycast 에 먼저 맞는다.
             coverer.transform.SetAsLastSibling();
             yield return null;
             IsolateFixtureRaycaster();
@@ -295,8 +285,8 @@ namespace UnityPlayMcp.Tests
             Assert.That(source.Events.First(), Is.EqualTo("down"));
             Assert.That(source.Events[1], Is.EqualTo("beginDrag"));
             Assert.That(source.Events, Has.Some.EqualTo("drag"));
-            // 활강의 걸음 수는 프레임 속도가 정한다. 못 박을 수 있는 것은 순서와, up 이 endDrag
-            // 앞에 온다는 것 — Unity 자신의 input module 이 두는 자리다.
+            // drag 횟수는 프레임 속도에 따라 다르다. 순서와, up 이 endDrag 앞에 오는 것만 확인한다
+            // (Unity input module 과 같은 순서).
             Assert.That(
                 source.Events.Skip(2).Where(name => name != "drag"),
                 Is.EqualTo(new[] { "up", "endDrag" }));
@@ -305,8 +295,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// pointer capture. 포인터가 원본을 떠난 뒤에도 드래그는 원본이 받는다. 이것이 없으면
-        /// 포인터가 경계를 넘는 순간 드래그가 끊긴다.
+        /// pointer capture: 포인터가 원본을 벗어나도 drag 는 원본이 계속 받는다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerDrag_KeepsSendingToTheSourceAfterThePointerHasLeftIt()
@@ -327,7 +316,7 @@ namespace UnityPlayMcp.Tests
             var destinationCentre = destination.transform.position.x;
             var lastDrag = source.DragPositions.Last().x;
 
-            // 마지막 drag 는 목적지 쪽에서 났는데도 원본이 받았다. 그것이 capture 다.
+            // 마지막 drag 가 목적지 근처에서 났어도 원본이 받았어야 한다.
             Assert.That(
                 Mathf.Abs(lastDrag - destinationCentre),
                 Is.LessThan(Mathf.Abs(lastDrag - sourceCentre)),
@@ -335,8 +324,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 목적지를 못 풀면 아무것도 쥐지 않은 채로 끝난다. 두 자리를 모두 누르기 전에 확인하는
-        /// 이유가 이것이다.
+        /// 목적지를 찾지 못하면 누르기 전에 실패해 버튼을 쥔 채로 남기지 않는다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerDrag_HoldsNothingWhenTheDestinationCannotBeResolved()
@@ -380,7 +368,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// host 는 <c>AdvanceFrame</c> 을 돌리려고만 세운다. 액션은 여기서 만든 executor 가 돈다.
+        /// host 는 <c>AdvanceFrame</c> 을 돌리는 데만 쓰고 action 은 여기서 만든 executor 가 실행한다.
         /// </summary>
         private void CreateRuntime()
         {
@@ -400,7 +388,7 @@ namespace UnityPlayMcp.Tests
             string method, List<object> parameters, System.Action<ActionResultDto> completed)
         {
             yield return executor.Execute(NextActionId(), method, parameters, completed);
-            // 결과를 받은 프레임과 마지막 OnMouse* 가 배달되는 프레임이 같아, 한 프레임을 더 준다.
+            // 결과가 온 프레임에 마지막 OnMouse* 가 배달되므로 한 프레임을 더 기다린다.
             yield return null;
         }
 
@@ -417,8 +405,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// <c>VirtualMouseMessenger</c> 는 <c>Camera.main</c> 에서 쏜 레이로 대상을 고른다.
-        /// <c>MainCamera</c> 태그가 없으면 고를 것이 아예 없다.
+        /// <c>VirtualMouseMessenger</c> 는 <c>Camera.main</c> 에서 ray 를 쏘므로 <c>MainCamera</c> tag 가 필요하다.
         /// </summary>
         private MouseMessageFixtureBehaviour CreateColliderTarget()
         {
@@ -438,7 +425,7 @@ namespace UnityPlayMcp.Tests
             return targetObject.AddComponent<MouseMessageFixtureBehaviour>();
         }
 
-        /// <param name="acrossTheScreen">화면 가로에서 차지할 자리, 0 에서 1 사이.</param>
+        /// <param name="acrossTheScreen">화면 가로 위치 비율 (0–1).</param>
         private PointerFixtureBehaviour CreateGraphicTarget(string name, float acrossTheScreen)
         {
             if (canvasObject == null)
@@ -472,8 +459,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// fixture 의 canvas 만 포인터 레이에 답하게 둔다. 게임 자신의 canvas 가 먼저 답하면
-        /// 액션이 엉뚱한 오브젝트에 닿는다.
+        /// fixture canvas 의 raycaster 만 남긴다. 게임 canvas 가 먼저 맞으면 action 이 다른 오브젝트에 닿는다.
         /// </summary>
         private void IsolateFixtureRaycaster()
         {

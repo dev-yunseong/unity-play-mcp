@@ -1,11 +1,10 @@
 namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
-    /// 설정을 어느 자리에 쓸지. Unity project 하나에만 적용할지, 이 계정의 모든 project 에 적용할지.
+    /// 설정을 Unity project 하나에 적용할지, 이 계정의 모든 project 에 적용할지.
     /// </summary>
     /// <remarks>
-    /// 이 값은 agent 마다 다른 설정 파일 자리를 고르는 데만 쓴다. scope 를 바꾼다고 이미 쓰여 있는 설정이
-    /// 옮겨지거나 지워지지는 않는다.
+    /// 설정 파일 경로를 고르는 데만 쓴다. scope 를 바꿔도 이미 쓴 설정은 옮기거나 지우지 않는다.
     /// </remarks>
     internal enum McpConfigScope
     {

@@ -7,76 +7,62 @@ using System.Text;
 
 namespace UnityPlayMcp.Affordances.Live
 {
-    /// <summary>게임이 도는 동안 읽어 달라고 근거가 청하는 멤버 하나.</summary>
+    /// <summary>게임이 도는 동안 읽을 멤버 하나.</summary>
     internal sealed class Watched
     {
         internal string Declaring;
         internal string Member;
 
-        /// <summary>아무것도 읽기 전에, 분석이 그 값이 무엇이라고 말했는지.</summary>
+        /// <summary>분석이 기록한 값의 타입 이름.</summary>
         /// <remarks>
-        /// 값을 그것이 출력되는 모습이 아니라 그것인 바로 보고할 수 있도록 나른다. bool 은 필드에서 <c>True</c> 로 나오고
-        /// int 는 <c>1</c> 로 나오는데, 리포트는 그 둘이 닮아 보이지 않게 하는 법을 오래 배워 왔다.
+        /// 출력 모양이 아니라 타입으로 값을 보고하기 위해 싣는다. bool <c>True</c> 와 int <c>1</c> 을 구분해야 한다.
         /// </remarks>
         internal string Type;
 
         internal bool Static;
 
         /// <summary>
-        /// 컴파일러가 이름을 바꿨을 때, 리플렉션 말고 나머지 전부가 이것을 부르는 이름.
+        /// 컴파일러가 바꾼 이름일 때 원래 프로퍼티 이름.
         /// </summary>
         /// <remarks>
-        /// 자동 프로퍼티는 <c>&lt;Instance&gt;k__BackingField</c> 라 불리는 필드다. 그 이름이 그것을 찾아 주고 다른 무엇도
-        /// 그것을 쓰지 않는다 — 근거는 <c>StageDataSingleton.Instance</c> 라고 말한다 — 그래서 필드 이름을 댄 pulse 는 그것이
-        /// 답하는 조건에 이어지지 않는다.
+        /// 자동 프로퍼티의 필드 이름은 <c>&lt;Instance&gt;k__BackingField</c> 라, <c>evidence</c> 의
+        /// <c>StageDataSingleton.Instance</c> 와 이으려면 프로퍼티 이름이 필요하다.
         /// </remarks>
         internal string Property;
 
-        /// <summary>필드 자체가 값이 아닐 때, 그 필드에서 무엇을 읽었는지.</summary>
+        /// <summary>필드 자체가 값이 아닐 때 필드에서 따라갈 경로.</summary>
         internal string Via;
 
-        /// <summary>리플렉션에 물어본 뒤의 필드 그 자체. 그 전까지는 null.</summary>
+        /// <summary>리플렉션으로 찾은 필드.</summary>
         /// <remarks>
-        /// 읽을 때 <c>null</c> 이면 다른 뜻이 하나 있다: <b>컴포넌트 자신에서 <see cref="Member"/> 를 읽으라</b>는 것.
-        /// <see cref="Drawn"/> 이 그런 멤버를 만든다 — <c>Text.text</c> 뒤의 필드는 <c>m_Text</c> 이고 그것은 Unity 버전마다
-        /// 달라질 수 있는 이름이라, 필드가 아니라 프로퍼티를 읽는다. 그 길로 만든 멤버는 전부 인스턴스의 것이므로 static 목록에는
-        /// 닿지 않는다.
+        /// <c>null</c> 이면 컴포넌트에서 <see cref="Member"/> 프로퍼티를 읽는다. <see cref="Drawn"/> 이 만드는 멤버가 그렇고,
+        /// 모두 인스턴스 멤버라 static 목록에는 없다.
         /// </remarks>
         internal FieldInfo Field;
 
-        /// <summary>그것이 사는 타입. 그것을 나르는 인스턴스를 찾기 위한 것.</summary>
+        /// <summary>멤버를 선언한 타입. 인스턴스를 찾는 데 쓴다.</summary>
         internal Type Owner;
 
         /// <summary>
-        /// 조건이나 효과가 이 멤버의 이름을 댔는지, 아니면 그저 읽을 수 있을 뿐인지.
+        /// 조건이나 효과가 이 멤버를 이름 댔는지, 읽을 수 있어서 실었을 뿐인지.
         /// </summary>
         /// <remarks>
-        /// 둘 다 읽히고 둘 다 나간다. 차이는 독자가 그것으로 무엇을 해야 하는가다. 근거가 청한 멤버는 어떤 명세 줄이 걸려 있는
-        /// 것이고, 그 줄을 확인하는 독자는 정확히 그것들을 원한다. 나머지는 아직 아무도 쓰지 않은 줄을 위해 나른다 — 애초에 왜
-        /// 나르는지는 <see cref="Readable"/> 참고 — 그리고 그 둘을 똑같이 다루는 독자는 전제를 읽으려던 자리에서 게임의 상태
-        /// 전체를 읽게 된다.
-        ///
-        /// watch list 자신이 쥔 것에 대해서는 전부 참이다. 그 목록은 청해진 것 말고는 아무것도 아니기 때문이다.
+        /// 둘 다 pulse 에 실린다. 읽는 쪽이 조건을 확인할 때 게임 상태 전체가 아니라 청한 멤버만 볼 수 있게 구분한다
+        /// (<see cref="Readable"/> 참고). watch list 가 만든 멤버는 모두 true 다.
         /// </remarks>
         internal bool Asked = true;
 
-        /// <summary>이 멤버를 다른 어떤 것과도 구별해 부르는 이름.</summary>
+        /// <summary>멤버를 유일하게 가리키는 key.</summary>
         internal string Key => Declaring + "::" + Member;
     }
 
     /// <summary>
-    /// 게임이 도는 동안 무엇을 볼 것인가. 분석이 알아낸 그대로.
+    /// 분석이 어셈블리 리소스에 구워 둔 감시 대상 멤버 목록.
     /// </summary>
     /// <remarks>
-    /// 다른 SDK 는 게임더러 제 필드를 표시하라고 청했다. 그것은 결정을 두 겹으로 엉뚱한 자리에 두었다: 아무도 표시할 생각을
-    /// 못 한 필드는 리포트가 아무리 그것에 걸려 있어도 보이지 않고, 탈출구인 — 직렬화된 필드를 전부 읽기 — 쪽은 idle
-    /// 애니메이션을 상태 변화처럼 보이게 만드는데, 그래서 그것은 라이브 경로에서 쓰인 적이 없다.
+    /// 게임이 필드에 표시를 달 필요가 없다. 분석이 조건과 효과에서 감시할 멤버를 이미 뽑아 두었다.
     ///
-    /// 여기서는 표시할 것이 없다. 분석은 모든 조건과 모든 효과 뒤의 명령어를 이미 읽었으므로, 감시할 값이 있는 멤버는 어차피
-    /// 하고 있던 일에서 떨어져 나왔고, 목록은 게임의 길이가 아니라 근거가 요구하는 만큼 정확히 길다.
-    ///
-    /// 한 번 읽는다. 이름을 필드로 해석하는 일은 리플렉션이고, 폴링마다 멤버 백 개에 리플렉션을 거는 것은 그것들을 읽는
-    /// 것보다 비싸다.
+    /// 이름을 필드로 해석하는 리플렉션은 비싸므로 한 번만 하고 결과를 기억한다.
     /// </remarks>
     internal static class WatchList
     {
@@ -87,17 +73,12 @@ namespace UnityPlayMcp.Affordances.Live
         private static Dictionary<string, Offer> _offers;
 
         /// <summary>
-        /// 플레이어가 어떤 타입을 움직이게 만들 수 있는 방법들. 그것이 씬 안의 무엇에 붙어 있을 때.
+        /// 한 타입이 씬에 있을 때 플레이어가 줄 수 있는 입력: 키와 포인터.
         /// </summary>
         /// <remarks>
-        /// pulse 는 게임이 무엇을 쥐고 있는지를 말하고, 이것이 없으면 다음에 그것에 무엇을 할 수 있는지는 아무것도 말하지 않는다.
-        /// 스캔은 버튼을 스스로 찾는다 — persistent call 은 누구나 볼 수 있는 배선이다 — 그리고 이것들이 스캔이 볼 수 없는
-        /// 둘이다: 여기서 어떤 키가 뜻을 가지는가, 그리고 어떤 객체가 포인터에 답하는가. 둘 다 컴파일된 코드 안의 리터럴과
-        /// 메서드 이름이다.
+        /// 버튼의 persistent call 은 스캔이 씬에서 찾지만, 키와 포인터 handler 는 컴파일된 코드에만 있어 분석이 구워 둔다.
         ///
-        /// 씬이 아니라 타입으로 키를 잡는다. 키를 뜻 있게 만드는 것은 그것을 읽는 무언가가 지금 화면에 있다는 사실이기
-        /// 때문이다. pulse 는 거기 있는 객체들을 걷고 각각의 컴포넌트에 물으므로, 그 타입이 없는 화면은 누가 여기가 어느 화면인지
-        /// 알아내지 않아도 아무것도 내놓지 않는다.
+        /// 씬이 아니라 타입으로 묶는다. pulse 가 지금 있는 객체의 컴포넌트를 물으므로 그 타입이 없는 화면에서는 나오지 않는다.
         /// </remarks>
         internal sealed class Offer
         {
@@ -105,14 +86,9 @@ namespace UnityPlayMcp.Affordances.Live
             internal readonly List<string> Pointers = new List<string>();
         }
 
-        /// <summary>키 하나와, 그것을 누르면 무엇이 일어나는지.</summary>
+        /// <summary>키 하나와 그 키를 누를 때의 효과.</summary>
         /// <remarks>
-        /// 이름만 나르던 자리다. 그때는 씬의 키 다섯이 대등하게 실려, 어느 것이 무엇을 하는지 읽는 쪽이 알
-        /// 길이 없었다 — 실제로 Map 씬의 QA 가 그래서 전투에 진입하지 못했다. 근거는 `Return` 이 씬을
-        /// 바꾼다는 것을 알고 있었고, 그 앎이 여기서 버려지고 있었다.
-        ///
-        /// <see cref="Does"/> 가 비어 있는 것은 "아무 일도 안 한다" 가 아니라 "분석이 못 읽었다" 이다.
-        /// 그 둘은 읽는 쪽의 다음 수가 다르므로 방출에서도 갈라 쓴다.
+        /// <see cref="Does"/> 가 비어 있으면 "아무 일도 안 한다" 가 아니라 "분석이 못 읽었다" 이다. 출력에서도 구분한다.
         /// </remarks>
         internal sealed class KeyOffer
         {
@@ -120,7 +96,7 @@ namespace UnityPlayMcp.Affordances.Live
             internal readonly List<string> Does = new List<string>();
         }
 
-        /// <summary>이 타입이 무엇에 답하는지, 또는 null.</summary>
+        /// <summary>이 타입이 받는 입력, 또는 null.</summary>
         internal static Offer OfferedBy(string declaring)
         {
             All();
@@ -137,9 +113,7 @@ namespace UnityPlayMcp.Affordances.Live
         /// 게임 코드가 animator 에 건네는 모든 이름.
         /// </summary>
         /// <remarks>
-        /// Unity 는 animator 가 있는 상태를 해시로 돌려주고 그것을 말로 바꿔 주는 것은 없으므로, pulse 는 상태가 바뀌었다고만
-        /// 말하고 무엇으로 바뀌었는지는 말하지 못한다 — 화면 녹화가 이미 보여 주는 절반이고, 녹화가 줄 수 없는 절반은 아니다.
-        /// <c>IsName</c> 은 그 물음에 거꾸로 답하므로, 후보를 아는 pulse 는 물어서 상태의 이름을 댈 수 있다.
+        /// Unity 는 animator 상태를 해시로만 돌려준다. 후보 이름을 알면 <c>IsName</c> 으로 물어 상태 이름을 알아낼 수 있다.
         /// </remarks>
         internal static IReadOnlyList<string> AnimatorNames
         {
@@ -150,15 +124,13 @@ namespace UnityPlayMcp.Affordances.Live
             }
         }
 
-        /// <summary>분석은 이름을 댔으나 리플렉션이 찾지 못한 것이 몇인지.</summary>
+        /// <summary>분석이 이름 댔으나 리플렉션이 찾지 못한 멤버 수.</summary>
         /// <remarks>
-        /// 난독화가 흔한 원인이다: 목록은 코드가 컴파일될 때 가지고 있던 이름을 쥐고 있고 어셈블리는 다른 이름으로 나간다.
-        /// 건너뛰지 않고 말한다. 이백 개 멤버 중 열하나를 아무 설명 없이 보고하는 감시자는 상태가 거의 없는 게임처럼 보이기
-        /// 때문이다.
+        /// 흔한 원인은 난독화다. 세어 두지 않으면 멤버가 빠진 것이 상태가 적은 게임처럼 보인다.
         /// </remarks>
         internal static int Unresolved { get; private set; }
 
-        /// <summary>분석이 읽을 자리를 찾지 못한 값이 몇인지. 어셈블리를 통틀어 합한 것.</summary>
+        /// <summary>분석이 읽을 위치를 찾지 못한 값의 수. 모든 어셈블리의 합이다.</summary>
         internal static int Unwatchable { get; private set; }
 
         internal static IReadOnlyList<Watched> All()
@@ -182,7 +154,7 @@ namespace UnityPlayMcp.Affordances.Live
                 }
                 catch (Exception)
                 {
-                    // 동적 어셈블리이거나 리소스가 열리지 않는 어셈블리다. 건너뛰면 목록이 짧아지지 틀리지는 않는다.
+                    // 동적 어셈블리이거나 리소스가 열리지 않는 어셈블리다. 건너뛰어도 목록이 틀리지는 않는다.
                 }
             }
 
@@ -230,9 +202,8 @@ namespace UnityPlayMcp.Affordances.Live
         /// JSON 파서 없이 <c>watch</c> 배열의 각 객체를 찾는다.
         /// </summary>
         /// <remarks>
-        /// 문서는 그것을 읽는 바로 그 패키지가 쓰고, 필드 모양은 하나이며, 배열 원소 안에 중첩이 없고, 중괄호를 담은 문자열도
-        /// 없다 — 타입 이름은 그것을 담을 수 없다. 그것 하나 때문에 런타임 어셈블리에 파서를 들이는 일은 이것을 싣고 나가는 모든
-        /// 게임에 얹히는 무게이고, writer 는 오십 줄 옆에 있다.
+        /// 문서는 이 패키지의 writer 가 쓰며, 배열 원소에 중첩이 없고 중괄호를 담은 문자열도 없다. 런타임 어셈블리에 파서
+        /// 의존성을 들이지 않으려고 직접 찾는다.
         /// </remarks>
         private static IEnumerable<string> Entries(string text, string array)
         {
@@ -264,8 +235,7 @@ namespace UnityPlayMcp.Affordances.Live
                 yield return text.Substring(open + 1, close - open - 1);
                 index = close + 1;
 
-                // 다음 배열까지 달려가지 않고 이 배열 자신의 끝에서 멈춘다. 항목 뒤에 오는 것으로 안다 — 쉼표이거나 닫는 대괄호이지
-                // 그 밖의 것은 아니다 — 대괄호를 세는 방식은 필드가 제 대괄호를 나르는 제네릭 타입 이름을 쥐는 순간 틀리기 때문이다.
+                // 항목 뒤 문자가 `]` 이면 이 배열이 끝난 것이다. 제네릭 타입 이름에 대괄호가 있어 대괄호를 세지 않는다.
                 while (index < text.Length && char.IsWhiteSpace(text[index]))
                 {
                     index++;
@@ -296,8 +266,7 @@ namespace UnityPlayMcp.Affordances.Live
                 return;
             }
 
-            // private 인 것과 상속된 것 둘 다. 게임의 상태는 대개 private 이고, 기반 클래스가 선언한 필드에 대한 조건도 여전히 이
-            // 컴포넌트에 대한 조건이다.
+            // 게임 상태는 대개 private 이고 기반 클래스 필드도 이 컴포넌트의 상태라 둘 다 찾는다.
             var field = owner.GetField(
                 member,
                 BindingFlags.Instance | BindingFlags.Static |
@@ -323,19 +292,16 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 필드가 쥔 것에서 실제로 걸어갈 수 있을 때의 경로 — 아니면 없음.
+        /// 필드 타입에서 <paramref name="path"/> 를 따라갈 수 있으면 그 경로를, 아니면 null 을 돌려준다.
         /// </summary>
         /// <remarks>
-        /// pulse 마다 묻지 않고 여기서 한 번 결정한다. 타입이 어떤 멤버를 가졌는지는 게임이 도는 동안 바뀌지 않고, 옆의 이름과
-        /// 다르게 답하는 pulse 는 둘 중 어느 답보다도 나쁘기 때문이다.
+        /// 타입의 멤버는 실행 중에 바뀌지 않으므로 pulse 마다가 아니라 여기서 한 번 판단한다.
         ///
-        /// 걸어지지 않을 때는 보고하지 않고 떨어뜨린다. 근거는 필드로 가는 길에 <c>transform</c> 을 벗겨 내므로,
-        /// <c>MapMove.battle1.transform.position</c> 으로 쓰인 목적지가 여기에는 <c>GameObject</c> 위의 <c>position</c> 으로
-        /// 도착하는데 그런 멤버는 없다 — 정작 그 줄이 원하는 좌표는 이미 참조가 쓰이는 방식 그 자체다. 그것을 읽을 수 없다고 한
-        /// 탓에 열세 줄의 목적지를 잃었다. 필드가 스스로 답하게 두는 것이 경로라는 것이 있기 전에 이것이 하던 일이다.
+        /// 따라갈 수 없으면 오류로 보고하지 않고 경로만 버려 필드 값을 그대로 읽는다. <c>evidence</c> 는 <c>transform</c> 을
+        /// 벗겨 내므로 <c>MapMove.battle1.transform.position</c> 이 <c>GameObject</c> 의 <c>position</c> 으로 와서 경로가
+        /// 성립하지 않는다.
         ///
-        /// 선언된 타입에 대고 판단한다. 더 파생된 것을 쥔 필드는 이것이 볼 수 있는 것보다 많이 내놓을 수 있고, 그 값은 틀린 값이
-        /// 아니라 가지 않은 경로 하나다.
+        /// 선언 타입으로 판단하므로 더 파생된 인스턴스의 멤버 경로는 놓칠 수 있다.
         /// </remarks>
         private static string Walkable(Type from, string path)
         {
@@ -371,7 +337,7 @@ namespace UnityPlayMcp.Affordances.Live
             return path;
         }
 
-        /// <summary><c>inputs</c> 배열의 한 항목에서 꺼낸, 한 타입이 내놓는 입력들.</summary>
+        /// <summary><c>inputs</c> 배열의 한 항목에서 한 타입의 입력을 읽어 <c>_offers</c> 에 넣는다.</summary>
         private static void Offered(string entry)
         {
             var declaring = Text(entry, "\"declaring\":\"");
@@ -395,12 +361,10 @@ namespace UnityPlayMcp.Affordances.Live
         /// 키 배열을 읽는다. 각 항목은 <c>키\u0001효과\u0001효과…</c> 다.
         /// </summary>
         /// <remarks>
-        /// 배열이 평평한 이유는 <see cref="Entries"/> 에 있다. 그것은 항목의 끝을 첫 <c>}</c> 로 찾으므로
-        /// — 괄호를 셀 수 없다, 필드가 제 대괄호를 나르는 제네릭 타입 이름을 쥔다 — 키를 객체로 만들면
-        /// 항목이 첫 키에서 잘린다. 실제로 그렇게 만들었다가 키가 통째로 사라졌다.
+        /// <see cref="Entries"/> 는 항목의 끝을 첫 <c>}</c> 로 찾으므로, 키를 객체로 만들면 항목이 첫 키에서 잘린다.
+        /// 그래서 문자열 하나에 구분자로 담는다.
         ///
-        /// 구분자가 없는 항목은 옛 형식이다. 그때는 이름만 실렸고, 그 리소스로 만든 빌드도 무엇을 누를 수
-        /// 있는지는 그대로 말할 수 있어야 한다.
+        /// 구분자가 없는 항목은 키 이름만 담던 옛 형식이며 그대로 읽는다.
         /// </remarks>
         private static void Keyed(string entry, List<KeyOffer> into)
         {
@@ -409,8 +373,7 @@ namespace UnityPlayMcp.Affordances.Live
 
             foreach (var one in said)
             {
-                // 이 파일의 파서는 JSON 이스케이프를 풀지 않는다 — 값이 식별자와 경로뿐이라 그럴 일이
-                // 없었다. 구분자는 그 규칙의 첫 예외라 여기서만 푼다.
+                // 이 파일의 파서는 JSON 이스케이프를 풀지 않는다. 구분자만 예외로 여기서 푼다.
                 var parts = one.Replace("\\u0001", "\u0001").Split('\u0001');
                 var offer = new KeyOffer { Key = parts[0] };
 
@@ -424,11 +387,10 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 한 항목 안에 앉은 평평한 문자열 배열. 그 배열 자신의 끝까지.
+        /// 한 항목 안의 평평한 문자열 배열을 읽는다.
         /// </summary>
         /// <remarks>
-        /// 문서 끝까지 달리지 않고 배열로 가둔다. <see cref="Names"/> 가 그렇게 할 수 있는 것은 그것이 제 이름의 유일한 배열을
-        /// 읽기 때문이다. 이런 것 둘이 한 항목 안에 나란히 앉아 있으므로, 그러지 않으면 첫째가 둘째를 삼킨다.
+        /// 한 항목에 이런 배열이 둘(<c>keys</c>, <c>pointers</c>) 있으므로 배열의 <c>]</c> 에서 멈춰야 첫째가 둘째를 읽지 않는다.
         /// </remarks>
         private static void Listed(string entry, string key, List<string> into)
         {
@@ -486,9 +448,7 @@ namespace UnityPlayMcp.Affordances.Live
                 return;
             }
 
-            // 키 자신의 닫는 따옴표 뒤에서 시작하지 그 자리에서 시작하지 않는다. 키에서 시작하면 처음 찾은 따옴표 쌍이 키 자신의
-            // 것이고 그 이름이 첫 항목이 됐다 — 실측하니 목록이 `:[` 와 `,` 로 나왔고, 그래서 모든 상태가 이름 없이 남았으며,
-            // 이름 없는 상태는 상태를 다르게 이름 짓는 게임이 만들어내는 것이기도 해서 그 이유가 보이지 않았다.
+            // 키 앞에서 시작하면 키 자신의 따옴표 쌍이 첫 항목으로 잡히므로 `[` 에서 시작한다.
             var index = start + key.Length - 1;
             var end = text.IndexOf(']', index);
 

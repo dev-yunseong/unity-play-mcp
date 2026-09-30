@@ -4,35 +4,33 @@ using Mono.Cecil;
 namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
-    /// 피호출자가 제 말로 하는 것이, 그것을 부른 자리에서는 무엇이라 불리는가.
+    /// 피호출자 쪽 용어를 호출 지점의 호출자 용어로 옮긴 대응표.
     /// </summary>
     /// <remarks>
-    /// 피호출자의 조건은 피호출자의 객체와 그 매개변수에 대한 것이고, 둘 다 호출자의 용어 옆에서는 아무
-    /// 뜻도 없다 — 그래서 둘을 합성하는 일은 하지 않고 거절해 왔다. 거절이 옳은 것은 하나를 다른 쪽의
-    /// 말로 옮길 방법이 없는 동안뿐이다. 호출 지점에는 그 방법이 있다: 호출자가 그 메서드를 무엇에 대고
-    /// 불렀는지와 무엇을 넘겼는지를 직접 썼고, 둘 다 호출자 자신의 용어로 된 식이다.
+    /// 피호출자의 조건은 자기 객체와 매개변수에 대한 것이라 그대로는 호출자 쪽에서 뜻이 없다. 호출 지점에는
+    /// 수신 객체와 넘긴 인자가 호출자의 식으로 적혀 있으므로 그것으로 옮긴다.
     ///
-    /// 그래서 이것은 번역이지 추측이 아니다. 옮기지 못하는 것은 전부 거절하고, 어느 한 부분이라도 거절된
-    /// 조건은 아예 내놓지 않는다 — 반만 번역된 문장은 실제로는 둘인 것을 한 객체의 진술처럼 읽히게 한다.
+    /// 옮기지 못하는 항이 하나라도 있는 조건은 통째로 내놓지 않는다. 반만 옮긴 조건은 서로 다른 두 객체에 대한
+    /// 내용을 한 객체의 것처럼 읽히게 한다.
     /// </remarks>
     internal sealed class Binding
     {
-        /// <summary>피호출자의 타입. 제 <c>this</c> 에 대한 모든 항의 머리에 그 이름이 온다.</summary>
+        /// <summary>피호출자의 타입 이름. <c>this</c> 에 대한 항의 머리에 온다.</summary>
         internal string Owner;
 
-        /// <summary>호출자가 그것을 무엇에 대고 불렀는지, 그리고 그것이 누구의 것인지.</summary>
+        /// <summary>호출자가 이 메서드를 부른 수신 객체의 식.</summary>
         internal string Receiver;
 
         internal string ReceiverWhere;
 
-        /// <summary>매개변수 이름과 그 자리에 넘어간 것, 그리고 그것이 누구의 것인지.</summary>
+        /// <summary>매개변수 이름에서 그 자리에 넘어간 인자 식으로의 대응.</summary>
         internal Dictionary<string, string> Passed;
 
         internal Dictionary<string, string> PassedWhere;
 
         internal bool Anything => Receiver != null || (Passed != null && Passed.Count > 0);
 
-        /// <summary>인자를 그것이 채운 매개변수의 이름으로 부른다.</summary>
+        /// <summary>인자를 그것이 채운 매개변수의 이름에 대응시킨다.</summary>
         internal static Binding Of(
             MethodDefinition callee, string receiver, string receiverWhere,
             string[] args, string[] argWhere)
@@ -56,8 +54,8 @@ namespace UnityPlayMcp.Affordances.CodeGen
             {
                 var name = callee.Parameters[index].Name;
 
-                // 아무도 읽을 수 없는 인자이거나, 짝지을 이름이 없는 매개변수다. 빼 둔다 — 그래야 그것에 대한
-                // 항이 번역 불가로 남고 조건 전체가 거절된다.
+                // 읽을 수 없는 인자이거나 이름 없는 매개변수는 빼 둔다. 그러면 그 항이 옮길 수 없는 채로 남아 조건 전체가
+                // 거절된다.
                 if (string.IsNullOrEmpty(name) || args[index] == null)
                 {
                     continue;

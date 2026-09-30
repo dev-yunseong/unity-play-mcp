@@ -6,22 +6,16 @@ using UnityEngine;
 namespace UnityPlayMcp.Tests
 {
     /// <remarks>
-    /// scene 이 host 를 하나도 들고 있지 않은 build 에 QA 를 붙일 수 있는지가 여기서 지키는 것이다.
-    ///
-    /// 예전에는 <c>AfterSceneLoad</c> hook 이 남긴 오브젝트를 나중에 찾아보는 방식이었다. 그 hook 은
-    /// play mode 당 한 번만 돌고 <see cref="MouseMessageActionTests"/> 와 <see cref="PointerActionTests"/>
-    /// 는 SetUp 에서 살아 있는 host 를 전부 파괴하므로 — port 17311 을 자기 host 에게 넘겨야 한다 —
-    /// 이 fixture 가 그 둘보다 먼저 돌아야만 통과했다. 실행 순서는 fixture 이름의 알파벳 순이라,
-    /// 이름을 바꾸는 것만으로 조용히 깨지고 무엇이 깨졌는지는 이름과 아무 상관이 없어 보였다.
-    /// 그래서 hook 이 부르는 메서드를 직접 부른다. 순서에 기대지 않고, 등록이 살아 있는지는 attribute
-    /// 로 따로 확인한다.
+    /// scene 에 host 가 없는 build 에도 host 가 생기는지 확인한다.
+    /// 다른 fixture 가 SetUp 에서 host 를 파괴하므로 <c>AfterSceneLoad</c> hook 결과를 찾지 않고 hook 메서드를
+    /// 직접 부른다. 그래야 fixture 실행 순서에 의존하지 않는다. hook 등록은 attribute 로 따로 확인한다.
     /// </remarks>
     public sealed class HostBootstrapTests
     {
         [SetUp]
         public void SetUp()
         {
-            // 다른 fixture 가 남긴 host 를 보고 판단하지 않기 위해 먼저 비운다.
+            // 다른 fixture 가 남긴 host 를 먼저 비운다.
             ClearHosts();
         }
 
@@ -60,7 +54,7 @@ namespace UnityPlayMcp.Tests
         [Test]
         public void LeavesTheHostTheSceneAlreadyCarries()
         {
-            // scene 이 들고 온 host 는 설정을 담고 있을 수 있다. 그것을 밀어내면 안 된다.
+            // scene 에 있던 host 는 설정을 담고 있을 수 있으므로 대체하면 안 된다.
             var carried = new GameObject("Carried By The Scene").AddComponent<UnityPlayMcpHost>();
 
             UnityPlayMcpHost.SpawnInDevelopmentBuilds();
@@ -71,8 +65,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// 위 두 test 는 메서드를 직접 부르므로 hook 등록이 사라져도 통과한다. 등록이야말로 이 기능이
-        /// 실제로 도는 유일한 이유이므로 따로 지킨다.
+        /// 위 test 들은 메서드를 직접 부르므로 hook 등록이 사라져도 통과한다. 등록은 여기서 확인한다.
         /// </remarks>
         [Test]
         public void RunsItselfAfterTheFirstSceneLoads()

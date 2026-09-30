@@ -7,8 +7,7 @@ import { describeStatus, failureText } from "../src/tools.js";
 
 const ENDPOINT = "ws://127.0.0.1:17311/ws";
 
-/// 이 두 문장이 갈리는 것이 이 기능 전체다. agent 는 문장만 읽고 재시도할지 사용자에게 말할지를
-/// 정하므로, 둘이 같은 말로 수렴하면 기능이 없는 것과 같다.
+/// agent 는 이 문장만 보고 재시도할지 사용자에게 알릴지 정하므로 두 문장은 달라야 한다.
 test("a connection failure says the game is not running, not what was attempted", () => {
   const message = failureText("Unity action failed", new UnityUnreachableError(ENDPOINT));
 
@@ -73,9 +72,8 @@ test("status never prints undefined, and says what it could not read, when no re
 });
 
 test("status keeps reporting a stalled reading alongside the last one that arrived", () => {
-  // 정상 reading 이 들어오다가 그 다음 frame 이 읽히지 않으면 두 값이 동시에 있는 상태가
-  // 정상 경로에서 그대로 만들어진다 — #48 이 고치는 장면이다: reading 이 멈춘 순간에도
-  // 사람이 무엇을 못 읽었는지 알아야 한다.
+  // 정상 reading 뒤에 읽지 못한 frame 이 오면 두 값이 함께 있다. 이때도 무엇을 못 읽었는지 보여야
+  // 한다 (#48).
   const described = describeStatus({
     connected: true,
     endpoint: ENDPOINT,
@@ -93,9 +91,7 @@ test("status keeps reporting a stalled reading alongside the last one that arriv
   assert.match(described, /A frame arrived but could not be read just now: incoming is not iterable/);
 });
 
-/// #19 이 진짜로 고치는 것은 값이 안 오는 것이고, 이 test 가 보는 것은 **또 어긋났을 때 사람이
-/// 이유를 읽을 수 있는가** 다. 예전에는 `incoming is not iterable` 이 나와 아무것도 가리키지
-/// 않았다.
+/// 키가 다시 어긋났을 때 사람이 이유를 읽을 수 있는지 확인한다 (#19).
 test("status names the component and the key when a reading could not be read", () => {
   const store = new PulseStore(() => 1_000);
 
@@ -162,7 +158,7 @@ test("the store remembers when a reading arrived, even one that changed nothing"
   store.fold(frame);
   assert.equal(store.getLastReadingAt(), 5_000);
 
-  // 같은 reading 번호가 다시 와도 상태는 안 바뀌지만, 도착했다는 사실은 게임이 살아 있다는 증거다.
+  // 같은 reading 번호가 다시 오면 상태는 바뀌지 않지만 게임이 살아 있다는 뜻이다.
   clock = 6_000;
   store.fold(frame);
   assert.equal(store.getLastReadingAt(), 6_000);

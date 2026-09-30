@@ -19,11 +19,10 @@ type ListToolsHandler = (
   extra: { signal: AbortSignal },
 ) => Promise<{ tools: ListedTool[] }>;
 
-/// agent 에게 실제로 나가는 schema 를 `tools/list` 응답 그대로 가져온다.
+/// agent 에게 나가는 schema 를 `tools/list` 응답 그대로 가져온다.
 ///
-/// `server.server._requestHandlers` 는 SDK 내부 이름이라 판올림에 사라질 수 있다. 그때는 조용히
-/// 통과하지 말고 여기서 실패해야 한다 — schema 를 한 개도 보지 못한 채 초록불이 켜지는 것이 이
-/// test 가 막으려는 실수보다 나쁘다.
+/// `server.server._requestHandlers` 는 SDK 내부 이름이라 버전이 오르면 사라질 수 있다. 그때 schema 를
+/// 하나도 보지 않고 통과하지 않도록 여기서 실패한다.
 async function listRegisteredTools(): Promise<ListedTool[]> {
   const server = new McpServer({ name: "unity-play-mcp-test", version: "0" });
   const connection = {
@@ -54,12 +53,11 @@ async function listRegisteredTools(): Promise<ListedTool[]> {
   return listed.tools;
 }
 
-/// draft-07 에서만 뜻이 있는 구성을 찾는다.
+/// draft-07 에서만 의미가 있는 구성을 찾는다.
 ///
-/// Anthropic API 는 tool 의 input schema 가 draft 2020-12 이기를 요구하고, 어긋난 tool 이 하나만
-/// 있어도 요청 전체를 400 으로 거절한다. 위치별 schema 는 `prefixItems`, 정의 모음은 `$defs` 여야
-/// 하고, `dependencies` 는 `dependentSchemas` 와 `dependentRequired` 로 갈라졌으며,
-/// `exclusiveMinimum` 과 `exclusiveMaximum` 은 boolean 이 아니라 숫자다.
+/// Anthropic API 는 draft 2020-12 를 요구하고, 어긋난 tool 이 하나라도 있으면 요청 전체를 400 으로
+/// 거절한다. 2020-12 에서는 `prefixItems`, `$defs`, `dependentSchemas`/`dependentRequired` 를 쓰고
+/// `exclusiveMinimum`/`exclusiveMaximum` 은 숫자다.
 function draftSevenLeftovers(node: unknown, path: string, found: string[] = []): string[] {
   if (Array.isArray(node)) {
     node.forEach((item, index) => draftSevenLeftovers(item, `${path}[${index}]`, found));
@@ -120,10 +118,9 @@ test("every registered tool schema is free of draft-07-only constructs", async (
   assert.deepEqual(leftovers, []);
 });
 
-/// `$ref` 자체는 draft 2020-12 에서도 옳지만, zod-to-json-schema 는 같은 zod schema 를 두 곳에서
-/// 쓰면 두 번째를 처음 나온 자리를 가리키는 JSON pointer 로 적는다. 그 자리는 대개 다른 union
-/// 가지 안이라, 가지 순서만 바뀌어도 제약이 조용히 다른 것을 가리킨다. schema 는 스스로 완결돼야
-/// 한다.
+/// `$ref` 는 draft 2020-12 에서도 유효하지만, zod-to-json-schema 는 공유된 schema 의 두 번째 사용을
+/// 처음 위치를 가리키는 JSON pointer 로 적는다. 그 위치는 대개 다른 union 멤버 안이라 순서가 바뀌면
+/// 조용히 다른 것을 가리킨다.
 test("no tool schema points at another branch with $ref", async () => {
   const tools = await listRegisteredTools();
   const refs = tools.flatMap((tool) => collectRefs(tool.inputSchema, tool.name));

@@ -11,10 +11,10 @@ using UnityEngine.TestTools;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 읽는 쪽이 reading 번호를 비교해도 되는지 알 수 있는지, 그리고 청하면 전량 reading 을 받는지 (#69).
+    /// 읽는 쪽이 reading 번호를 비교해도 되는지 알 수 있는지, 요청하면 whole reading 을 받는지 확인한다 (#69).
     /// </summary>
     /// <remarks>
-    /// play mode 여야 한다. <see cref="Pulse"/> 는 coroutine 으로 박자를 세고 <c>DontDestroyOnLoad</c> carrier 에 산다.
+    /// <see cref="Pulse"/> 는 coroutine 으로 돌고 <c>DontDestroyOnLoad</c> carrier 에 있으므로 play mode 에서만 돈다.
     /// </remarks>
     public sealed class PulseRunTests
     {
@@ -28,7 +28,7 @@ namespace UnityPlayMcp.Tests
             }
         }
 
-        /// <summary>박자 간격. 전달은 여전히 1초마다라 test 는 그만큼 기다린다.</summary>
+        /// <summary>`pulse` 간격이다. 전달은 1초마다라 test 는 그만큼 기다린다.</summary>
         private const float Interval = 0.05f;
 
         [TearDown]
@@ -49,7 +49,7 @@ namespace UnityPlayMcp.Tests
         [Test]
         public void 다시_시작한_채널은_새_run_에서_1번부터_센다()
         {
-            // Begin 이 coroutine 을 시작하는 순간 첫 pulse 를 찍고, Stop 이 그것을 건넨다. 기다릴 것이 없다.
+            // Begin 이 첫 pulse 를 바로 찍고 Stop 이 그것을 전달하므로 기다리지 않는다.
             var first = new CapturingSink();
             Assert.That(Pulse.Begin(first, Interval), Is.True);
             Pulse.Stop();
@@ -67,7 +67,7 @@ namespace UnityPlayMcp.Tests
             Assert.That(firstRun, Is.Not.Empty);
             Assert.That(secondRun, Is.Not.EqualTo(firstRun));
 
-            // 번호가 같다는 것이 이 issue 의 전부다. run 이 없으면 읽는 쪽은 이것을 이미 본 reading 으로 버린다.
+            // run 이 없으면 읽는 쪽은 같은 번호를 이미 본 reading 으로 버린다.
             Assert.That(first.Documents[0], Does.Contain("\"reading\":1,"));
             Assert.That(second.Documents[0], Does.Contain("\"reading\":1,"));
             Assert.That(second.Documents[0], Does.Contain("\"whole\":true"));
@@ -91,18 +91,18 @@ namespace UnityPlayMcp.Tests
             var sink = new CapturingSink();
             Pulse.Begin(sink, Interval);
 
-            // 첫 전달을 기다린다. 그 뒤로는 아무것도 안 움직이는 빈 씬이라 박자가 찍은 pulse 는 전부 쥐고 만다.
+            // 첫 전달을 기다린다. 이후 빈 scene 이라 변화가 없어 pulse 는 전달되지 않는다.
             yield return WaitForDocuments(sink, 1, 3f);
             yield return new WaitForSecondsRealtime(Interval * 4);
             var before = sink.Documents.Count;
 
             AffordanceBootstrap.RequestWholeReading();
 
-            // 청한 뒤 한 박자는 지나야 찍힌다. Stop 이 남은 것을 건넨다.
+            // 요청 뒤 `pulse` 간격이 한 번 지나야 찍힌다. Stop 이 남은 것을 전달한다.
             yield return new WaitForSecondsRealtime(Interval * 4);
             Pulse.Stop();
 
-            // 청하기 전에 무언가 움직였다면 그 차이가 먼저 건네질 수 있다. 그래서 자리가 아니라 청한 뒤의 문서 가운데서 찾는다.
+            // 요청 전 변화가 먼저 전달될 수 있으므로 위치가 아니라 요청 뒤 문서 중에서 찾는다.
             var requested = sink.Documents.Skip(before).FirstOrDefault(document => document.Contains("\"whole\":true"));
             Assert.That(requested, Is.Not.Null, "the requested whole reading never left");
             Assert.That(RunOf(requested), Is.EqualTo(RunOf(sink.Documents[0])));

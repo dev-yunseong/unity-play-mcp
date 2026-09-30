@@ -39,8 +39,8 @@ namespace UnityPlayMcp.Tests.Input
         }
 
         /// <summary>
-        /// <c>mouse_down</c> 과 <c>KeyCode.Mouse0</c> 을 실은 <c>key_down</c> 이 같은 버튼을 가리키므로
-        /// 둘이 겹쳐 들어올 수 있다. 그때 폴링하는 게임이 클릭을 두 번으로 세면 안 된다.
+        /// <c>mouse_down</c> 과 <c>KeyCode.Mouse0</c> <c>key_down</c> 은 같은 버튼이라 겹쳐 올 수 있다.
+        /// 폴링하는 게임이 클릭을 두 번으로 세면 안 된다.
         /// </summary>
         [Test]
         public void Press_OnAButtonAlreadyHeldChangesNothing()
@@ -65,7 +65,7 @@ namespace UnityPlayMcp.Tests.Input
             mouse.Press(0, 10);
             mouse.Release(0, 11);
 
-            // 놓기가 예약된 버튼은 이미 끝난 누름이다. 다음 누름을 삼키면 연타가 한 번이 된다.
+            // 놓기가 예약된 버튼은 끝난 누름이다. 다음 누름을 삼키면 연타가 한 번이 된다.
             mouse.Press(0, 11);
 
             Assert.That(mouse.GetButtonDown(0, 12), Is.True);
@@ -136,20 +136,20 @@ namespace UnityPlayMcp.Tests.Input
             var mouse = new VirtualMouseState();
             mouse.MoveTo(new Vector2(120f, 240f), new Vector2(10f, 10f));
 
-            // Jitter from a mouse sitting still is not somebody reaching for it.
+            // Jitter from a mouse sitting still does not reclaim the pointer.
             Assert.That(mouse.OwnsPointer(new Vector2(12f, 11f)), Is.True);
 
             Assert.That(mouse.OwnsPointer(new Vector2(400f, 300f)), Is.False);
 
-            // And it stays given back: the claim is not re-taken by the hand coming to rest again.
+            // A mouse coming back to rest does not reclaim it either.
             Assert.That(mouse.OwnsPointer(new Vector2(10f, 10f)), Is.False);
         }
 
         [Test]
         public void ReleasePointer_LeavesAHeldButtonAlone()
         {
-            // The connection ending hands the pointer back, but a button still has to report its
-            // release on the right frame rather than vanishing mid-press.
+            // Ending the connection hands the pointer back, but a held button still reports its
+            // release on the right frame.
             var mouse = new VirtualMouseState();
             mouse.MoveTo(new Vector2(120f, 240f), Vector2.zero);
             mouse.Press(0, 1);
@@ -167,7 +167,7 @@ namespace UnityPlayMcp.Tests.Input
             mouse.Press(0, 1);
             mouse.Release(0, 1);
 
-            // The release frame itself still has to report the up, so only later frames may drop it.
+            // The release frame still reports the up; only later frames may drop it.
             mouse.Refresh(2);
             Assert.That(mouse.GetButtonUp(0, 2), Is.True);
 

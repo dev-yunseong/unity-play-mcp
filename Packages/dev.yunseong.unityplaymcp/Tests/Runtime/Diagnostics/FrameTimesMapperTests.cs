@@ -36,7 +36,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             Assert.AreEqual(16.7f, dto.BudgetMs, 1e-3f);
             Assert.AreEqual(2, dto.HitchCount);
 
-            // FPS는 이미 비율이라 단위 변환 대상이 아니다.
+            // FPS 는 이미 비율이라 단위를 변환하지 않는다.
             Assert.AreEqual(8.5f, dto.OnePercentLowFps, 1e-3f);
             Assert.AreEqual(8.3f, dto.PointOnePercentLowFps, 1e-3f);
         }

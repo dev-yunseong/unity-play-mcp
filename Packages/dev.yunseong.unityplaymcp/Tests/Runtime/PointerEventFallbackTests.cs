@@ -5,9 +5,8 @@ using UnityEngine.EventSystems;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// An edit-mode test on purpose: outside play mode Unity never runs <c>OnEnable</c>, so no
-    /// <see cref="EventSystem"/> ever registers itself as the current one. That is exactly the
-    /// scene the dispatcher has to survive — a game that never used uGUI.
+    /// Edit mode on purpose: outside play mode <c>OnEnable</c> never runs, so no
+    /// <see cref="EventSystem"/> becomes current, like a game that never used uGUI.
     /// </summary>
     public sealed class PointerEventFallbackTests
     {
@@ -16,8 +15,7 @@ namespace UnityPlayMcp.Tests
         {
             Assume.That(EventSystem.current, Is.Null);
 
-            // move_mouse and mouse_down still reach the virtual mouse state in such a game; this
-            // must not throw on the way there.
+            // move_mouse and mouse_down still reach the virtual mouse in such a game, so this must not throw.
             var dispatcher = new PointerEventDispatcher();
 
             Assert.DoesNotThrow(() =>

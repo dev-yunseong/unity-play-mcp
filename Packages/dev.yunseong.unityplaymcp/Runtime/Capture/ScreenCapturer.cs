@@ -10,10 +10,9 @@ namespace UnityPlayMcp.Capture
     /// Captures the composited screen, including Screen Space Overlay UI.
     /// </summary>
     /// <remarks>
-    /// Reads the back buffer the same way <see cref="Streaming.ScreenVideoSource"/> does, for the
-    /// same reason: a camera render omits overlay UI, which is most of what a QA agent needs to
-    /// judge. The virtual cursor and keyboard overlay are part of that composite and appear in
-    /// captures on purpose — the agent seeing where its own pointer is beats a clean image.
+    /// Reads the back buffer like <see cref="Streaming.ScreenVideoSource"/>, because a camera
+    /// render omits overlay UI. The virtual cursor and keyboard overlay appear on purpose so the
+    /// agent can see its own pointer.
     /// </remarks>
     internal sealed class ScreenCapturer : IScreenCapturer
     {
@@ -31,15 +30,13 @@ namespace UnityPlayMcp.Capture
 
             if (Application.isBatchMode)
             {
-                // There is no framebuffer to read. Said plainly here because the alternative is a
-                // black image that reads as a rendering bug.
+                // No framebuffer to read. Failing here avoids a black image that looks like a rendering bug.
                 completed(CapturedImage.Failed(
                     "The game runs in batchmode and has no screen to capture."));
                 yield break;
             }
 
-            // The screenshot reads the back buffer, so it is only correct once everything for this
-            // frame has been drawn — including the overlay UI this path exists for.
+            // The back buffer is complete, overlay UI included, only at end of frame.
             yield return endOfFrame;
 
             var screenWidth = Mathf.Max(2, Screen.width);
@@ -57,31 +54,27 @@ namespace UnityPlayMcp.Capture
             {
                 screen = RenderTexture.GetTemporary(
                     screenWidth, screenHeight, 0, RenderTextureFormat.BGRA32);
-                // 다른 end-of-frame 소비자가 남긴 target으로 back buffer grab이 향하지 않게 한다.
-                // 호출자가 쓰던 target은 finally에서 되돌려 이 캡처도 전역 렌더 상태를 새지 않는다.
+                // 다른 end-of-frame 소비자가 남긴 target 으로 back buffer grab 이 향하지 않게 한다.
+                // 호출자의 target 은 finally 에서 되돌린다.
                 RenderTexture.active = null;
                 ScreenCapture.CaptureScreenshotIntoRenderTexture(screen);
 
                 scaled = RenderTexture.GetTemporary(
                     size.x, size.y, 0, RenderTextureFormat.BGRA32);
 
-                // The screenshot is written in framebuffer orientation, which under D3D is upside
-                // down relative to what an encoder expects. The flip is not optional: getting it
-                // wrong produces a working-but-inverted image, which passes a smoke test and is
-                // only caught against on-screen text.
+                // The screenshot is in framebuffer orientation, upside down under D3D. Getting the
+                // flip wrong yields an inverted image that only on-screen text reveals.
                 //
-                // Crop and flip ride in the same blit: the blit samples `uv * scale + offset`.
-                // The rectangle is in Unity screen coordinates, whose origin is bottom-left, so
-                // output row v must read screen row `yMin + v * height`; the buffer holds that
-                // upside down, which is where the negative y and the `1 -` come from.
+                // Crop and flip share one blit that samples `uv * scale + offset`. The rect is
+                // bottom-left origin, so output row v reads screen row `yMin + v * height`; the
+                // buffer holds it upside down, hence the negative y and the `1 -`.
                 var scale = new Vector2(source.width / screenWidth, -source.height / screenHeight);
                 var offset = new Vector2(
                     source.xMin / screenWidth,
                     1f - source.yMin / screenHeight);
                 Graphics.Blit(screen, scaled, scale, offset);
 
-                // Only the synchronous work is wrapped. A marker spanning the end-of-frame wait
-                // above would report the idle time as capture cost.
+                // Only synchronous work is measured; spanning the end-of-frame wait would count idle time.
                 using (ProfilerMarkers.CaptureReadback.Auto())
                 {
                     readback = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false);
@@ -104,15 +97,15 @@ namespace UnityPlayMcp.Capture
                     yield break;
                 }
 
-                // 좌표 변환에 필요한 값은 추정하지 않고 여기서 잰다. 이미지 크기만 보고 원본 크기를 되짚으면 maxEdge 로 줄인
-                // 비율과 crop 의 원점을 알 방법이 없다 (#71). 프레임과 씬도 back buffer 를 읽은 바로 이 순간의 것이다.
+                // 좌표 변환 값은 여기서 잰다. 이미지 크기만으로는 maxEdge 축소 비율과 crop 원점을
+                // 알 수 없다 (#71). 프레임과 씬도 back buffer 를 읽은 순간의 값이다.
                 var active = SceneManager.GetActiveScene();
                 completed(new CapturedImage
                 {
                     Bytes = bytes,
                     Width = size.x,
                     Height = size.y,
-                    // blit 이 쓴 값 그대로다. 창이 최소화돼 Screen 이 0 이어도 region 이 screen 안에 들도록.
+                    // blit 이 쓴 값이다. 창이 최소화돼 Screen 이 0 이어도 region 이 screen 안에 들게 한다.
                     ScreenWidth = screenWidth,
                     ScreenHeight = screenHeight,
                     Source = source,
@@ -122,8 +115,7 @@ namespace UnityPlayMcp.Capture
             }
             finally
             {
-                // Every capture allocates three native objects. Leaking any of them kills a long
-                // run rather than the capture that caused it, so release runs even on failure.
+                // Release even on failure; a leak here eventually kills a long run.
                 RenderTexture.active = previous;
                 if (screen != null)
                 {

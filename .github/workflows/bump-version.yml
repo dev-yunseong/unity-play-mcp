@@ -1,9 +1,8 @@
 name: Bump release version
 
-# 사람이 release 마다 네 파일(Unity package.json, PackageVersion.cs, mcp/package.json,
-# mcp-server-version.txt)에 손으로 적던 version 값을 여기서 한 번의 dispatch 로 갱신한다.
-# 이 workflow 는 draft pull request 를 여는 데서 끝난다 — develop 에 직접 push 하지 않고,
-# GitHub Release 생성과 tag 발행도 여전히 사람이 한다 (publish-mcp.yml 참고).
+# 네 파일(Unity package.json, PackageVersion.cs, mcp/package.json, mcp-server-version.txt)의
+# version 을 한 번의 dispatch 로 갱신한다. draft pull request 만 열고 develop 에 직접 push 하지
+# 않는다. GitHub Release 와 tag 는 사람이 만든다 (publish-mcp.yml 참고).
 on:
   workflow_dispatch:
     inputs:
@@ -26,8 +25,8 @@ permissions:
   contents: write
   pull-requests: write
 
-# 같은 workflow 가 겹쳐 돌면 branch 생성과 push 가 서로 밟을 수 있다. 취소 대신 줄을 세운다 —
-# 취소하면 PR 은 안 열렸는데 원격 branch 만 남는 부분 상태가 생길 수 있어서다.
+# 겹쳐 돌면 branch 생성과 push 가 충돌한다. 취소하면 PR 없이 원격 branch 만 남을 수 있으므로
+# 취소하지 않고 순서대로 실행한다.
 concurrency:
   group: bump-version
   cancel-in-progress: false
@@ -37,8 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      # dispatch 입력을 shell 안에서 직접 `${{ }}` 로 전개하면 version 문자열에 shell
-      # 특수문자가 섞였을 때 그대로 실행돼 버린다. env var 를 거쳐서만 shell 에 들어오게 한다.
+      # 입력을 shell 에서 `${{ }}` 로 직접 전개하면 특수문자가 실행되므로 env var 로만 넘긴다.
       UNITY_VERSION: ${{ inputs.unity_version }}
       MCP_VERSION: ${{ inputs.mcp_version }}
       DISPATCH_ACTOR: ${{ github.actor }}
@@ -46,9 +44,7 @@ jobs:
       - name: Require default branch
         run: |
           set -euo pipefail
-          # workflow_dispatch 는 default branch 에 있어야 Actions UI 목록에 나타나 실행할 수
-          # 있으므로 사실상 항상 develop 에서 시작한다. 그래도 dispatch UI 에서 다른 ref 를
-          # 고르는 경로가 남아 있어 명시적으로 막는다.
+          # dispatch UI 에서 다른 ref 를 고를 수 있으므로 develop 이 아니면 막는다.
           if [ "${{ github.ref }}" != "refs/heads/develop" ]; then
             echo "this workflow only runs from refs/heads/develop, got: ${{ github.ref }}" >&2
             exit 1
@@ -76,10 +72,9 @@ jobs:
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
-          # 이 repository 의 ruleset 은 unattributed commit 에 추가 승인을 요구한다
-          # (require_extra_approval_for_unattributed_changes). 숫자 id 가 없는
-          # "github-actions[bot]@users.noreply.github.com" 은 어떤 계정에도 연결되지 않아
-          # unattributed 로 잡힌다 — 실제 github-actions[bot] 계정의 noreply 주소를 쓴다.
+          # ruleset 이 unattributed commit 에 추가 승인을 요구한다
+          # (require_extra_approval_for_unattributed_changes). 숫자 id 없는 noreply 주소는 계정에
+          # 연결되지 않으므로 github-actions[bot] 계정의 실제 noreply 주소를 쓴다.
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Set Unity package version
@@ -113,19 +108,16 @@ jobs:
         if: steps.diff.outputs.unity_changed != 'true' && steps.diff.outputs.mcp_changed != 'true'
         run: echo "::notice::requested version already matches the working tree; nothing to do"
 
-      # "이미 release 됨" 검사는 실제로 바뀐 그룹에 대해서만 돈다. 사람이 mcp_version 에 지금
-      # 값(이미 npm 에 있는 값)을 그대로 다시 넣어 "MCP 는 건드리지 않는다"는 뜻으로 쓰는 경우,
-      # 무조건 검사하면 아무것도 바뀌지 않았는데도 거절당한다.
+      # "이미 release 됨" 검사는 실제로 바뀐 그룹에만 한다. 현재 값을 그대로 넣는 입력이
+      # 거절되지 않게 한다.
       - name: Reject already-released Unity version
         if: steps.diff.outputs.unity_changed == 'true'
         run: |
           set -euo pipefail
           tag="v${UNITY_VERSION}"
           set +e
-          # 복수형 "git/refs/tags/<ref>" endpoint 는 prefix 검색이라 "v0.1" 을 물으면
-          # "v0.1.0" 처럼 그 앞에 오는 다른 tag 까지 찾아 200 을 돌려준다(실제로 이 값으로
-          # 확인했다). 단수형 "git/ref/tags/<ref>" 는 정확히 그 이름의 tag 가 있을 때만 200,
-          # 없으면 404 를 돌려줘 오탐이 없다.
+          # 복수형 "git/refs/tags/<ref>" 는 prefix 검색이라 "v0.1" 이 "v0.1.0" 에도 200 을 돌려준다.
+          # 단수형 "git/ref/tags/<ref>" 는 정확히 일치할 때만 200 이다.
           gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>gh-error.log
           exit_code=$?
           set -e
@@ -163,10 +155,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # branch 이름을 실제로 바뀐 그룹만으로 결정적으로 만든다. 같은 조합으로 재시도하면
-          # 같은 branch 로 수렴해 중복 PR 을 줄인다. 입력값이 아니라 diff 결과를 기준으로
-          # 삼는다 — 입력이 있어도 값이 같으면(diff 없음) 그 그룹은 branch 이름에 들어가지
-          # 않는다.
+          # branch 이름은 입력값이 아니라 실제로 바뀐 그룹(diff)으로 정한다. 같은 조합으로
+          # 재시도하면 같은 branch 가 되어 중복 PR 을 줄인다.
           branch="bump-version"
           if [ "$UNITY_CHANGED" = "true" ]; then
             branch="${branch}/unity-${UNITY_VERSION}"
@@ -179,8 +169,7 @@ jobs:
             fi
           fi
 
-          # commit/PR 제목은 이 저장소에서 실제 있었던 release commit 문구(예: "MCP server를
-          # 0.2.0으로 올린다")를 따른다.
+          # commit/PR 제목은 기존 release commit 문구(예: "MCP server를 0.2.0으로 올린다")를 따른다.
           if [ "$UNITY_CHANGED" = "true" ] && [ "$MCP_CHANGED" = "true" ]; then
             title="chore: release version을 올린다 (Unity ${UNITY_VERSION}, MCP server ${MCP_VERSION})"
           elif [ "$UNITY_CHANGED" = "true" ]; then
@@ -205,15 +194,12 @@ jobs:
           fi
           git add "${add_paths[@]}"
           git commit -m "$title"
-          # `actions/checkout` 은 develop 하나만 얕게 fetch 해서, 이 시점에는 "$branch" 의 원격
-          # 상태를 담은 remote-tracking ref 가 로컬에 없다. `--force-with-lease` 는 비교할 기준이
-          # 없으면 "stale info"로 거절하므로, push 전에 그 branch 만 따로 fetch 해 기준을 만든다.
-          # 이전 실행이 없어 그 branch 가 원격에 아직 없으면 fetch 자체가 실패하는데, 그 경우는
-          # 정상이라 무시한다.
+          # `actions/checkout` 은 develop 만 fetch 하므로 "$branch" 의 remote-tracking ref 가 없다.
+          # `--force-with-lease` 는 기준이 없으면 "stale info" 로 거절하므로 먼저 fetch 한다.
+          # 원격에 branch 가 아직 없으면 fetch 가 실패하며, 이는 정상이다.
           git fetch origin "$branch" 2>/dev/null || true
-          # 이전 실행이 만든 동명 branch 가 원격에 남아 있을 수 있어 덮어쓴다.
-          # `--force` 대신 `--force-with-lease` 를 써서, 방금 fetch 한 뒤로 다른 무언가가 그
-          # branch 를 또 바꿔 놓았다면(우리가 모르는 변경) 조용히 덮어쓰지 않고 실패하게 한다.
+          # 이전 실행의 동명 branch 를 덮어쓴다. fetch 뒤 다른 변경이 있으면 조용히 덮어쓰지 않도록
+          # `--force-with-lease` 를 쓴다.
           git push --force-with-lease origin "$branch"
 
           existing_pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
@@ -222,8 +208,8 @@ jobs:
             exit 0
           fi
 
-          # YAML block scalar 는 모든 줄이 이 step 의 들여쓰기 이상이어야 해서, 여러 줄
-          # heredoc 대신 printf 인자 한 줄에 PR 본문 한 줄씩을 담아 만든다.
+          # YAML block scalar 는 모든 줄이 step 들여쓰기 이상이어야 하므로 heredoc 대신 printf 인자로
+          # PR 본문을 한 줄씩 만든다.
           body="$(printf '%s\n' \
             "## Why" \
             "" \

@@ -1,8 +1,6 @@
 /// `initialize` 응답에 실려 agent 의 context 에 들어가는 server 사용 안내.
 ///
-/// tool 설명은 tool 하나가 무엇을 하는지 말하지만, tool 사이의 순서와 전제는 어디에도 없다. 그래서
-/// agent 는 `start_readings` 없이 `get_scene_state` 를 부르고 빈 응답을 받은 뒤에야 순서를 배운다.
-/// 여기 적는 것은 그 순서와 전제뿐이다. 이 문자열은 모든 대화에 들어가므로 tool 설명을 옮겨 적지 않는다.
+/// tool 설명에 없는 tool 사이의 순서와 전제만 적는다. 모든 대화에 들어가므로 tool 설명을 반복하지 않는다.
 export const serverInstructions = [
   "Unity Play MCP controls a game in Play Mode in the local Unity editor.",
   "Call get_unity_status first. If Unity is not running, ask the user to enter Play Mode instead of retrying.",

@@ -36,8 +36,7 @@ namespace UnityPlayMcp.Tests.Input
                 PlayerPrefs.SetInt("UnityPlayMcp.DarkTheme", 1);
                 var controller = host.AddComponent<KeyboardStatusController>();
 
-                // EditMode 에서는 AddComponent 가 OnEnable 을 부르지 않는다. GUI 가 거기서 만들어지므로
-                // 직접 부르지 않으면 찾으려는 panel 이 끝까지 존재하지 않는다.
+                // edit mode 에서는 AddComponent 가 OnEnable 을 부르지 않는다. GUI 가 거기서 만들어지므로 직접 부른다.
                 typeof(KeyboardStatusController)
                     .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(controller, null);
@@ -45,8 +44,7 @@ namespace UnityPlayMcp.Tests.Input
                     .Find("Unity Play MCP Keyboard Status Canvas/Keyboard Status Panel");
 
                 Assert.That(panel.GetComponent<Image>().color, Is.EqualTo((Color)KeyboardStatusController.DarkPanelColor));
-                // 다크에서는 밝힌 coral을 써야 한다. 원본 #F04B3A는 다크 패널 위에서
-                // 대비 4.5:1을 넘지 못한다.
+                // 다크 테마는 밝힌 coral 을 쓴다. 원본 #F04B3A 는 다크 패널 위에서 대비 4.5:1 에 못 미친다.
                 Assert.That(
                     panel.Find("Brand Accent").GetComponent<Image>().color,
                     Is.EqualTo((Color)KeyboardStatusController.DarkAccentColor));

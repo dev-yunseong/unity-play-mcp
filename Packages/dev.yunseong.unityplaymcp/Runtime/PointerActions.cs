@@ -10,21 +10,15 @@ namespace UnityPlayMcp
     /// ID 로 받은 대상을 실제 입력 경로로 클릭하고 드래그한다.
     /// </summary>
     /// <remarks>
-    /// <c>button_click</c> 처럼 <c>Button.onClick</c> 을 직접 부르지 않는다. 가상 마우스를 대상
-    /// 위로 옮기고 버튼을 눌렀다 놓아, <see cref="VirtualMouseMessenger"/> 의 <c>OnMouse*</c> 와
-    /// <see cref="PointerEventDispatcher"/> 의 uGUI 이벤트가 게임에 닿게 한다. collider 로만
-    /// 입력을 받는 2D 게임이 ID 로 조작될 수 있는 유일한 경로다.
-    /// <para>
-    /// <see cref="ActionExecutor"/> 에서 갈라 둔 것은 그 클래스가 이미 800줄이 넘고, 여기 있는
-    /// 것은 프레임 순서라는 하나의 관심사이기 때문이다.
-    /// </para>
+    /// <c>Button.onClick</c> 을 직접 부르지 않고 가상 마우스를 옮겨 버튼을 눌렀다 놓는다.
+    /// 그래서 <see cref="VirtualMouseMessenger"/> 의 <c>OnMouse*</c> 와 <see cref="PointerEventDispatcher"/>
+    /// 의 uGUI 이벤트가 모두 나간다. collider 로만 입력을 받는 게임은 이 경로로만 id 로 조작할 수 있다.
     /// </remarks>
     internal sealed class PointerActions
     {
         /// <summary>
-        /// 엔진이 <c>OnMouse*</c> 를 보내는 버튼은 왼쪽뿐이다
-        /// (<see cref="VirtualMouseMessenger"/>). 다른 버튼을 받으면 uGUI 대상에서는 눌리고
-        /// collider 대상에서는 조용히 아무 일도 안 하는 비대칭이 생기므로, 받지 않는다.
+        /// <c>OnMouse*</c> 는 왼쪽 버튼만 보낸다 (<see cref="VirtualMouseMessenger"/>).
+        /// 다른 버튼은 collider 대상에서 아무 일도 하지 않으므로 받지 않는다.
         /// </summary>
         private const int DrivingButton = 0;
 
@@ -52,12 +46,9 @@ namespace UnityPlayMcp
         /// 대상 위로 포인터를 옮기고 왼쪽 버튼을 눌렀다 놓는다.
         /// </summary>
         /// <remarks>
-        /// 프레임을 세 번 넘기는 것이 이 코루틴의 전부다. uGUI 이벤트는 <c>setButton</c> 을 부른
-        /// 그 자리에서 동기로 나가지만 <c>OnMouse*</c> 는 그렇지 않다 —
-        /// <see cref="VirtualMouseMessenger"/> 를 미는 것은 host 의 <c>Update</c> 안
-        /// <c>VirtualInput.AdvanceFrame</c> 이고, <c>VirtualMouseState.Press</c> 는 눌린 프레임의
-        /// <b>다음</b> 프레임부터 눌린 것으로 답한다. 누름과 놓음 사이에 프레임을 두지 않으면
-        /// messenger 는 눌린 적이 없는 것으로 보고 <c>OnMouseDown</c> 이 통째로 빠진다.
+        /// uGUI 이벤트는 <c>setButton</c> 에서 동기로 나가지만 <c>OnMouse*</c> 는 host <c>Update</c> 의
+        /// <c>VirtualInput.AdvanceFrame</c> 에서 나가고, <c>VirtualMouseState.Press</c> 는 다음 프레임부터
+        /// 눌린 것으로 답한다. 누름과 놓음 사이에 프레임을 두지 않으면 <c>OnMouseDown</c> 이 빠진다.
         /// </remarks>
         public IEnumerator Click(
             int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -78,9 +69,8 @@ namespace UnityPlayMcp
             yield return cursorController.MoveTo(aim.ScreenPosition, pointerMoved);
             yield return null;
 
-            // Drag 와 달리 try/finally 가 없다. 누름과 놓음 사이에 프레임을 넘기는 것 말고는
-            // 아무 일도 하지 않아 던질 것이 없고, 그래도 남는 중단 경로는 host 의
-            // ReleaseAgentInput 이 덮는다.
+            // 누름과 놓음 사이에 던질 코드가 없어 try/finally 를 두지 않는다. 중단은 host 의
+            // ReleaseAgentInput 이 처리한다.
             setButton(DrivingButton, true);
             yield return null;
 
@@ -94,14 +84,12 @@ namespace UnityPlayMcp
         /// 버튼을 누르지 않고 포인터를 대상 위에 올린다.
         /// </summary>
         /// <remarks>
-        /// 클릭과 같은 겨누기(<see cref="TryAim"/>)와 같은 이동(<c>pointerMoved</c>)을 쓴다. 그래서 uGUI 의
-        /// <c>OnPointerEnter</c>/<c>OnPointerExit</c> 는 <c>PointerEventDispatcher.MoveTo</c> 가, collider 의
-        /// <c>OnMouseEnter</c>/<c>OnMouseOver</c> 는 가상 마우스 위치를 읽는 <c>VirtualMouseMessenger</c> 가 게임의 입력 경로로
-        /// 보낸다 — 게임 메서드를 직접 부르지 않는다.
+        /// click 과 같은 <see cref="TryAim"/> 과 <c>pointerMoved</c> 를 쓴다. uGUI enter/exit 는
+        /// <c>PointerEventDispatcher.MoveTo</c> 가, <c>OnMouseEnter</c>/<c>OnMouseOver</c> 는
+        /// <c>VirtualMouseMessenger</c> 가 보낸다.
         ///
-        /// 옮긴 뒤 한 프레임을 넘기고 그 자리에서 다시 묻는다. 툴팁을 띄우는 게임 코드는 그 프레임에 돌고, 그 사이 대상이 가려지거나
-        /// 파괴되면 그것을 성공으로 보고하지 않는다. 포인터는 그 자리에 남는다 — hover 는 머무는 상태이고, 다음 입력이 옮길 때까지가
-        /// 그것의 수명이다.
+        /// 옮긴 뒤 한 프레임 기다렸다가 다시 확인한다. 그 사이 대상이 가려지거나 파괴되면 실패로 보고한다.
+        /// 포인터는 다음 입력이 옮길 때까지 그 자리에 남는다.
         /// </remarks>
         public IEnumerator Hover(
             int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -159,25 +147,19 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 원본 위에서 버튼을 누르고, 목적지까지 활강한 뒤 놓는다.
+        /// 원본 위에서 버튼을 누르고 목적지까지 이동한 뒤 놓는다.
         /// </summary>
         /// <remarks>
-        /// 두 자리를 모두 누르기 전에 확인한다. 목적지를 못 찾는 것이 흔한 실패이고, 그것을 누른
-        /// 뒤에 알게 되면 이미 쥔 버튼을 풀어야 하기 때문이다. 확인이 끝난 뒤로는 실패할 자리가
-        /// 없지만, 누름과 놓음 사이는 <c>finally</c> 로 감싼다 — 그 사이에서 무엇이 튀어나오든
-        /// 버튼을 쥔 채로 끝나서는 안 된다.
+        /// 버튼을 누른 뒤 실패하지 않도록 두 대상을 먼저 확인한다. 누름과 놓음 사이는 <c>finally</c> 로
+        /// 감싸 버튼이 눌린 채 끝나지 않게 한다.
         /// <para>
-        /// 연결이 끊기는 경우는 여기가 아니라 host 가 처리한다.
-        /// <c>UnityPlayMcpHost.OnDisable</c> 이 <c>StopTransport</c> 를 거쳐
-        /// <c>ReleaseAgentInput</c> 을 부르고, 그 해제는 멱등이라 뒤늦은 <c>finally</c> 가 겹쳐
-        /// 돌아도 아무 일도 하지 않는다. 파괴로 멈춘 코루틴의 <c>finally</c> 가 도는지에 기대지
-        /// 않는 이유가 그것이다.
+        /// 연결 끊김은 host 가 처리한다. <c>UnityPlayMcpHost.OnDisable</c> 이 <c>ReleaseAgentInput</c> 을
+        /// 부르고, 해제는 멱등이라 뒤늦은 <c>finally</c> 와 겹쳐도 된다. 파괴로 멈춘 coroutine 의
+        /// <c>finally</c> 실행에 기대지 않는다.
         /// </para>
         /// <para>
-        /// 활강이 매 프레임 위치를 보고하므로 그 프레임마다
-        /// <see cref="PointerEventDispatcher"/> 가 <c>beginDrag</c> 와 <c>drag</c> 를 내고
-        /// messenger 가 <c>OnMouseDrag</c> 를 낸다. 포인터가 원본을 떠난 뒤에도 둘 다 원본에
-        /// 계속 보내는 것이 pointer capture 이고, 그것은 양쪽 모두 이미 하고 있다.
+        /// 이동 중 매 프레임 <see cref="PointerEventDispatcher"/> 가 <c>beginDrag</c>/<c>drag</c> 를,
+        /// messenger 가 <c>OnMouseDrag</c> 를 원본에 보낸다 (pointer capture).
         /// </para>
         /// </remarks>
         public IEnumerator Drag(
@@ -223,17 +205,14 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// id 를 살아 있고, 켜져 있고, 포인터가 닿을 수 있는 대상으로 푼다.
+        /// id 를 살아 있고, 활성이고, 포인터가 닿을 수 있는 대상으로 푼다.
         /// </summary>
         /// <remarks>
-        /// 실패는 네 가지로 갈린다: 파괴/미지, 비활성, 겨눌 면적 없음, 불일치. 그 넷이 에이전트가
-        /// 서로 다르게 대응해야 하는 것들이다 — 다시 읽어야 하는지, 게임을 먼저 움직여야 하는지,
-        /// 가린 것을 치워야 하는지.
+        /// 실패는 파괴/미지, 비활성, 겨눌 면적 없음, 불일치의 네 경우다. agent 가 각각 다르게 대응해야 하므로
+        /// 구분해 보고한다.
         /// <para>
-        /// 비활성 판정은 <c>activeInHierarchy</c> 하나로 한다. 자신이 꺼졌든 부모가 꺼졌든
-        /// 포인터가 닿지 못하는 것은 같다. 꺼진 <c>Canvas</c> 나 <c>raycastTarget = false</c> 는
-        /// 여기서 걸리지 않고 불일치로 나타나는데, 그것이 맞다 — 오브젝트는 살아 있고 포인터가
-        /// 닿지 못할 뿐이다.
+        /// 비활성은 <c>activeInHierarchy</c> 로만 판정한다. 꺼진 <c>Canvas</c> 나 <c>raycastTarget = false</c>
+        /// 는 오브젝트가 살아 있으므로 불일치로 보고된다.
         /// </para>
         /// </remarks>
         private bool TryAim(string method, int targetId, out PointerAim aim, out string error)
@@ -259,13 +238,10 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 겨눈 자리를 보고할 모양으로. 좌표는 여기서 좌상단 기준으로 뒤집는다 — scan 이 보고하고
-        /// <c>move_mouse</c> 가 받는 그 좌표계라야 호출자가 그대로 되쓸 수 있다.
+        /// 겨눈 위치를 결과로 만든다. y 좌표는 scan 과 <c>move_mouse</c> 가 쓰는 좌상단 기준으로 뒤집는다.
         /// </summary>
         /// <remarks>
-        /// <see cref="PointerAim"/> 이 이미 베껴 둔 값만 읽는다. 여기까지 오는 데 세 프레임이
-        /// 걸리고 그 사이에 대상이 파괴될 수 있어서, 살아 있는 <c>GameObject</c> 를 여기서
-        /// 건드리면 안 된다 — 그 이유는 <see cref="PointerAim.HitId"/> 에 적혀 있다.
+        /// 그 사이 대상이 파괴될 수 있으므로 <c>GameObject</c> 대신 <see cref="PointerAim"/> 에 복사해 둔 값만 읽는다.
         /// </remarks>
         private static PointerHitDto HitOf(int targetId, PointerAim aim)
         {

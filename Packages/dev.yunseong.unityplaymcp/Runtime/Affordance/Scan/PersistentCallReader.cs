@@ -6,7 +6,7 @@ using UnityEngine.Events;
 
 namespace UnityPlayMcp.Affordances.Scan
 {
-    /// <summary>인스펙터가 부르라고 들은 메서드 하나와, 그것이 무엇에 매달려 있는지.</summary>
+    /// <summary>인스펙터에 연결된 persistent call 하나와 그 대상.</summary>
     internal struct PersistentCall
     {
         internal string Event;
@@ -16,22 +16,18 @@ namespace UnityPlayMcp.Affordances.Scan
     }
 
     /// <summary>
-    /// 디자이너가 인스펙터에서 한 배선을 읽는다.
+    /// 인스펙터에서 연결한 `wiring` 을 읽는다.
     /// </summary>
     /// <remarks>
-    /// 이것이 컴파일된 코드가 알 수 없는 절반이다. 버튼 핸들러의 본문은 무슨 일이 일어나는지를 말하지만, 그 안의 무엇도
-    /// 어느 버튼인지, 애초에 버튼이 있기는 한지를 말하지 않는다. 그 연결은 직렬화된 persistent call 로 씬에 살고, 그 둘을
-    /// 잇는 것이 어셈블리만 읽는 대신 런타임에 스캔하는 이유 전부다.
-    ///
-    /// 보이는 것은 persistent call 뿐이다. 코드에서 <c>AddListener</c> 로 더한 리스너는 직렬화되지 않아 셀 수도 없고
-    /// 이름을 댈 수는 더더욱 없다 — 그 공백은 감추지 않고 보고한다.
+    /// 어느 버튼이 어느 핸들러를 부르는지는 씬의 persistent call 에만 있어 코드 분석으로는 알 수 없다.
+    /// <c>AddListener</c> 로 더한 리스너는 직렬화되지 않아 보이지 않으며, 이 한계는 gap 으로 보고한다.
     /// </remarks>
     internal static class PersistentCallReader
     {
         private const BindingFlags Fields =
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
-        /// <summary>이벤트 필드를 찾아 컴포넌트의 기반 타입을 얼마나 거슬러 오르는지.</summary>
+        /// <summary>이벤트 필드를 찾아 거슬러 오르는 기반 타입의 최대 깊이.</summary>
         private const int MaxDepth = 16;
 
         private static readonly Dictionary<Type, FieldInfo[]> Known = new Dictionary<Type, FieldInfo[]>();
@@ -89,18 +85,17 @@ namespace UnityPlayMcp.Affordances.Scan
                 }
                 catch (Exception)
                 {
-                    // 읽을 수 없는 항목 하나이지, 그 이벤트의 나머지를 버릴 이유가 아니다.
+                    // 읽지 못한 항목만 건너뛴다.
                 }
             }
         }
 
         /// <summary>
-        /// 타입 위의 이벤트 모양 필드들. 엔진이 선언하는 private 인 것까지.
+        /// 타입의 <c>UnityEventBase</c> 필드들. 엔진이 선언한 private 필드도 포함한다.
         /// </summary>
         /// <remarks>
-        /// Button 은 <c>onClick</c> 을 프로퍼티로 내놓고, 그 뒤의 직렬화된 상태는 그것을 선언하는 클래스의 private 필드다.
-        /// 리플렉션에는 비공개 멤버를 보라고 일러 줘야 하고 기반 타입도 스스로 걸어야 한다. 파생 타입에 비공개 멤버를 청해도
-        /// 그 부모가 선언한 것에는 닿지 않기 때문이다.
+        /// Button 의 <c>onClick</c> 은 선언 클래스의 private 필드에 저장된다. 파생 타입에서는 부모의 private 필드가
+        /// 보이지 않으므로 기반 타입을 직접 거슬러 오른다.
         /// </remarks>
         private static FieldInfo[] EventFieldsOf(Type type)
         {

@@ -17,10 +17,8 @@ namespace UnityPlayMcp.Protocol.Dto
         /// What the action produced, for the actions that produce something.
         /// </summary>
         /// <remarks>
-        /// Omitted from the wire when absent, so results with nothing to return keep exactly the
-        /// shape they had before this field existed. The relay parses the payload as a tree and
-        /// passes it through untouched, which is what lets one action add a field without a
-        /// protocol version.
+        /// Omitted when absent. The relay passes the payload through untouched, so an action can
+        /// add a field without a protocol version.
         /// </remarks>
         [JsonProperty("returnValue", NullValueHandling = NullValueHandling.Ignore)]
         public object ReturnValue { get; set; }

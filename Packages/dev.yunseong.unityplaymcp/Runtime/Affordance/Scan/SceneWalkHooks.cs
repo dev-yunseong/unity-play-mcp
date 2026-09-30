@@ -4,19 +4,13 @@ using System.Collections;
 namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
-    /// 순회가 씬 하나를 읽어 낸 자리에서 바깥이 끼어들 수 있는 유일한 지점.
+    /// 순회가 씬 하나를 읽은 직후 바깥 코드를 부르는 hook.
     /// </summary>
     /// <remarks>
-    /// 이 어셈블리는 <c>UnityPlayMcp.Runtime</c> 을 참조하지 않는다 — 참조는 반대 방향 하나뿐이다. 그래서 근거 문서를 올리는 쪽이
-    /// 씬마다 무언가를 하려면 순회가 그 자리를 열어 주는 수밖에 없다. 순회가 저쪽을 알게 만들면 참조가 양방향이 되고,
-    /// 스캔만 쓰려는 프로젝트가 업로드 코드까지 함께 들여야 한다.
-    ///
-    /// 코루틴을 돌려받는 이유는 캡처가 프레임을 기다려야 하기 때문이다. 값 하나를 돌려주는 콜백으로는 back buffer 가 다 그려질
-    /// 때까지 기다릴 수 없고, 기다리지 않고 읽으면 이전 씬이 찍힌다.
-    ///
-    /// <b>예외는 구독자가 스스로 삼킨다.</b> <c>yield return</c> 을 <c>try</c> 로 감쌀 수 없어 순회는 이 코루틴 안에서 터진
-    /// 예외를 잡지 못한다. 새어 나오면 순회 전체가 그 자리에서 멎고 근거 문서가 아예 나오지 않는다 — 곁다리인 캡처가 본 일을
-    /// 죽이는 것이라 그렇게 두지 않는다.
+    /// 이 어셈블리는 <c>UnityPlayMcp.Runtime</c> 을 참조하지 않으므로 그쪽이 hook 을 등록한다.
+    /// 캡처가 프레임 렌더링을 기다려야 하므로 coroutine 을 돌려받는다.
+    /// <b>구독자는 예외를 직접 삼켜야 한다.</b> 순회는 <c>yield return</c> 을 <c>try</c> 로 감쌀 수 없어,
+    /// 새어 나온 예외가 순회를 멈추고 `evidence` 문서가 나오지 않는다.
     /// </remarks>
     public static class SceneWalkHooks
     {
@@ -25,7 +19,7 @@ namespace UnityPlayMcp.Affordances.Scan
         /// </summary>
         public static Func<string, IEnumerator> SceneRead;
 
-        /// <summary>순회가 이 자리에서 쓰는 코루틴. 구독자가 없거나 아무것도 하지 않으면 null.</summary>
+        /// <summary>hook 의 coroutine. 구독자가 없거나 할 일이 없으면 null.</summary>
         internal static IEnumerator OnSceneRead(string sceneName)
         {
             var hook = SceneRead;
@@ -41,7 +35,7 @@ namespace UnityPlayMcp.Affordances.Scan
             }
             catch (Exception exception)
             {
-                // 코루틴을 만드는 도중의 실패는 여기서 잡을 수 있다. 도는 도중의 실패는 구독자 몫이다.
+                // coroutine 생성 중 예외만 여기서 잡힌다. 실행 중 예외는 구독자가 처리한다.
                 UnityEngine.Debug.LogWarning(
                     "[Unity Play MCP] A scene-read hook threw before it started and was skipped: " + exception.Message);
                 return null;

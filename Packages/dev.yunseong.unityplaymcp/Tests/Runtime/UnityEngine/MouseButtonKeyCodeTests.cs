@@ -28,8 +28,8 @@ namespace UnityPlayMcp.Tests.Input
         }
 
         /// <summary>
-        /// <c>KeyCode.Mouse3</c> 이후는 <see cref="VirtualMouseState.ButtonCount"/> 에 자리가 없다.
-        /// 매핑해 버리면 존재하지 않는 버튼을 누르라는 요청이 조용히 성공한다.
+        /// <c>KeyCode.Mouse3</c> 이후는 <see cref="VirtualMouseState.ButtonCount"/> 범위 밖이다.
+        /// 매핑하면 없는 버튼을 누르는 요청이 조용히 성공한다.
         /// </summary>
         [Test]
         public void TryGetButton_StopsWhereTheVirtualMouseStops()

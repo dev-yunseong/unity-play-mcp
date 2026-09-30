@@ -5,7 +5,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
 {
     internal enum ConditionKind
     {
-        /// <summary>참이어야 했던 것이 없다.</summary>
+        /// <summary>참이어야 할 것이 없다.</summary>
         Always,
 
         /// <summary>코드가 한 비교.</summary>
@@ -14,26 +14,24 @@ namespace UnityPlayMcp.Affordances.CodeGen
         /// <summary>플레이어가 준 입력.</summary>
         Gesture,
 
-        /// <summary>여기 오는 길에 있었으나 읽을 수 없었던 것.</summary>
+        /// <summary>경로에 있었지만 읽지 못한 조건.</summary>
         Unknown,
 
-        /// <summary>이것들 전부.</summary>
+        /// <summary><see cref="Condition.Parts"/> 전부.</summary>
         Every,
 
-        /// <summary>이것들 중 아무거나 하나.</summary>
+        /// <summary><see cref="Condition.Parts"/> 중 하나.</summary>
         Either
     }
 
     /// <summary>
-    /// 어딘가에 닿기 위해 참이어야 했던 것.
+    /// 어딘가에 닿기 위해 참이어야 하는 조건.
     /// </summary>
     /// <remarks>
-    /// 목록이 아니라 트리다. 목록은 "그리고" 밖에 뜻하지 못하기 때문이다. 한 자리에 두 갈래로 닿는 코드는 —
-    /// <c>position == 4 || position == 5</c> — 그 필드가 두 값을 동시에 쥐고 있었다고 말하는 목록으로
-    /// 납작해지는데, 그것을 만족하는 상태는 없다. 거기서 만든 명세는 아무도 수행할 수 없는 동작을 서술한다.
+    /// 목록은 AND 만 표현하므로 트리로 둔다. <c>position == 4 || position == 5</c> 를 목록으로 만들면 만족할 수 없는
+    /// 조건이 된다.
     ///
-    /// 곱의 합으로 펼치지 않고 중첩된 채로 둔다. 가지들이 조상을 공유하므로 트리는 메서드만 한 크기로 남지만,
-    /// 펼치면 그렇지 않다.
+    /// 곱의 합으로 펼치지 않는다. 가지가 조상을 공유하므로 중첩된 트리는 메서드 크기에 머물지만 펼치면 커진다.
     /// </remarks>
     internal sealed class Condition
     {
@@ -44,16 +42,14 @@ namespace UnityPlayMcp.Affordances.CodeGen
         internal InputRead Gesture { get; private set; }
         internal string Reason { get; private set; }
 
-        /// <summary>읽기를 좌절시킨 것의 모양. 세기 위한 것.</summary>
+        /// <summary>읽기를 막은 원인의 종류. 진단 집계용이다.</summary>
         /// <remarks>
-        /// 읽지 못한 조건의 개수는 얼마나 빠졌는지를 말하지, 다음에 무엇을 만들지는 말하지 않는다. 여기 여든아홉이
-        /// 걷기가 따라가기를 거부하는 지역 변수인지, 부를 말이 없는 연산자인지, 안을 들여다볼 수 없는 호출인지에
-        /// 따라 서로 다른 일 세 가지가 결정되는데, 이 필드가 생기기 전까지 그 답은 추측이었다. 진단용일 뿐이다 —
-        /// 아무것도 이것 위에서 합성하지 않고, 이것을 무시하는 독자는 전에 읽던 것을 그대로 읽는다.
+        /// 원인(따라갈 수 없는 지역 변수, 이름 없는 연산자, 들여다볼 수 없는 호출)에 따라 개선 작업이 달라진다.
+        /// 합성에는 쓰지 않는다.
         /// </remarks>
         internal string Unread { get; private set; }
 
-        /// <summary>다시 한 바퀴 도는 일이 시작되는 자리, 또는 -1.</summary>
+        /// <summary>반복이 다시 시작되는 IL 오프셋. 없으면 -1.</summary>
         internal int LoopsBackTo { get; private set; } = -1;
         internal List<Condition> Parts { get; private set; }
 
@@ -75,12 +71,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 여기 닿으려면 다시 한 바퀴 돌아야 해서 읽을 수 없었던 조건.
+        /// 반복을 한 번 더 돌아야 닿아서 읽을 수 없는 조건.
         /// </summary>
         /// <remarks>
-        /// 오프셋은 다시 도는 일이 시작되는 자리다. "루프" 라고만 말하면, 그 서로 다른 바퀴에서 일어나는 두 가지를
-        /// 잇고 싶은 독자에게 남는 것은 오프셋에 대한 산술뿐이었다 — 리포트가 세운 적 없는 근거다. 이 엣지는
-        /// 그래프가 이미 찾아 둔 것이고, 포기하는 순간에 버려지고 있었다.
+        /// 반복이 시작되는 오프셋을 함께 남겨 읽는 쪽이 서로 다른 반복에서 일어나는 일을 이을 수 있게 한다.
         /// </remarks>
         internal static Condition Looping(int backTo)
         {
@@ -133,7 +127,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     continue;
                 }
 
-                // 아무것도 필요로 하지 않는 갈래 하나가 선택 전체를 조건 없는 것으로 만든다.
+                // 조건 없는 경우가 하나라도 있으면 전체가 조건 없다.
                 if (part.Kind == ConditionKind.Always)
                 {
                     return Always;
@@ -155,17 +149,14 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 선택으로 들어가는 한 갈래. 단락 평가가 남긴 자국을 걷어낸 것.
+        /// OR 의 한 경우에서 단락 평가가 남긴 부재 입력을 걷어낸다.
         /// </summary>
         /// <remarks>
-        /// <c>GetKey(Left) || GetKey(Right)</c> 는 왼쪽이 눌리지 않았을 때만 오른쪽 키를 검사하므로, 오른쪽 키로
-        /// 들어가는 갈래는 <c>no Left</c> 를 함께 나른다. 그것은 참이고, 게임에 대한 사실이 아니라 C# 이
-        /// <c>||</c> 를 평가하는 방식에 대한 사실이다 — 명세로 읽으면 왼쪽을 조심스럽게 누르지 않은 채 오른쪽을
-        /// 누르라는 말이 된다.
+        /// <c>GetKey(Left) || GetKey(Right)</c> 의 오른쪽 경우는 <c>no Left</c> 를 함께 나른다. 이는 C# 의 <c>||</c> 평가
+        /// 방식일 뿐 게임 규칙이 아니다.
         ///
-        /// 선택 아래에서만 그렇게 한다. <c>and</c> 맨 위의 부재하는 입력은 진짜 규칙이고 —
-        /// <c>if (!Input.GetKey(Shift))</c> 는 게임이 뜻하는 바다 — 건드리지 않는다. 그리고 요구를 하나 떨어뜨리는
-        /// 일은 갈래를 쉽게 만들 뿐이므로, 이것이 속한 선택은 전에 성립하던 자리에서 여전히 성립한다.
+        /// OR 아래에서만 걷어낸다. AND 최상위의 부재 입력(<c>if (!Input.GetKey(Shift))</c>)은 진짜 규칙이다. 요구를 떨어뜨리면
+        /// 조건이 약해질 뿐이므로 OR 전체는 전에 성립하던 곳에서 여전히 성립한다.
         /// </remarks>
         private static Condition WithoutShortCircuit(Condition way)
         {
@@ -207,30 +198,14 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 여기 있는 모든 비교가 호출자 자신의 객체에 대한 것인지, 아니면 아무것에 대한 것도 아닌지.
+        /// 같은 조건을 호출자 쪽 용어로 옮긴 것. 옮길 수 없으면 null.
         /// </summary>
         /// <remarks>
-        /// 입력은 비교가 아니고 주어가 없으므로 결코 걸림돌이 되지 않는다. 주어를 알아낼 수 없는 비교는 걸림돌이
-        /// 된다 — 이 <c>count</c> 가 누구의 것인지 모른다는 것은 그것을 다른 누군가의 것 옆에서 읽어도 되는지를
-        /// 모른다는 뜻이다.
-        /// </remarks>
-        /// <summary>
-        /// 같은 조건을 호출자가 선 자리에서 말한 것, 또는 그럴 수 없을 때 null.
-        /// </summary>
-        /// <remarks>
-        /// 피호출자의 조건은 피호출자의 객체에 대한 것이고 호출자의 용어 옆에서는 다른 말을 한다 — 그래서 합성하지
-        /// 않고 거절한다. 거절이 옳은 것은 둘을 한 벌의 말로 데려올 수 없는 동안뿐이다. 호출자가 이름 붙일 수 있는
-        /// 것에 대고 그것을 불렀다면 데려올 수 있다: 카드가 드래그되는 자리에서 읽은
-        /// <c>CombineZone.spellCards.Count</c> 는 <c>DraggableCard.combineZone.spellCards.Count</c> 이고, 그
-        /// 문장은 호출자 자신의 객체에 대한 것이며, 그것이 합성 규칙이 원하는 바다.
+        /// 호출자가 이름 붙일 수 있는 수신 객체에 대해 불렀다면 옮길 수 있다. 예:
+        /// <c>CombineZone.spellCards.Count</c> 는 호출 지점에서 <c>DraggableCard.combineZone.spellCards.Count</c> 가 된다.
         ///
-        /// 갈아 끼우기는 이름의 머리에서 일어나고, 그 머리가 피호출자 자신의 타입일 때만 일어난다. 여기의 모든
-        /// 이름은 그것이 읽힌 출처로부터 쓰이므로 피호출자의 <c>this</c> 에 대한 항은 그 타입으로 시작한다. 그것으로
-        /// 시작하지 않는 항은 다른 무언가에 대한 것이라 있던 자리에 둔다 — 그러면 조건 전체를 여기서 말할 수 없게
-        /// 되므로 아무것도 돌려주지 않는다.
-        ///
-        /// 아무것도 떨어뜨리지 않고 아무것도 추측하지 않는다. 조건 전체를 호출자의 말로 말할 수 있거나, 아니면
-        /// 하나도 내놓지 않는다. 반만 번역된 문장은 실제로는 둘인 것을 한 객체의 진술처럼 읽히게 하기 때문이다.
+        /// 항의 머리가 피호출자 자신의 타입일 때만 바꾼다. 그렇지 않은 항이 하나라도 있으면 전체를 null 로 한다. 반만
+        /// 옮긴 조건은 두 객체에 대한 내용을 한 객체의 것처럼 읽히게 한다.
         /// </remarks>
         internal Condition ReadFrom(Binding binding)
         {
@@ -260,7 +235,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     }
                     else if (Test.Context != null && Test.Context.StartsWith("arg:", System.StringComparison.Ordinal))
                     {
-                        // 매개변수에 대한 항은 호출자가 거기 넣은 무엇에 대한 것이다.
+                        // 매개변수에 대한 항은 호출자가 넘긴 인자에 대한 것이다.
                         head = HeadOf(Test.Left);
 
                         if (head == null || binding.Passed == null ||
@@ -276,7 +251,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     }
                     else
                     {
-                        // static 이거나 주어 없는 항은 어디서 읽어도 같은 뜻이다.
+                        // static 이거나 주어가 없는 항은 어디서 읽어도 같은 뜻이다.
                         return Test.Context == "static" || Test.Context == null ? this : null;
                     }
 
@@ -320,12 +295,12 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 }
 
                 default:
-                    // Always 이거나, 제스처이거나, 읽지 못한 것이다. 그중 어느 것도 객체의 이름을 대지 않는다.
+                    // Always, 입력, 읽지 못한 조건은 객체를 가리키지 않는다.
                     return this;
             }
         }
 
-        /// <summary>항 하나를 호출자가 선 자리에서 말한 것, 또는 그럴 수 없을 때 null.</summary>
+        /// <summary>항 하나를 호출자 쪽 용어로 옮긴 것. 옮길 수 없으면 null.</summary>
         internal static string Swapped(string term, string owner, string receiver)
         {
             if (term == null || owner == null || receiver == null)
@@ -338,7 +313,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 return receiver;
             }
 
-            // 숫자, 문자열, `null` — 피호출자의 객체 이름을 대는 것은 하나도 없다.
+            // 숫자, 문자열, `null` 은 피호출자의 객체를 가리키지 않는다.
             if (!term.StartsWith(owner + ".", System.StringComparison.Ordinal))
             {
                 return term.IndexOf('.') < 0 ? term : null;
@@ -347,7 +322,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return receiver + term.Substring(owner.Length);
         }
 
-        /// <summary>항의 첫 이름. 나머지가 거기 매달린다.</summary>
+        /// <summary>항의 첫 이름.</summary>
         private static string HeadOf(string term)
         {
             if (string.IsNullOrEmpty(term))
@@ -359,6 +334,13 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return dot < 0 ? term : term.Substring(0, dot);
         }
 
+        /// <summary>
+        /// 모든 검사가 호출자 자신의 객체나 static 에 대한 것일 때 참.
+        /// </summary>
+        /// <remarks>
+        /// 입력은 주어가 없으므로 막지 않는다. 주어를 알 수 없는 검사는 다른 객체의 조건과 함께 읽어도 되는지 알 수
+        /// 없으므로 거짓이 된다.
+        /// </remarks>
         internal bool AboutSelfOnly()
         {
             switch (Kind)
@@ -379,26 +361,19 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     return true;
 
                 default:
-                    // Always 이거나, 제스처이거나, 읽지 못한 것이다. 그중 어느 것도 객체의 이름을 대지 않는다.
+                    // Always, 입력, 읽지 못한 조건은 객체를 가리키지 않는다.
                     return true;
             }
         }
 
         /// <summary>
-        /// 같은 조건에서 입력만 남기고 전부 떨어뜨린 것.
+        /// 같은 조건에서 입력만 남긴 것.
         /// </summary>
         /// <remarks>
-        /// 나오는 것은 들어간 것이 함의하는 것이고, 중요한 성질은 그것 하나뿐이다: 진실보다 적게 말할지언정 진실이
-        /// 말하지 않는 것을 말하지는 않는다.
+        /// 결과는 원래 조건이 함의하는 것이어야 한다. 덜 말할 수는 있어도 틀린 것을 말하면 안 된다. AND 는 어느 부분에서든
+        /// 입력을 남겨도 참이다. OR 은 모든 경우에 입력이 있을 때만 남긴다. 입력 없는 경우가 있으면 Always 다.
         ///
-        /// 그래서 잇는 두 방식을 똑같이 다루지 않는다. <c>and</c> 의 모든 부분은 성립해야 했으므로, 그중 어느
-        /// 것에서든 입력만 남겨도 여전히 참이다. <c>or</c> 은 *한* 갈래를 탔다는 것만 약속하므로, 그 입력은 **모든**
-        /// 갈래에 입력이 있을 때만 남길 수 있다 — 그러지 않으면 입력 없는 갈래는 이것이 부정하게 될 갈래가 된다.
-        ///
-        /// 이것이 존재하는 이유는, 입력이 조건 안에서 객체에 속하지 않는 유일한 것이기 때문이다. 호출자의
-        /// <c>count &gt; 0</c> 은 호출자의 <c>count</c> 에 대한 것이고 피호출자의 용어 옆에서는 다른 뜻이 된다.
-        /// 호출자의 <c>Space 가 눌렸다</c> 는 키보드에 대한 것이고 어디서나 같은 뜻이다. 그래서 엣지가 수신자를
-        /// 나를 수 있게 되기 전에 호출 엣지를 따라 내려보낼 수 있는 유일한 부분이다.
+        /// 입력은 객체에 속하지 않아 어디서나 같은 뜻이므로 수신 객체를 옮기지 않고도 호출 엣지를 따라 내려보낼 수 있다.
         /// </remarks>
         internal Condition InputsOnly()
         {
@@ -444,7 +419,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 }
 
                 default:
-                    // 검사이거나, 알 수 없는 것이거나, 아예 아무것도 아니다. 그중 어느 것도 입력이 아니다.
+                    // 검사, 읽지 못한 조건 등은 입력이 아니다.
                     return Always;
             }
         }
@@ -471,11 +446,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 나머지가 이미 말하는 것을 걷어낸다.
+        /// 다른 부분이 이미 함의하는 부분을 걷어낸다.
         /// </summary>
         /// <remarks>
-        /// <c>else if</c> 사슬은 앞선 모든 검사를 그 부정으로 뒤에 남기므로, 네 번째 팔에 닿는 일은 <c>== 3</c> 이
-        /// 이미 함의하는 <c>!=</c> 절 셋을 나른다. 그것들은 참이고, 중요한 절 하나를 파묻는다.
+        /// <c>else if</c> 사슬의 네 번째 경우는 <c>== 3</c> 이 이미 함의하는 <c>!=</c> 절 셋을 나르고, 그것이 중요한 절을 가린다.
         /// </remarks>
         private static void DropImplied(List<Condition> parts)
         {
@@ -505,17 +479,13 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 같은 말을 하는 두 조건이 같다고 비교되도록 하는 정규형.
+        /// 같은 내용의 두 조건이 같다고 비교되게 하는 정규형.
         /// </summary>
         /// <remarks>
-        /// 검사는 무엇을 말하는가뿐 아니라 어디서 읽혔는가로도 가려진다. 같은 말로 나온 두 읽기가 같은 사실인 것은
-        /// 아니다 — 호출의 이름이 그 선언 타입에 대고 쓰이던 시절 <c>spellCards.Count == 1</c> 과
-        /// <c>magicTypeCards.Count == 1</c> 이 한 문장으로 도착했고, 그중 하나는 반복으로 떨어져 나갔다. 그렇게
-        /// 나간 것은 제 절반이 사라진 채 그렇다고 말하는 것도 없는 선행 조건이었고, 그것은 읽지 못한 것보다 나쁘다:
-        /// 거기서 만든 명세는 게임이 카드 둘을 원하는 자리에서 하나를 청한다.
+        /// 검사는 내용뿐 아니라 읽힌 오프셋으로도 구분한다. 같은 문자열로 쓰인 두 검사가 같은 사실은 아니며, 하나를 중복으로
+        /// 떨어뜨리면 선행 조건의 절반이 말없이 사라진다.
         ///
-        /// 오프셋은 사람이 읽는 문장에 넣지 않는다. 그것은 같음이 결정되는 여기에 있고, 써 나가는 쪽은 건드리지
-        /// 않는다.
+        /// 오프셋은 사람이 읽는 문자열에는 넣지 않고 여기서만 쓴다.
         /// </remarks>
         internal string Key
         {
@@ -566,8 +536,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
 
             if (Kind == ConditionKind.Gesture)
             {
-                // 부재해야 했던 입력은 선행 조건이지 이것을 일으키는 방법이 아니다. 그것을 방법으로 나열하면 제 말과
-                // 반대로 동작하는 키를 내놓게 된다.
+                // 부재해야 하는 입력은 선행 조건이지 이것을 일으키는 방법이 아니다. 방법으로 나열하면 반대로 동작하는 키가 된다.
                 if (Gesture.Absent)
                 {
                     return;
@@ -625,11 +594,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 조건을 써 나가되, 길어지면 멈춘다.
+        /// 조건을 써 나가되 예산을 넘으면 멈춘다.
         /// </summary>
         /// <remarks>
-        /// 트리는 가지를 공유하지만 써 나가는 것은 그렇지 않다. 예산이 메모리에서 촘촘한 모양이 텍스트 한 쪽이 되는
-        /// 것을 막고, 표시가 어디서 멈췄는지를 말하므로 결과는 조용히 일부인 것이 아니라 짧은 것이 된다.
+        /// 트리는 가지를 공유하지만 텍스트는 그렇지 않아 펼치면 커진다. 멈춘 자리에 표시를 남겨 잘렸음을 드러낸다.
         /// </remarks>
         internal void Write(StringBuilder text, ref int budget)
         {

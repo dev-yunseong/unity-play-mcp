@@ -1,18 +1,17 @@
 namespace UnityPlayMcp
 {
     /// <summary>
-    /// 실행을 모는 쪽을 위해 라이브 reading 을 켜고 끄는 일.
+    /// executor 가 live reading 을 켜고 끄는 interface 다.
     /// </summary>
     /// <remarks>
-    /// 매니저 자체가 아니라 이음매다. executor 가 하는 일 전부는 게임에 무언가를 하는 것이고 이것은 SDK 에 하는 유일한
-    /// 것이다 — 따로 이름 붙이는 것이 그것을 보이게 하고, 테스트가 채널 없이 executor 를 만들 수 있게 한다.
+    /// 테스트가 channel 없이 executor 를 만들 수 있도록 manager 와 분리한다.
     /// </remarks>
     internal interface IReadingChannel
     {
-        /// <summary>reading 을 시작하거나, 왜 안 되는지 말한다. 그 뒤에 돌고 있으면 참.</summary>
+        /// <summary>reading 을 시작한다. 실패하면 이유를 보고한다. 호출 뒤 돌고 있으면 true 다.</summary>
         bool StartReadings();
 
-        /// <summary>그것들을 끝낸다. 한 번도 시작하지 않았을 때도 안전하다.</summary>
+        /// <summary>reading 을 끝낸다. 시작한 적이 없어도 안전하다.</summary>
         void StopReadings();
     }
 }

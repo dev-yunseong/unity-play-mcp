@@ -5,11 +5,10 @@ using UnityEngine.EventSystems;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 받은 uGUI hover 와 누름 이벤트를 도착 순서대로 적는다.
+    /// 받은 uGUI hover 와 누름 이벤트를 도착 순서대로 기록한다.
     /// </summary>
     /// <remarks>
-    /// <see cref="PointerFixtureBehaviour"/> 에 enter/exit 를 더하지 않는 것은 그것을 쓰는 test 들이 이벤트 순서를 통째로 비교하기
-    /// 때문이다. 거기에 hover 가 끼면 클릭 test 가 hover 때문에 깨진다.
+    /// <see cref="PointerFixtureBehaviour"/> 를 쓰는 test 는 이벤트 순서를 통째로 비교하므로 enter/exit 를 따로 둔다.
     /// </remarks>
     public sealed class HoverFixtureBehaviour :
         MonoBehaviour,
@@ -20,7 +19,7 @@ namespace UnityPlayMcp.Tests
     {
         public List<string> Events { get; } = new List<string>();
 
-        /// <summary>enter 를 받은 그 순간 게임이 하는 일. 포인터가 도착하는 사이 대상이 바뀌는 경우를 만든다.</summary>
+        /// <summary>enter 를 받을 때 게임이 할 일이다. 포인터 이동 중 대상이 바뀌는 경우를 만든다.</summary>
         public System.Action Entered { get; set; }
 
         public void OnPointerEnter(PointerEventData eventData)

@@ -3,13 +3,10 @@ using System;
 namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
-    /// 설정 파일 자리를 계산하는 데 필요한 뿌리 경로와 운영체제.
+    /// 설정 파일 경로를 계산하는 데 필요한 root 경로와 운영체제.
     /// </summary>
     /// <remarks>
-    /// <see cref="McpAgent.Catalog"/> 가 받는 값을 한 type 으로 묶는다. 네 개를 낱개 인자로 넘기면 부르는 쪽마다
-    /// 순서를 틀릴 수 있고, 어느 것이 없어도 되는 값인지 signature 만 보고는 알 수 없다.
-    /// <see cref="RoamingApplicationDataDirectory"/> 는 Windows 의 <c>%APPDATA%</c> 이고 다른 운영체제에서는
-    /// 쓰지 않으므로 비어 있어도 된다.
+    /// <see cref="McpAgent.Catalog"/> 의 인자를 묶어 인자 순서 실수를 막고 필수 값을 생성자에서 검사한다.
     /// </remarks>
     internal sealed class McpConfigRoots
     {

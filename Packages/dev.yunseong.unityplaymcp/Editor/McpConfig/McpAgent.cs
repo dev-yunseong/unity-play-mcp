@@ -5,7 +5,7 @@ using System.IO;
 namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
-    /// 설정을 써 넣을 수 있는 coding agent 한 곳: 화면에 보일 이름, 설정 파일 자리, 그 파일의 형식.
+    /// 설정을 쓸 수 있는 coding agent 의 표시 이름, 설정 파일 경로, 파일 형식.
     /// </summary>
     internal sealed class McpAgent
     {
@@ -23,11 +23,10 @@ namespace UnityPlayMcp.McpConfig.Editor
         internal IMcpConfigFormat Format { get; }
 
         /// <summary>
-        /// 지원하는 네 곳을 고른 scope 기준으로 만든다.
+        /// 지원하는 agent 목록을 scope 기준으로 만든다.
         /// </summary>
         /// <remarks>
-        /// agent 마다 자리와 형식이 다르고, 같은 agent 도 scope 에 따라 자리가 다르다. 이 세 가지가 한 곳에
-        /// 모여 있어야 자리를 고칠 때 볼 곳이 하나다. 형식은 scope 와 무관하므로 scope 로 갈리지 않는다.
+        /// agent 별 경로와 형식을 한 곳에 모은다. 형식은 scope 와 무관하다.
         /// </remarks>
         internal static IReadOnlyList<McpAgent> Catalog(McpConfigScope scope, McpConfigRoots roots)
         {
@@ -57,7 +56,7 @@ namespace UnityPlayMcp.McpConfig.Editor
             };
         }
 
-        /// <summary>user scope 는 파일 이름부터 다르다. project 의 <c>.mcp.json</c> 이 홈에는 없다.</summary>
+        /// <summary>user scope 는 파일 이름이 다르다. 홈에는 <c>.mcp.json</c> 대신 <c>.claude.json</c> 을 쓴다.</summary>
         private static string ClaudeCodePath(McpConfigScope scope, McpConfigRoots roots)
         {
             return scope == McpConfigScope.User
@@ -71,12 +70,11 @@ namespace UnityPlayMcp.McpConfig.Editor
         }
 
         /// <summary>
-        /// Visual Studio Code 의 user 설정만 운영체제마다 자리가 다르다.
+        /// Visual Studio Code 의 user 설정만 운영체제마다 경로가 다르다.
         /// </summary>
         /// <remarks>
         /// Windows 는 <c>%APPDATA%</c>, macOS 는 <c>~/Library/Application Support</c>, Linux 는 <c>~/.config</c>
-        /// 아래다. Mono 의 <c>SpecialFolder.ApplicationData</c> 는 macOS 에서도 <c>~/.config</c> 를 돌려주므로
-        /// 그 값 하나로 세 갈래를 대신할 수 없다.
+        /// 아래다. Mono 의 <c>SpecialFolder.ApplicationData</c> 는 macOS 에서도 <c>~/.config</c> 를 돌려주므로 쓰지 않는다.
         /// </remarks>
         private static string VisualStudioCodePath(McpConfigScope scope, McpConfigRoots roots)
         {
@@ -93,7 +91,7 @@ namespace UnityPlayMcp.McpConfig.Editor
             switch (roots.Platform)
             {
                 case McpHostPlatform.Windows:
-                    // %APPDATA% 를 못 받았을 때의 기본 자리. 홈 아래에 바로 만들어 엉뚱한 곳을 쓰지 않는다.
+                    // %APPDATA% 를 받지 못하면 Windows 기본 경로를 쓴다.
                     return string.IsNullOrEmpty(roots.RoamingApplicationDataDirectory)
                         ? Path.Combine(roots.HomeDirectory, "AppData", "Roaming")
                         : roots.RoamingApplicationDataDirectory;

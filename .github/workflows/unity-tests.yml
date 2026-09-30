@@ -24,10 +24,8 @@ jobs:
     outputs:
       run-tests: ${{ steps.gate.outputs.run-tests }}
     steps:
-      # Unity batch mode refuses to start without an activated licence, and the
-      # licence only reaches the job through repository secrets. Decide here,
-      # once, whether the test jobs can run at all — a green pipeline that never
-      # started an editor would advertise coverage that does not exist.
+      # Unity batch mode needs a licence from repository secrets. Decide once whether
+      # the test jobs can run, so a run that never started an editor is not reported green.
       - name: Decide whether tests can run
         id: gate
         env:
@@ -102,23 +100,15 @@ jobs:
           # project assembled from Packages/dev.yunseong.unityplaymcp.
           submodules: false
 
-      # The repository root is not a Unity project, and samples/WordVenture does
-      # not declare dev.yunseong.unityplaymcp as a testable, so nothing in the tree is
-      # runnable by the Test Runner as checked out. This builds the project that
-      # is. (game-ci's own `packageMode` is not used: it derives the manifest
-      # from package.json, which does not list the built-in modules the runtime
-      # needs — com.unity.modules.physics among them — so the package would not
-      # compile.)
+      # No project in the tree declares the package as a testable, so build one.
+      # game-ci's `packageMode` is not used: its manifest omits built-in modules the
+      # runtime needs (com.unity.modules.physics), so the package would not compile.
       - name: Assemble Unity test project
         run: .github/scripts/setup-unity-test-project.sh "${TEST_PROJECT_PATH}"
 
-      # Library/ is ~210 MB, most of it PackageCache — restoring it is what turns
-      # a cold "resolve every package and reimport everything" run into an
-      # incremental one. The key deliberately excludes the commit SHA: on an
-      # exact hit actions/cache skips the save, so a 210 MB upload does not
-      # happen on every run, and Unity reimports only what actually changed. The
-      # cache is refreshed when the dependency set changes, which is what
-      # invalidates PackageCache.
+      # Restoring Library/ (mostly PackageCache) makes the import incremental. The key
+      # excludes the commit SHA so an exact hit skips the ~210 MB save; it changes only
+      # when the dependency set does.
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
@@ -137,8 +127,7 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          # "auto" reads .unity-test-project/ProjectSettings/ProjectVersion.txt,
-          # which the template pins to 2022.3.34f1. One source of truth.
+          # "auto" reads the editor version pinned in .unity-test-project/ProjectSettings/ProjectVersion.txt.
           unityVersion: auto
           projectPath: ${{ env.TEST_PROJECT_PATH }}
           testMode: ${{ matrix.testMode }}
@@ -146,17 +135,14 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           checkName: ${{ matrix.testMode }} Test Results
 
-      # Unity runs as root inside the container, so Library/ and artifacts/ come
-      # back root-owned. The cache post-step and the artifact upload both run as
-      # the runner user and would fail to read them.
+      # Unity runs as root in the container; the cache and upload steps run as the
+      # runner user and cannot read root-owned Library/ and artifacts/.
       - name: Make Unity output readable by the runner
         if: always()
         run: sudo chown -R "$(id -u):$(id -g)" artifacts "${TEST_PROJECT_PATH}" 2>/dev/null || true
 
-      # unity-test-runner already fails the job on a failing test. This turns the
-      # NUnit XML into annotations and a job summary so the failing test names and
-      # assertion messages are visible on the pull request without downloading
-      # the artifact.
+      # Surface failing test names and messages on the pull request as annotations
+      # and a job summary, without downloading the artifact.
       - name: Report test results
         if: always()
         run: |
@@ -174,10 +160,8 @@ jobs:
           path: artifacts/${{ matrix.testMode }}
           if-no-files-found: warn
 
-      # 원본을 그대로 올리지 않는다. 로그를 올리는 목적이 라이선스 활성화 실패 진단인데,
-      # 하필 그 실패 경로에서 Unity가 계정 이메일과 시리얼을 로그에 남긴다. GitHub의 시크릿
-      # 마스킹은 콘솔 출력에만 걸리고 아티팩트 파일 내용은 훑지 않으므로, 저장소 읽기 권한이
-      # 있는 사람 누구나 받아 볼 수 있게 된다.
+      # 라이선스 활성화 실패 로그에는 계정 이메일과 시리얼이 남는다. GitHub 시크릿 마스킹은
+      # 아티팩트 내용에 적용되지 않으므로 원본 대신 정리한 사본을 올린다.
       - name: Scrub credentials from Unity log
         if: failure()
         env:

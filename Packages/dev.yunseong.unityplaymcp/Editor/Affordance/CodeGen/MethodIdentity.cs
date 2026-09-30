@@ -3,7 +3,10 @@ using Mono.Cecil;
 
 namespace UnityPlayMcp.Affordances.CodeGen
 {
-    /// <summary>맨 메서드 이름에 기대지 않고 컴파일 시점 근거를 이어 붙일 만큼은 안정적이다.</summary>
+    /// <summary>
+    /// 어셈블리, 선언 타입, 이름, 시그니처로 메서드를 식별한다. 컴파일 시점 `evidence` 를 이름만으로
+    /// 이어 붙이면 overload 가 섞인다.
+    /// </summary>
     internal static class MethodIdentity
     {
         internal static string Of(MethodReference method)

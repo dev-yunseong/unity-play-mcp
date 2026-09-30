@@ -115,6 +115,28 @@ hold. Do not restate what the code already says.
 
 Delete commented-out code instead of parking it. Git history holds it.
 
+### Tone and length
+
+Write a comment the way you would explain the code to a colleague in one or two
+sentences: plain declarative Korean (`~다`), short, and specific.
+
+- Keep: the constraint, the reason, the failure mode it prevents, the invariant.
+- Cut: development history ("실측했다", "예전에는 …였다", how the bug was found),
+  metaphors, rhetorical contrasts, and anything the code or the name already says.
+  An issue number such as `(#69)` is enough to point at the history.
+- One comment is usually one to three lines. A `<remarks>` block longer than a
+  short paragraph is a sign the reasoning belongs in the PR or the plan.
+- Do not coin Korean words for things the code names. These have been used here
+  and must not be used again: `박자`(→ `pulse` 간격), `장부`(→ `ledger`),
+  `게이트`(→ 변화 판정), `독자`(→ 읽는 쪽, MCP server), `진술`(→ 값, 내용),
+  `갈래`(→ 경우, `branch`), `배선`(→ `wiring`), `통`(→ `active`/`deactive` 목록),
+  `carrier`를 풀어 쓴 말(→ `carrier`).
+
+```
+// 나쁨: 박자가 제 루프를 벗어나는 자리가 아니라 여기서 하는 것은, 박자가 거기 닿는 일이 없기 때문이다.
+// 좋음: carrier 를 파괴하면 coroutine 이 멈추므로 남은 reading 은 여기서 보낸다.
+```
+
 ## Terminology in comments, documents, and pull requests
 
 Keep a technical term in English, in backticks, even in the middle of a Korean

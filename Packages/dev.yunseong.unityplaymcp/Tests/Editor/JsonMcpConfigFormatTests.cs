@@ -139,8 +139,7 @@ namespace UnityPlayMcp.Tests.McpConfig
         }
 
         /// <remarks>
-        /// Newtonsoft 의 JObject 는 object 안의 주석을 담지 못한다. 읽어서 다시 쓰면 사용자가 적어 둔 주석이
-        /// 사라지므로, 조용히 지우는 대신 멈춘다.
+        /// Newtonsoft JObject 는 object 안의 주석을 보존하지 못하므로, 주석을 지우는 대신 멈춘다.
         /// </remarks>
         [Test]
         public void RefusesToRewriteAFileWithComments()
@@ -175,8 +174,7 @@ namespace UnityPlayMcp.Tests.McpConfig
         }
 
         /// <remarks>
-        /// JObject.ToString 은 Environment.NewLine 으로 줄을 바꾼다. 개행을 파일에 맞추지 않으면 Windows 에서
-        /// 본문만 CRLF 이고 마지막 줄은 LF 인 파일이 나온다.
+        /// JObject.ToString 은 Environment.NewLine 을 쓴다. 파일 개행에 맞추지 않으면 Windows 에서 CRLF 와 LF 가 섞인다.
         /// </remarks>
         [Test]
         public void KeepsTheLineEndingTheFileAlreadyUses()

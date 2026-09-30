@@ -12,13 +12,11 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// The decisions in `capture_screen`, exercised without a framebuffer.
+    /// `capture_screen` decisions, tested without a framebuffer.
     /// </summary>
     /// <remarks>
-    /// The pixel path itself needs a real screen and is verified by hand in play mode. What is
-    /// covered here is everything that decides *what* to capture and *what to say* about it — the
-    /// parts that fail silently, by producing a plausible image of the wrong area or a result the
-    /// agent cannot act on.
+    /// The pixel path needs a real screen and is checked by hand. These cover what to capture and
+    /// what to report, which fail silently with a plausible image of the wrong area.
     /// </remarks>
     public sealed class CaptureScreenTests
     {
@@ -50,8 +48,7 @@ namespace UnityPlayMcp.Tests
             Assert.That(request.IsFullScreen, Is.True);
             Assert.That(request.MaxEdge, Is.EqualTo(CaptureRequestReader.FullScreenMaxEdge));
 
-            // A whole screen is mostly rendered scene, where JPEG's cost is invisible and its
-            // saving is not.
+            // A full screen is mostly rendered scene, where JPEG artifacts are invisible.
             Assert.That(request.ContentType, Is.EqualTo("image/jpeg"));
         }
 
@@ -65,8 +62,7 @@ namespace UnityPlayMcp.Tests
             Assert.That(request.TargetId, Is.EqualTo(42));
             Assert.That(request.MaxEdge, Is.EqualTo(CaptureRequestReader.CropMaxEdge));
 
-            // A crop is usually UI, where JPEG ringing lands on the glyph edges and borders that
-            // are the thing being judged.
+            // A crop is usually UI, where JPEG ringing lands on glyph edges and borders.
             Assert.That(request.ContentType, Is.EqualTo("image/png"));
         }
 
@@ -114,8 +110,7 @@ namespace UnityPlayMcp.Tests
             var screen = new Rect(0f, 0f, 800f, 600f);
             var panel = Panel("panel", OverlayCanvas(), new Vector2(200f, 100f), new Vector2(80f, 40f));
 
-            // An overlay canvas sizes itself to the screen during the canvas update, not on the
-            // frame it was created, and its children's world corners are meaningless until then.
+            // An overlay canvas sizes itself during the canvas update, not on the frame it was created.
             yield return null;
 
             Assert.That(CaptureRect.TryResolve(panel, 0f, screen, out var region), Is.True);
@@ -142,8 +137,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// A half-visible element is itself the kind of defect the agent is looking for, so the
-        /// visible part is captured and the fact reported rather than treated as an error.
+        /// A half-visible element is itself a defect the agent looks for, so the visible part is
+        /// captured and reported rather than treated as an error.
         /// </summary>
         [UnityTest]
         public IEnumerator ResolveRect_ReportsAnElementTheScreenCutsShortAsClipped()
@@ -159,7 +154,7 @@ namespace UnityPlayMcp.Tests
             Assert.That(region.PixelRect.xMin, Is.EqualTo(0f).Within(0.5f));
             Assert.That(region.PixelRect.width, Is.EqualTo(60f).Within(0.5f));
 
-            // 잘리기 전에 청한 영역도 남는다. 무엇이 잘렸는지는 이 둘의 차이로만 말할 수 있다.
+            // 잘리기 전 요청 영역도 남겨야 무엇이 잘렸는지 알 수 있다.
             Assert.That(region.Requested.xMin, Is.EqualTo(-20f).Within(0.5f));
             Assert.That(region.Requested.width, Is.EqualTo(80f).Within(0.5f));
         }
@@ -189,7 +184,7 @@ namespace UnityPlayMcp.Tests
         [Test]
         public void Downscale_LeavesAnImageAlreadyUnderTheCapAlone()
         {
-            // Upscaling a small button to the cap costs bytes and adds no detail for the model.
+            // Upscaling a small button costs bytes and adds no detail.
             var size = CaptureRect.Downscale(200, 80, 512);
 
             Assert.That(size.x, Is.EqualTo(200));
@@ -208,7 +203,7 @@ namespace UnityPlayMcp.Tests
         // --- coordinates (#71) ---
 
         /// <summary>
-        /// 관찰된 그 경우. 1920x1080 게임 화면을 1024x576 으로 줄인 스크린샷의 픽셀을 <c>move_mouse</c> 좌표로 되돌린다.
+        /// 1920x1080 화면을 1024x576 으로 줄인 스크린샷의 픽셀을 <c>move_mouse</c> 좌표로 되돌린다.
         /// </summary>
         [Test]
         public void Geometry_MapsADownscaledFullScreenBackToScreenPixels()
@@ -226,12 +221,12 @@ namespace UnityPlayMcp.Tests
             Assert.That(scale.X, Is.EqualTo(1024f / 1920f).Within(1e-5f));
             Assert.That(scale.Y, Is.EqualTo(576f / 1080f).Within(1e-5f));
 
-            // 이미지 (512, 288) 은 화면 한가운데 (960, 540) 이다. agent 가 손으로 적용하던 1.875 배가 이것이다.
+            // 이미지 (512, 288) 은 화면 중앙 (960, 540) 이다 (배율 1.875).
             Assert.That(region.X + 512f / scale.X, Is.EqualTo(960f).Within(0.01f));
             Assert.That(region.Y + 288f / scale.Y, Is.EqualTo(540f).Within(0.01f));
         }
 
-        /// <summary>해상도가 바뀌면 같은 이미지 크기라도 비율이 달라진다. 이미지 크기만으로는 원본을 알 수 없다는 것이 이것이다.</summary>
+        /// <summary>같은 이미지 크기라도 해상도가 다르면 비율이 달라진다.</summary>
         [Test]
         public void Geometry_FollowsAResolutionChange()
         {
@@ -243,16 +238,16 @@ namespace UnityPlayMcp.Tests
             var scale = CaptureRect.Scale(source, size.x, size.y);
             Assert.That(scale.X, Is.EqualTo(0.8f).Within(1e-5f));
 
-            // 1920x1080 에서와 같은 이미지 점 (512, 288) 이 이번에는 (640, 360) 이다.
+            // 같은 이미지 점 (512, 288) 이 이번에는 (640, 360) 이다.
             Assert.That(512f / scale.X, Is.EqualTo(640f).Within(0.01f));
             Assert.That(288f / scale.Y, Is.EqualTo(360f).Within(0.01f));
         }
 
-        /// <summary>대상 crop 은 원점이 화면 구석이 아니다. 좌하단 Unity 좌표를 좌상단으로 뒤집은 원점을 싣는다.</summary>
+        /// <summary>대상 crop 의 원점은 좌하단 Unity 좌표를 좌상단 기준으로 뒤집은 값이다.</summary>
         [Test]
         public void Geometry_PlacesACropAtItsTopLeftOrigin()
         {
-            // 화면 1920x1080 에서 아래서 200, 왼쪽에서 100 인 300x100 영역.
+            // 1920x1080 화면에서 아래 200, 왼쪽 100 에 있는 300x100 영역이다.
             var source = new Rect(100f, 200f, 300f, 100f);
 
             var region = CaptureRect.TopLeft(source, 1080);
@@ -262,7 +257,7 @@ namespace UnityPlayMcp.Tests
             Assert.That(region.Y, Is.EqualTo(780f));
             Assert.That(scale.X, Is.EqualTo(1f));
 
-            // 이미지의 왼쪽 위 픽셀은 화면 (100, 780), 오른쪽 아래는 (400, 880).
+            // 이미지 좌상단 픽셀은 화면 (100, 780), 우하단은 (400, 880) 이다.
             Assert.That(region.X + 300f / scale.X, Is.EqualTo(400f));
             Assert.That(region.Y + 100f / scale.Y, Is.EqualTo(880f));
         }
@@ -341,8 +336,8 @@ namespace UnityPlayMcp.Tests
         // --- wire shape ---
 
         /// <summary>
-        /// The whole point of `NullValueHandling.Ignore`: results that return nothing keep the
-        /// exact shape the relay and the agent already parse.
+        /// With `NullValueHandling.Ignore`, results that return nothing keep the shape the relay and
+        /// agent already parse.
         /// </summary>
         [Test]
         public void Serialize_LeavesAResultWithNothingToReturnUnchanged()
@@ -429,8 +424,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// A panel at an exact pixel offset from the bottom-left corner, so the expected rectangle
-        /// is readable rather than derived from the screen size the test happens to run at.
+        /// A panel at an exact pixel offset from the bottom-left, so the expected rectangle does not
+        /// depend on the test's screen size.
         /// </summary>
         private RectTransform Panel(string name, Canvas canvas, Vector2 position, Vector2 size)
         {

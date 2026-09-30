@@ -3,9 +3,8 @@ using global::UnityEngine;
 namespace UnityPlayMcp
 {
     /// <summary>
-    /// Where the agent's pointer is and which of its buttons are down. Unlike a key press, a button
-    /// never expires on its own — a drag lasts as long as the agent needs, so only an explicit
-    /// release ends it.
+    /// The agent's pointer position and held buttons. Unlike a key press, a button never expires;
+    /// only an explicit release ends a drag.
     /// </summary>
     internal sealed class VirtualMouseState
     {
@@ -14,16 +13,14 @@ namespace UnityPlayMcp
         private readonly ButtonPressState[] buttons = new ButtonPressState[ButtonCount];
 
         /// <summary>
-        /// How far the real mouse may drift before the person is taken to have grabbed it back.
-        /// A few pixels, because a resting mouse still reports jitter.
+        /// Real mouse drift that hands the pointer back to the person. Small but above resting jitter.
         /// </summary>
         private const float ReclaimPixels = 4f;
 
         private Vector2 physicalWhenClaimed;
 
         /// <summary>
-        /// False until the agent moves the pointer for the first time, which is what lets the proxy
-        /// keep reporting the real pointer in a session nobody is driving.
+        /// False until the agent first moves the pointer, so an undriven session reports the real pointer.
         /// </summary>
         public bool HasPosition { get; private set; }
 
@@ -42,13 +39,10 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Whether the agent's pointer is the one to report. It stops being so the moment the real
-        /// mouse moves: a person reaching for it means they want the game back, and a claim that
-        /// outlives them leaves the game reading a cursor nobody is driving.
+        /// Whether the agent's pointer is the one to report. Moving the real mouse hands it back to the person.
         /// </summary>
         /// <remarks>
-        /// This gives the claim up as a side effect, because the read is the only moment the two
-        /// positions can be compared.
+        /// Releases the claim as a side effect; the read is the only moment the positions are compared.
         /// </remarks>
         public bool OwnsPointer(Vector2 physicalPosition)
         {
@@ -66,7 +60,7 @@ namespace UnityPlayMcp
             return true;
         }
 
-        /// <summary>Hands the pointer back without disturbing the buttons, which have their own frame rules.</summary>
+        /// <summary>Hands the pointer back without touching the buttons.</summary>
         public void ReleasePointer()
         {
             HasPosition = false;
@@ -79,19 +73,16 @@ namespace UnityPlayMcp
                 return;
             }
 
-            // 이미 눌린 채인 버튼을 다시 누르면 StartFrame 이 새로 찍혀 GetButtonDown 이 한 번 더
-            // 참이 된다. mouse_down 과 KeyCode.Mouse0 을 실은 key_down 이 같은 버튼을 가리키므로
-            // 둘이 겹쳐 들어올 수 있고, 그때 폴링하는 게임이 클릭을 두 번으로 세면 안 된다.
-            // 놓기를 예약해 둔 버튼은 다시 누를 수 있다 — 그것은 이미 끝난 누름의 다음 누름이다.
+            // 눌린 버튼을 다시 누르면 GetButtonDown 이 한 번 더 참이 된다. mouse_down 과
+            // KeyCode.Mouse0 의 key_down 이 겹쳐 올 수 있어 무시한다. 놓기가 예약된 버튼은 다시 누를 수 있다.
             var held = buttons[button];
             if (held != null && !held.ReleaseFrame.HasValue)
             {
                 return;
             }
 
-            // The frame after the request, matching the virtual keyboard: the action is handled in
-            // the manager's Update, and a consumer polling in its own Update must not miss it
-            // because of script execution order.
+            // Starts next frame, like the virtual keyboard, so a consumer polling in Update does
+            // not miss it due to script execution order.
             buttons[button] = new ButtonPressState(currentFrame + 1);
         }
 
@@ -145,8 +136,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Unity 의 <c>Input.anyKeyDown</c> 은 마우스 버튼도 센다. 가상 쪽만 그러지 않으면 에이전트가
-        /// 누른 버튼이 <c>anyKeyDown</c> 으로 넘길 화면에서만 조용해진다.
+        /// Unity 의 <c>Input.anyKeyDown</c> 은 마우스 버튼도 세므로 가상 입력도 같게 맞춘다.
         /// </summary>
         public bool IsAnyButtonDown(int frame)
         {

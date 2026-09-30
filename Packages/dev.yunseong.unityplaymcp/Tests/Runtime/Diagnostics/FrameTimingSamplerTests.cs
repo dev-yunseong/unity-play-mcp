@@ -8,8 +8,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
     public sealed class FrameTimingSamplerTests
     {
         /// <summary>
-        /// 프레임 타이밍을 시험이 직접 정하는 리더. Unity의 FrameTimingManager도, 실제 GPU도
-        /// 건드리지 않는다.
+        /// test 가 프레임 타이밍을 정하는 reader 다. FrameTimingManager 와 GPU 를 쓰지 않는다.
         /// </summary>
         private sealed class FakeFrameTimingReader : IFrameTimingReader
         {
@@ -17,7 +16,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             public int CaptureCount { get; private set; }
 
-            /// <summary>직전 <see cref="ReadLatest"/>가 요청받은 프레임 수.</summary>
+            /// <summary>마지막 <see cref="ReadLatest"/> 가 요청받은 프레임 수.</summary>
             public int LastRequestedFrames { get; private set; }
 
             public void Capture()
@@ -44,7 +43,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             }
         }
 
-        /// <summary>큐에 넣은 프레임 수만큼 캡처를 돌린다. 실제 호출 순서와 같게 둔다.</summary>
+        /// <summary>큐에 넣은 프레임 수만큼 실제 호출 순서대로 캡처한다.</summary>
         private static void RecordFrames(FrameTimingSampler sampler, int frames)
         {
             for (var i = 0; i < frames; i++)
@@ -74,7 +73,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             RecordFrames(sampler, 3);
 
-            // 매 프레임 도는 자리라 읽기와 평균은 여기서 일어나면 안 된다.
+            // 매 프레임 도는 곳이므로 읽기와 평균은 여기서 하면 안 된다.
             Assert.AreEqual(3, reader.CaptureCount);
             Assert.AreEqual(0, reader.LastRequestedFrames);
         }
@@ -94,8 +93,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             var sampler = new FrameTimingSampler(reader);
             RecordFrames(sampler, 60);
 
-            // 설정이 꺼진 프로젝트는 예외 없이 0개를 돌려준다. 0으로 채운 결과를 내보내면
-            // 소비자가 CPU도 GPU도 공짜인 프레임으로 읽는다.
+            // 설정이 꺼진 project 는 0 개를 돌려준다. 0 으로 채워 보내면 CPU 와 GPU 비용이 없는 프레임으로 읽힌다.
             Assert.IsFalse(sampler.TrySummarize(out _));
         }
 
@@ -127,7 +125,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             Assert.IsTrue(sampler.TrySummarize(out var breakdown));
 
-            // Unity가 이미 ms로 준다. 초로 보고 1000을 곱하면 값이 천 배가 된다.
+            // Unity 가 이미 ms 로 준다. 1000 을 곱하면 안 된다.
             Assert.AreEqual(16.7f, breakdown.CpuMs.Value, 1e-3f);
             Assert.AreEqual(12.5f, breakdown.GpuMs.Value, 1e-3f);
         }
@@ -138,7 +136,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             var reader = new FakeFrameTimingReader();
             var sampler = new FrameTimingSampler(reader);
 
-            // GPU 타이머를 주지 않는 드라이버와 렌더 스레드가 없는 구성. 둘 다 0으로 온다.
+            // GPU timer 가 없는 드라이버와 render thread 가 없는 구성은 0 으로 온다.
             reader.Enqueue(cpuMs: 12d, mainThreadMs: 12d, renderThreadMs: 0d, gpuMs: 0d);
             RecordFrames(sampler, 1);
 
@@ -160,7 +158,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             Assert.IsTrue(sampler.TrySummarize(out var breakdown));
 
-            // 8과 0의 평균인 4가 아니라, 실제로 잰 프레임의 평균인 8이어야 한다.
+            // 0 을 뺀, 실제로 잰 프레임의 평균이어야 한다.
             Assert.AreEqual(8f, breakdown.GpuMs.Value, 1e-3f);
         }
 
@@ -172,7 +170,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             reader.Enqueue(cpuMs: 0d, mainThreadMs: 0d, renderThreadMs: 0d, gpuMs: 0d);
             RecordFrames(sampler, 1);
 
-            // 프레임 수만 남은 껍데기를 보내느니 그룹을 통째로 뺀다.
+            // 프레임 수만 남은 그룹은 보내지 않는다.
             Assert.IsFalse(sampler.TrySummarize(out _));
         }
 
@@ -191,7 +189,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             reader.Enqueue(cpuMs: 10d, mainThreadMs: 10d, renderThreadMs: 5d, gpuMs: 8d);
             RecordFrames(sampler, 1);
 
-            // 더 요청하면 이전 구간에 이미 실은 프레임을 다시 세게 된다.
+            // 더 요청하면 이전 구간에 실은 프레임을 다시 센다.
             Assert.IsTrue(sampler.TrySummarize(out _));
             Assert.AreEqual(1, reader.LastRequestedFrames);
         }
@@ -263,7 +261,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             Assert.IsTrue(sampler.TrySummarize(out var breakdown));
 
-            // 0.1ms 차이로 병목을 단정하면 보고마다 이름이 뒤집힌다.
+            // 0.1ms 차이로 병목을 정하면 보고마다 결과가 뒤집힌다.
             Assert.AreEqual(FrameTimingBottleneck.Balanced, breakdown.Bottleneck);
         }
 
@@ -273,7 +271,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             var reader = new FakeFrameTimingReader();
             var sampler = new FrameTimingSampler(reader);
 
-            // GPU 타이밍이 없는 환경. 남은 두 값만으로 가른다.
+            // GPU 타이밍이 없으면 남은 두 값으로 판정한다.
             reader.Enqueue(cpuMs: 30d, mainThreadMs: 29d, renderThreadMs: 5d, gpuMs: 0d);
             RecordFrames(sampler, 1);
 

@@ -3,25 +3,19 @@ using System.Text;
 
 namespace UnityPlayMcp.Affordances.CodeGen
 {
-    /// <summary>런타임 스캐너를 위해 유계이고 결정적인 근거 문서 하나를 쓴다.</summary>
+    /// <summary>런타임 스캐너가 읽을 유계이고 결정적인 `evidence` 문서 하나를 쓴다.</summary>
     internal static class EvidenceJson
     {
         /// <summary>
-        /// 여섯: 기록은 무엇이 자신에게 닿는지를 말한다.
+        /// 6: <c>calledBy</c> 를 더한다.
         /// </summary>
         /// <remarks>
-        /// 셋은 호출 엣지에 수신자와 인자를 더하고 구독을 써냈다. 넷은 어디서 닿았는지만 다른 기록들을 하나로
-        /// 접고 나머지 갈래를 <c>alsoReachedBy</c> 에 넣는다.
+        /// 3 은 호출 엣지에 수신 객체와 인자, 구독을 더했고, 4 는 중복 경우를 접어 <c>alsoReachedBy</c> 에 넣었다.
         ///
-        /// 버전 둘 문서가 가지고 있던 필드는 전부 같은 자리에 같은 뜻으로 남아 있으므로, 이것을 읽기 위해
-        /// 다시 써야 할 것은 없다. 번호가 움직이는 이유는 문서가 *빠뜨린 것* 의 뜻이 달라졌기 때문이다:
-        /// <c>handles</c> 를 무시하는 독자는 그 타입이 아무것도 구독하지 않는다고 결론짓고,
-        /// <c>alsoReachedBy</c> 를 무시하는 독자는 어떤 효과에 이르는 갈래를 실제보다 적게 본다. 자기가
-        /// 무엇을 쥐고 있는지 말해 주는 것은 버전뿐이다.
+        /// 기존 필드는 같은 자리와 뜻으로 남는다. 그래도 버전을 올리는 것은 빠뜨린 필드의 뜻이 달라지기 때문이다.
+        /// <c>handles</c> 나 <c>alsoReachedBy</c> 를 무시하는 읽는 쪽은 구독이나 경로를 실제보다 적게 본다.
         ///
-        /// 여섯은 <c>calledBy</c> 를 더한다: 무엇이 이 기록에 닿는가 — 기록 자신의 호출로는 결코 말할 수 없는
-        /// 것이다. 더하기만 하고, 그것을 나르는 문서와 함께 움직이지 한 버전 뒤에 처지지 않는다. 한 파일이
-        /// 자신이 어떤 모양인지에 대해 두 개의 답을 쥐고 있어서는 안 된다.
+        /// 이 값은 attribute 에도 쓰이므로 문서와 함께 올린다. 한 파일이 두 버전을 말하면 안 된다.
         /// </remarks>
         internal const int SchemaVersion = 6;
         private const int MaxItems = 64;
@@ -69,8 +63,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 text.Append(',');
                 Property(text, "handedOverIn", variant.HandedIn);
 
-                // 무엇이 그것을 가져갔는가. `WaitUntil` 에 넘긴 술어는 그것이 참이 될 때까지 멈춰 선 코루틴이고,
-                // 같은 술어를 콜백 목록에 넘긴 것은 그것이 아니다.
+                // 가져간 대상. `WaitUntil` 에 넘긴 술어는 coroutine 을 멈춰 세우지만 콜백 목록에 넘긴 것은 그렇지 않다.
                 if (variant.HandedTo != null)
                 {
                     text.Append(',');
@@ -78,8 +71,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 }
             }
 
-            // 무엇이 여기에 닿는가. 기록 자신의 호출로는 말할 수 없다: 그것들은 나가는 엣지이고, 제 기록이 없는
-            // 호출자는 그중 하나도 남기지 않는다.
+            // 이 기록에 닿는 호출자. 기록의 호출 목록은 나가는 엣지뿐이고, 자기 기록이 없는 호출자는 거기 남지 않는다.
             if (callers != null && variant.EntryId != null &&
                 callers.TryGetValue(variant.EntryId, out var reachedBy))
             {
@@ -126,8 +118,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 text.Append(',');
                 Property(text, "target", effect.Target);
 
-                // 대상이 될 수 있었던 값들. 원본이 그중에서 골랐을 때만 나온다. 그러니 이것을 본 독자는 위의 이름
-                // 하나가 답이 아니라는 것을 안다.
+                // 원본이 여러 값 중에서 골랐을 때만 나온다. 위의 target 하나가 확정된 답이 아님을 알린다.
                 if (effect.TargetCandidates != null && effect.TargetCandidates.Count > 0)
                 {
                     text.Append(",\"targetCandidates\":");
@@ -318,7 +309,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             text.Append(value ? ":true" : ":false");
         }
 
-        /// <summary>두 번째 writer 가 이스케이프에 대해 이쪽과 다른 말을 하지 못하도록 공유한다.</summary>
+        /// <summary>다른 writer 와 같은 이스케이프 규칙을 쓰도록 공유한다.</summary>
         internal static void String(StringBuilder text, string value)
         {
             if (value == null)

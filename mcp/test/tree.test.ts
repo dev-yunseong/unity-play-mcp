@@ -110,9 +110,8 @@ test("depth is counted from the root that was asked for", () => {
 });
 
 test("a slash inside a GameObject name does not add a level", () => {
-  // `selector` 의 마디 경계는 `]/` 다. 이름이 `A/B` 인 객체는 selector 마디가 `"A/B[0]"`
-  // 하나라 `Canvas` 바로 아래 마디 하나로 선다 — `path` 를 그대로 `/` 로 쪼갤 때 생기던
-  // 여분의 층이 없다.
+  // `selector` segment 경계는 `]/` 다. 이름이 `A/B` 인 객체는 segment `"A/B[0]"` 하나이므로
+  // `Canvas` 바로 아래 node 하나가 된다.
   const tree = foldIntoTree([object("Canvas[0]/A/B[0]", "Canvas/A/B")], noHistory);
   const canvas = find(tree, "Canvas");
   assert.equal(canvas?.children?.length, 1);
@@ -121,8 +120,8 @@ test("a slash inside a GameObject name does not add a level", () => {
 });
 
 test("siblings sharing a path each get their own node", () => {
-  // 만들어진 적 다섯이 `TurnBattleScene/RangedCat(Clone)` 하나를 나눠 쓴다. sibling index
-  // 가 다섯을 가르므로 다섯 마디가 선다 — 예전에는 마지막 하나만 남고 넷이 사라졌다.
+  // 적 다섯이 같은 `TurnBattleScene/RangedCat(Clone)` path 를 쓴다. sibling index 로 구별되므로
+  // node 가 다섯이어야 한다.
   const objects = [0, 1, 2, 3, 4].map((index) =>
     object(`TurnBattleScene[0]/RangedCat(Clone)[${index}]`, "TurnBattleScene/RangedCat(Clone)"));
   const tree = foldIntoTree(objects, noHistory);
@@ -154,10 +153,8 @@ test("root can select inside a truncated hierarchy", () => {
 });
 
 test("root naming a display path shared by siblings selects the first-inserted one", () => {
-  // 두 `Card` 형제가 같은 표시 이름을 쓰면 `root: "Canvas/Card"` 만으로는 사람이 둘을 못
-  // 가른다 — `descend()` 는 `objects` 배열에서 먼저 나온 쪽(sibling index 0)을 고른다. 이
-  // 동작 자체는 이전에도 있던 모호함이라 바뀌지 않지만, `build()` 의 삽입 순서가 나중에
-  // 바뀌어도 이 자리가 조용히 흔들리지 않도록 고정해 둔다.
+  // 같은 이름의 `Card` 형제는 `root: "Canvas/Card"` 로 구별할 수 없고 `descend()` 는 먼저 나온 쪽
+  // (sibling index 0)을 고른다. `build()` 의 삽입 순서가 바뀌어도 이 동작이 유지되도록 고정한다.
   const tree = foldIntoTree([
     object("Canvas[0]/Card[0]/First[0]", "Canvas/Card/First"),
     object("Canvas[0]/Card[1]/Second[0]", "Canvas/Card/Second"),

@@ -4,12 +4,7 @@ import test from "node:test";
 import type { FoldedPulseState, JsonValue, PulseComponent, PulseObject } from "../src/pulse.js";
 import { displayedTextOf, visibleElements } from "../src/visible.js";
 
-/// `PulseStore.fold` 를 태우지 않고 `FoldedPulseState` literal 에 대고 돌린다.
-///
-/// fold 를 태우면 #19 가 고치는 중인 member key 결함에 묶인다. Unity 는 `"m"` 을 보내고
-/// `mergeMembers` 는 `component.members` 를 읽으므로, 지금 그 길로 넣은 frame 은 fold 자체가
-/// 실패한다. 이 tool 이 검증하려는 것은 접힌 상태에서 무엇을 고르느냐이지 무엇이 접히느냐가
-/// 아니다.
+/// 선택 로직만 검증하므로 `PulseStore.fold` 를 거치지 않고 `FoldedPulseState` literal 을 쓴다.
 function component(on: string, values: Record<string, JsonValue>): PulseComponent {
   return {
     on,
@@ -61,8 +56,7 @@ test("화면에 무언가를 그리는 컴포넌트만 낸다", () => {
 });
 
 test("멤버를 하나도 안 든 UI 컴포넌트는 요소가 아니다", () => {
-  // SDK 는 읽어 낸 멤버가 없는 컴포넌트를 `by` 에 안 쓴다. 그래도 delta 에서는 빈 항목이
-  // 도착할 수 있고, 그것은 "이 타입이 여기 있다" 이지 "이것이 무언가를 보이고 있다" 가 아니다.
+  // delta 에서는 멤버 없는 component 가 올 수 있다. 타입이 있다는 뜻일 뿐 무언가를 보인다는 뜻은 아니다.
   const found = visibleElements(state([
     object("Layout", [component("UnityEngine.UI.LayoutElement", {})], seen),
   ]));
@@ -144,8 +138,8 @@ test("자리를 그대로 옮겨 싣는다", () => {
 });
 
 test("아직 아무 판단도 안 실린 요소는 빼지 않는다", () => {
-  // `onScreen` 과 `covered` 가 없는 것은 "안 보인다" 가 아니라 whole pulse 를 아직 못 받은
-  // 것이다. 없음을 아니오로 읽으면 첫 delta 에서 화면 전체가 사라진다.
+  // `onScreen` 과 `covered` 가 없으면 `whole` pulse 를 아직 못 받은 것이다. false 로 읽으면 첫
+  // delta 에서 화면 전체가 사라진다.
   const found = visibleElements(state([
     object("Score", [component("UnityEngine.UI.Text", { text: "12" })]),
   ]));

@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
-# MCP server 의 version 을 한 번에 옮긴다.
+# MCP server 의 version 을 한 번에 바꾼다.
 #
-# mcp/package.json 은 npm 에 올라가는 package 의 version 이고, mcp-server-version.txt 는
-# Unity Editor 쪽(McpConfig)이 그 값을 읽어 설치된 MCP server 와 맞는지 확인하는 literal 사본이다.
-# 두 파일이 어긋나면 publish-mcp.yml 의 "Validate release version contracts" 단계가 release 시점에
-# 잡아내지만, 잡히기 전에 맞추는 편이 낫다.
+# mcp/package.json 은 npm package 의 version 이고, mcp-server-version.txt 는 Unity Editor(McpConfig)가
+# 설치된 MCP server 와 맞는지 확인하는 literal 사본이다. 어긋나면 publish-mcp.yml 의
+# "Validate release version contracts" 단계가 잡는다.
 #
-# set-package-version.sh 는 Unity package.json 과 PackageVersion.cs 만 옮기고 이 두 파일은
-# 건드리지 않는다고 스스로 선언한다 — 그 경계를 지키면서 MCP server 두 파일을 옮기려면 별도
-# script 가 필요해서 이 파일을 만들었다. Unity 쪽 release 주기와 MCP server 쪽 release 주기는
-# 서로 독립적으로 움직인다 (예: PR #46 은 Unity package.json 을 건드리지 않고 이 두 파일만 올렸다).
+# MCP server 와 Unity package 는 release 주기가 따로이므로 set-package-version.sh 와 분리한다.
 set -euo pipefail
 
 if [ $# -ne 1 ]; then
@@ -43,8 +39,7 @@ node --input-type=module -e '
   writeFileSync(file, JSON.stringify(manifest, null, 2) + (trailingNewline ? "\n" : ""));
 ' "$manifest" "$version"
 
-# mcp-server-version.txt 는 값 하나만 담는 literal 파일이라 통째로 덮어쓴다.
-# 기존 파일도 trailing newline 을 하나 가지고 있어 그 모양을 그대로 맞춘다.
+# mcp-server-version.txt 는 값 하나만 담으므로 trailing newline 하나와 함께 통째로 덮어쓴다.
 printf '%s\n' "$version" > "$server_version_file"
 
 echo "MCP server version set to $version"

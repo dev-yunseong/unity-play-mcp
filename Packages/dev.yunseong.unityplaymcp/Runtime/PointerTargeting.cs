@@ -4,11 +4,10 @@ using UnityEngine.EventSystems;
 namespace UnityPlayMcp
 {
     /// <summary>
-    /// 겨눈 화면 좌표와, 그 좌표에서 실제로 맞은 오브젝트.
+    /// 겨눈 화면 좌표와 그 좌표에서 실제로 맞은 오브젝트다.
     /// </summary>
     /// <remarks>
-    /// 좌표는 Unity 의 좌하단 기준이다. 좌상단으로 뒤집는 일은 결과를 보고하는 자리에서만 한다 —
-    /// 여기서 뒤집으면 <c>CursorController</c> 로 넘길 때 도로 뒤집어야 한다.
+    /// 좌표는 Unity 의 좌하단 기준이다. <c>CursorController</c> 가 이 좌표계를 쓰므로 좌상단 변환은 결과를 보고할 때만 한다.
     /// </remarks>
     internal readonly struct PointerAim
     {
@@ -22,15 +21,12 @@ namespace UnityPlayMcp
         public Vector2 ScreenPosition { get; }
 
         /// <summary>
-        /// 겨눈 좌표에서 raycast 가 답한 그 오브젝트. 대상 자신일 수도, 그 자식일 수도 있다.
+        /// 겨눈 좌표에서 raycast 가 맞힌 오브젝트다. 대상 자신이거나 그 자식이다.
         /// </summary>
         /// <remarks>
-        /// <c>GameObject</c> 가 아니라 id 와 이름을 베껴 든다. 겨눈 뒤 결과를 보고하기까지 세
-        /// 프레임이 지나고, 그 사이에 게임이 대상을 파괴할 수 있다 — 죽는 적을 클릭하고 소모되는
-        /// 카드를 드래그하는 것이 바로 이 issue 가 겨냥한 장면이다. 파괴된 <c>GameObject</c> 의
-        /// <c>name</c> 을 읽으면 <c>MissingReferenceException</c> 이 나고, 그 예외는 coroutine 을
-        /// 뚫고 나가 host 의 action queue 를 <c>processingActions</c> 가 참인 채로 세운다. 그러면
-        /// 그 세션의 이후 액션이 전부 조용히 버려진다.
+        /// 결과 보고 전에 게임이 대상을 파괴할 수 있으므로 <c>GameObject</c> 대신 id 와 이름을 복사해 둔다.
+        /// 파괴된 오브젝트의 <c>name</c> 을 읽으면 <c>MissingReferenceException</c> 이 coroutine 밖으로 나가
+        /// host 의 action queue 가 <c>processingActions</c> 가 true 인 채로 멈추고 이후 action 이 모두 버려진다.
         /// </remarks>
         public int HitId { get; }
 
@@ -44,14 +40,11 @@ namespace UnityPlayMcp
     internal static class PointerTargeting
     {
         /// <summary>
-        /// 대상 면적 안에서 시험해 볼 좌표들. 면적의 가로세로 비율로 적는다.
+        /// 대상 면적 안에서 시험할 좌표다. 면적에 대한 비율로 적는다.
         /// </summary>
         /// <remarks>
-        /// 가운데 한 점만 보면 안 된다. 가운데가 비어 있는 collider 나, 가운데만 다른 것에 가린
-        /// 카드가 실제로 있다 — issue #59 의 Validation Notes 가 적은 "rect 안의 점에서도 실제
-        /// collider hit 여부가 달라 실패" 가 그 경우다. 다섯 점에서 멈추는 것은 이것이 한 번의
-        /// 액션 안에서 도는 순수 질의이고, 더 촘촘히 훑어도 못 맞히는 모양이라면 좌표를 직접
-        /// 겨누는 <c>move_mouse</c> 로 돌아가는 편이 정직하기 때문이다.
+        /// 가운데가 비었거나 가려진 대상이 있으므로 한 점만 보지 않는다 (#59). 다섯 점으로 못 맞히는 모양은
+        /// <c>move_mouse</c> 로 좌표를 직접 겨누게 한다.
         /// </remarks>
         private static readonly Vector2[] Probes =
         {
@@ -66,27 +59,18 @@ namespace UnityPlayMcp
         private static readonly Vector3[] Corners = new Vector3[4];
 
         /// <summary>
-        /// 엔진이 그 좌표에서 <c>OnMouse*</c> 를 배달할 오브젝트 하나. 없으면 null.
+        /// 엔진이 그 좌표에서 <c>OnMouse*</c> 를 보낼 오브젝트다. 없으면 null 이다.
         /// </summary>
         /// <remarks>
-        /// <c>Camera.main</c> 에서 쏜 ray, 2D 와 3D 를 같은 거리로 비교, <c>Camera.eventMask</c>
-        /// 로 거른다. 이 규칙이 여기 한 자리에만 있어야 한다 —
-        /// <see cref="VirtualMouseMessenger"/> 는 매 프레임 이것으로 대상을 고르고, 겨누기는
-        /// 같은 규칙으로 미리 확인한다. 둘이 갈라지면 "확인할 때는 맞았는데 배달은 딴 데로 간"
-        /// 클릭이 된다.
+        /// <c>Camera.main</c> 의 ray 로 2D 와 3D hit 을 거리로 비교하고 <c>Camera.eventMask</c> 로 거른다.
+        /// <see cref="VirtualMouseMessenger"/> 와 targeting 이 모두 이 규칙을 쓴다. 둘이 다르면 확인한 대상과
+        /// 실제로 이벤트를 받는 대상이 달라진다.
         /// <para>
-        /// 2D overlap 이 아니라 ray 인 것은, overlap 이 ray 가 놓치는 스프라이트까지 찾더라도
-        /// 엔진과 같은 것을 고르는 편이 낫기 때문이다. 엔진이 고르지 못하는 것은 사람도 클릭하지
-        /// 못하는 것이고, 그것을 클릭한 에이전트는 돌지 않는 게임을 돈다고 보고한다.
+        /// 엔진과 같은 대상을 고르도록 2D overlap 이 아니라 ray 를 쓴다. 엔진은 모든 카메라를 보지만 여기서는
+        /// <c>Camera.main</c> 만 보므로, 두 번째 카메라가 그리는 상호작용 오브젝트는 지원하지 않는다.
         /// </para>
         /// <para>
-        /// 포인터 아래 전부가 아니라 하나만 고른다. 엔진이 하나만 골라 보내므로, 같은 깊이에
-        /// 스프라이트가 겹친 게임은 그 모호함을 스스로 푼다. <c>Camera.main</c> 만 본다 — 엔진은
-        /// 모든 카메라를 도므로, 두 번째 카메라로 상호작용 오브젝트를 그리는 씬은 덮지 못한다.
-        /// </para>
-        /// <para>
-        /// 버퍼가 static 인 것은 안전하다. 메인 스레드에서만 돌고, 어느 호출자도 이것을
-        /// <c>yield</c> 너머로 들고 가지 않는다.
+        /// static 버퍼는 main thread 에서만 쓰고 <c>yield</c> 를 넘어 들고 가지 않으므로 안전하다.
         /// </para>
         /// </remarks>
         public static GameObject ColliderUnder(Vector2 screenPosition)
@@ -118,23 +102,15 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// raycast 가 답한 <paramref name="hit"/> 이 <paramref name="subject"/> 를 겨눈 것으로
-        /// 쳐도 되는지.
+        /// raycast 가 맞힌 <paramref name="hit"/> 을 <paramref name="subject"/> 를 겨눈 것으로 볼지 판정한다.
         /// </summary>
         /// <remarks>
-        /// 자기 자신과 자손은 두 경로 모두 참이다. 자손인 것은 collider 나 graphic 이 자식에
-        /// 앉아 있을 때이고, 그때 엔진도 그 자식을 고른다 — 사람이 같은 자리를 클릭해도 같은
-        /// 자식이 받는다.
+        /// 자기 자신과 자손은 두 경우 모두 true 다. collider 나 graphic 이 자식에 있으면 엔진도 그 자식을 고른다.
         /// <para>
-        /// 조상은 <paramref name="throughGraphics"/> 일 때만, 그것도 handler 사슬이 같을 때만
-        /// 참이다. 두 경로가 배달하는 방식이 다르기 때문이다.
-        /// <c>VirtualMouseMessenger.Send</c> 는 맞은 오브젝트 하나에 <c>SendMessage</c> 할 뿐
-        /// 위아래로 걷지 않으므로, collider 경로에서 조상이 맞았다는 것은 대상 앞을 더 큰
-        /// collider 가 가렸다는 뜻이고 대상의 <c>OnMouseDown</c> 은 영영 오지 않는다. uGUI 는
-        /// <c>ExecuteHierarchy</c> 로 위로 걸어 올라가므로 조상이 맞아도 같은 handler 에 닿을 수
-        /// 있는데, "닿을 수 있다" 를 믿지 말고 실제로 같은 handler 인지 물어본다 —
-        /// <c>raycastTarget</c> 이 켜진 전체 화면 부모 panel 이 모든 자식을 가려 놓고도 전부
-        /// 성공으로 보고되는 것이 그러지 않았을 때의 결과다.
+        /// 조상은 <paramref name="throughGraphics"/> 이고 click handler 가 같을 때만 true 다.
+        /// <c>VirtualMouseMessenger.Send</c> 는 맞은 오브젝트에만 <c>SendMessage</c> 하므로, collider 경우에
+        /// 조상이 맞으면 대상이 가려진 것이다. uGUI 는 <c>ExecuteHierarchy</c> 로 올라가지만, <c>raycastTarget</c>
+        /// 이 켜진 전체 화면 부모 panel 을 성공으로 보지 않도록 handler 가 같은지 확인한다.
         /// </para>
         /// </remarks>
         public static bool Reaches(GameObject subject, GameObject hit, bool throughGraphics)
@@ -162,8 +138,7 @@ namespace UnityPlayMcp
         /// 대상을 겨눌 좌표를 찾는다. 다섯 후보 중 처음으로 대상에 닿는 것을 고른다.
         /// </summary>
         /// <remarks>
-        /// hover 를 건드리지 않는 순수 질의다. 고르기 전에 커서를 옮기면 에이전트가 하지도 않은
-        /// hover 가 후보점마다 게임으로 나간다.
+        /// hover 를 바꾸지 않는다. 커서를 옮기며 고르면 후보점마다 게임에 hover 이벤트가 나간다.
         /// </remarks>
         public static bool TryAim(
             string method,
@@ -175,10 +150,8 @@ namespace UnityPlayMcp
         {
             aim = default;
 
-            // uGUI 로 답하는 대상과 collider 로 답하는 대상은 서로 다른 raycast 가 판단한다.
-            // 대상이 사는 쪽으로 물어야 실제로 이벤트를 받을 그 경로가 확인되고, 면적을 재는
-            // 방법도 같은 답을 따라야 한다 — 둘이 갈리면 Canvas 밖 RectTransform 이 corner 로
-            // 재어지고 collider 로 물어져, 월드 단위를 화면 픽셀로 읽은 엉터리 면적을 겨눈다.
+            // 면적 측정과 hit 확인은 같은 경우(uGUI 또는 collider)를 따라야 한다. 다르면 Canvas 밖
+            // RectTransform 의 월드 단위를 화면 픽셀로 읽어 잘못된 면적을 겨눈다.
             var throughGraphics = AnswersAsGraphic(target);
 
             if (!TryScreenRect(target, throughGraphics, out var area, out var areaError))
@@ -187,8 +160,7 @@ namespace UnityPlayMcp
                 return false;
             }
 
-            // Rect.Overlaps 를 쓰지 않는다. 그것은 너비가 0 인 면적을 겹치지 않는 것으로 보고,
-            // 크기 0 인 collider 를 가진 대상이 화면 한가운데 있어도 화면 밖이라고 답한다.
+            // Rect.Overlaps 는 너비 0 인 면적을 겹치지 않는 것으로 보아 크기 0 collider 를 화면 밖으로 판정한다.
             var onScreen = area.xMax >= 0f && area.xMin <= Screen.width &&
                            area.yMax >= 0f && area.yMin <= Screen.height;
             if (!onScreen)
@@ -234,8 +206,7 @@ namespace UnityPlayMcp
                         ? "Either it carries no Graphic with raycastTarget on, or the scene has no EventSystem."
                         : "Either it carries no Collider, or Camera.main does not draw its layer.")
                 : string.Format(
-                    // 좌표를 싣는다. 여기서 물러난 에이전트가 돌아갈 곳이 move_mouse 로 직접
-                    // 겨누는 것이고, 그러려면 어디를 겨눴는지 알아야 한다.
+                    // agent 가 move_mouse 로 직접 겨눌 수 있도록 좌표를 포함한다.
                     "{0}: the pointer reached {1} instead of {2} at ({3:0}, {4:0}). "
                     + "Something is drawn or colliding on top of the target.",
                     method,
@@ -247,14 +218,13 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 포인터가 이미 <paramref name="point"/> 에 있을 때, 그 자리에서 대상에 닿는 것이 여전히 대상인지.
+        /// 포인터가 <paramref name="point"/> 에 있을 때 여전히 대상에 닿는지 확인한다.
         /// </summary>
         /// <remarks>
-        /// <see cref="TryAim"/> 과 같은 경로(uGUI 또는 collider)로 묻는다. 겨눈 뒤 커서가 옮겨 가는 사이 게임이 대상을 옮기거나
-        /// 다른 것으로 덮을 수 있다 — 움직이는 카드 위의 hover 가 그 경우다. 겨눌 때의 답을 그대로 보고하면 실제로는 다른 것
-        /// 위에 떠 있는 포인터를 대상 위에 있다고 말하게 된다.
+        /// <see cref="TryAim"/> 과 같은 경우(uGUI 또는 collider)로 확인한다. 커서가 이동하는 사이 게임이
+        /// 대상을 옮기거나 가릴 수 있다.
         /// </remarks>
-        /// <param name="hit">그 자리에서 실제로 맞은 오브젝트. 아무것도 없으면 null.</param>
+        /// <param name="hit">그 자리에서 실제로 맞은 오브젝트다. 없으면 null 이다.</param>
         public static bool StillReaches(
             GameObject target, Vector2 point, PointerEventDispatcher graphics, out GameObject hit)
         {
@@ -264,7 +234,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 대상이 uGUI raycast 로 답하는지. <c>Canvas</c> 아래의 <c>RectTransform</c> 이면 그렇다.
+        /// <c>Canvas</c> 아래의 <c>RectTransform</c> 이면 uGUI raycast 로 판정한다.
         /// </summary>
         private static bool AnswersAsGraphic(GameObject target)
         {
@@ -273,11 +243,10 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 대상이 화면에서 차지하는 축 정렬 면적. Unity 좌표(좌하단 기준)다.
+        /// 대상이 화면에서 차지하는 축 정렬 면적이다. 좌하단 기준 Unity 좌표다.
         /// </summary>
         /// <param name="throughGraphics">
-        /// <see cref="AnswersAsGraphic"/> 가 답한 그대로를 받는다. 재는 방법과 hit 을 묻는 방법이
-        /// 갈리지 않게 하는 것이 이 인자의 전부다.
+        /// <see cref="AnswersAsGraphic"/> 의 결과다. 면적 측정과 hit 확인이 같은 경우를 따르게 한다.
         /// </param>
         private static bool TryScreenRect(
             GameObject target, bool throughGraphics, out Rect area, out string error)
@@ -313,8 +282,7 @@ namespace UnityPlayMcp
         /// collider 나 renderer 의 world bounds 를 화면으로 투영한다.
         /// </summary>
         /// <remarks>
-        /// collider 를 renderer 보다 먼저 본다. 포인터가 맞히는 것은 collider 이고, 스프라이트의
-        /// 그림이 collider 보다 큰 경우가 흔하다 — renderer 를 먼저 보면 collider 밖을 겨눈다.
+        /// 포인터가 맞히는 것은 collider 이고 sprite 가 collider 보다 큰 경우가 흔하므로 collider 를 먼저 본다.
         /// </remarks>
         private static bool TryBoundsArea(GameObject target, out Rect area, out string error)
         {
@@ -323,8 +291,7 @@ namespace UnityPlayMcp
             var camera = Camera.main;
             if (camera == null)
             {
-                // 태그를 안 단 카메라는 흔한 설정 실수다. 대상 탓으로 말하면 엉뚱한 데를 고치게
-                // 된다.
+                // MainCamera 태그 누락은 흔한 설정 실수이므로 대상 문제와 구분해 보고한다.
                 error = "cannot be aimed at: the scene has no Camera tagged MainCamera.";
                 return false;
             }
@@ -381,7 +348,7 @@ namespace UnityPlayMcp
             return true;
         }
 
-        /// <summary>에러 문장에 들어갈 이름. 이름만으로는 어느 것인지 모르므로 id 를 붙인다.</summary>
+        /// <summary>에러 메시지용 이름이다. 이름이 겹칠 수 있으므로 id 를 붙인다.</summary>
         public static string Describe(GameObject subject, int id)
         {
             return subject == null ? "#" + id : subject.name + "#" + id;
