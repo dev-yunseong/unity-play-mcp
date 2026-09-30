@@ -602,11 +602,14 @@ function stateResponse(
   // `root` 와 `depth` 가 없으면 기존 호출과 호환되도록 평평한 응답을 준다.
   if (root !== undefined || depth !== undefined) {
     const considered = (includeInactive ? [...active, ...deactive] : active) as PulseObject[];
+    // `depth` 를 주면 계층만 훑는 요약이다. 멤버 값은 root 나 selector 로 좁혀 `depth` 없이 요청한다.
+    const summaryOnly = depth !== undefined;
     const tree = foldIntoTree(
       considered,
       latestReadingOf(store, scene),
       root,
       depth ?? UNLIMITED_DEPTH,
+      !summaryOnly,
     );
     const located = root === undefined ? undefined : describeRoot(considered, root);
     // `statics` 는 tree 로 표현되지 않지만 양이 적어 그대로 싣는다. `changed` 는 길어질 수 있고
@@ -625,7 +628,9 @@ function stateResponse(
       gone: filterGone(record.gone),
       tree,
       ...(includeHistory
-        ? { history: historyOf(store, objectsShownIn(tree), scene) }
+        ? summaryOnly
+          ? { historyOmitted: "depth returns a summary without member values; call without depth to get history." }
+          : { history: historyOf(store, objectsShownIn(tree), scene) }
         : {}),
     }), null, 2));
   }
@@ -811,7 +816,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. Setting depth returns a summary at every level (name, path, object count, lastChangedReading, hasObject) without member values; to see member values, narrow with root or selector and leave depth out. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),

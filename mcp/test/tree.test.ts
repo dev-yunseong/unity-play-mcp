@@ -174,6 +174,20 @@ test("only the objects the tree actually shows are collected", () => {
   assert.equal(deep?.children, undefined);
 });
 
+test("members: false leaves only the summary on every level", () => {
+  const withObject = { ...object("Canvas[0]/Card[0]", "Canvas/Card"), members: [{ member: "text", value: "x" }] };
+  const objects = [withObject as PulseObject, object("Canvas[0]/Panel[0]/Row[0]", "Canvas/Panel/Row")];
+  for (const depth of [1, 2, 3]) {
+    const tree = foldIntoTree(objects, noHistory, undefined, depth, false);
+    const seen: TreeNode[] = [];
+    const walk = (nodes: readonly TreeNode[]) => nodes.forEach((node) => { seen.push(node); walk(node.children ?? []); });
+    walk(tree);
+    assert.equal(seen.some((node) => node.object !== undefined), false, `depth ${depth}`);
+  }
+  const card = find(foldIntoTree(objects, noHistory, undefined, 2, false), "Canvas/Card");
+  assert.equal(card?.hasObject, true);
+});
+
 test("describeRoot tells a missing root from an empty one and lists the top level", () => {
   const objects = [object("UI[0]/Card[0]", "UI/Card"), object("UI[0]/Bar[1]", "UI/Bar"), object("Main Camera[1]", "Main Camera")];
   assert.deepEqual(describeRoot(objects, "Canvas"), { found: false, topLevel: ["UI", "Main Camera"] });

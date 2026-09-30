@@ -196,7 +196,7 @@ test("a secret member on an object is hidden in state, history, tree, visible el
 
   const responses = [
     await call("get_scene_state", { includeHistory: true }),
-    await call("get_scene_state", { root: "Login", depth: 3 }),
+    await call("get_scene_state", { root: "Login" }),
     await call("get_visible_elements", { includeHidden: true }),
     await call("wait_for_condition", {
       memberEquals: [{ selector: "Login[0]/Form[0]", on: "Game.LoginForm", member: "password", equals: "x" }],
@@ -316,6 +316,9 @@ test("a root that names nothing says so and lists the real top-level names", asy
   assert.ok(missing.topLevelObjects?.includes("Login"));
   assert.deepEqual(missing.tree, []);
 
-  const present = JSON.parse(await call("get_scene_state", { root: "Login", depth: 1 })) as { rootNotFound?: string };
+  const present = JSON.parse(await call("get_scene_state", { root: "Login", depth: 1 })) as {
+    rootNotFound?: string; tree: Array<{ object?: unknown; hasObject?: boolean }>;
+  };
   assert.equal(present.rootNotFound, undefined);
+  assert.equal(present.tree.some((node) => node.object !== undefined), false);
 });
