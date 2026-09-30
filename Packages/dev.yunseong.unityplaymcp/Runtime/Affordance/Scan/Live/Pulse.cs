@@ -99,6 +99,9 @@ namespace UnityPlayMcp.Affordances.Live
 
         internal static bool InProgress => _beating != null;
 
+        /// <summary>돌고 있는 reading 의 run. 돌고 있지 않으면 null 이다.</summary>
+        internal static string CurrentRun => _beating == null ? null : _beating._run;
+
         /// <summary>시작 뒤 보낸 pulse 수.</summary>
         internal static int Sent { get; private set; }
 

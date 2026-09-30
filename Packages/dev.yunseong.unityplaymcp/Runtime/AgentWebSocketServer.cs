@@ -8,11 +8,15 @@ namespace UnityPlayMcp
 {
     internal sealed class AgentMessage
     {
-        public AgentMessage(string text, Action<string> reply)
+        public AgentMessage(string text, Action<string> reply, string clientId = null)
         {
             Text = text;
             Reply = reply;
+            ClientId = clientId;
         }
+
+        /// <summary>메시지를 보낸 연결. 입력을 소유한 operation 과 같은 client 인지 가릴 때 쓴다.</summary>
+        public string ClientId { get; private set; }
 
         public string Text { get; private set; }
         public Action<string> Reply { get; private set; }
@@ -110,7 +114,7 @@ namespace UnityPlayMcp
                         sendByConnectionId.Remove(connectionId);
                     }
                 },
-                (text, reply) => incomingMessages.Enqueue(new AgentMessage(text, reply)));
+                (text, reply, clientId) => incomingMessages.Enqueue(new AgentMessage(text, reply, clientId)));
             return behavior;
         }
     }
@@ -119,12 +123,12 @@ namespace UnityPlayMcp
     {
         private Action<string, Action<string>> onOpen;
         private Action<string> onClose;
-        private Action<string, Action<string>> onMessage;
+        private Action<string, Action<string>, string> onMessage;
 
         public void Configure(
             Action<string, Action<string>> onOpen,
             Action<string> onClose,
-            Action<string, Action<string>> onMessage)
+            Action<string, Action<string>, string> onMessage)
         {
             this.onOpen = onOpen;
             this.onClose = onClose;
@@ -145,7 +149,7 @@ namespace UnityPlayMcp
         {
             if (e.IsText)
             {
-                onMessage?.Invoke(e.Data, Send);
+                onMessage?.Invoke(e.Data, Send, ID);
             }
         }
     }
