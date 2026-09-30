@@ -36,10 +36,13 @@ const positiveInt = () => z.number().int().positive();
 ///
 /// `waitCondition.until` 은 recursive 라 입력 schema 에서는 느슨한 object 로 받고 `parsePredicate` 가 검증한다.
 export const stepSchema = () => z.discriminatedUnion("method", [
-  z.object({ method: z.literal("button_click"), targetId: z.number().int() }).strict(),
-  z.object({ method: z.literal("pointer_click"), targetId: z.number().int() }).strict(),
-  z.object({ method: z.literal("pointer_drag"), sourceId: z.number().int(), targetId: z.number().int() }).strict(),
-  z.object({ method: z.literal("pointer_hover"), targetId: z.number().int() }).strict(),
+  // 화면 좌표로 겨누는 합성 step. 실행할 때 move_mouse / mouse_down / mouse_up 으로 펼치고 down 과 up 사이에 한 프레임을 둔다.
+  z.object({ method: z.literal("pointerClick"), x: z.number().finite(), y: z.number().finite() }).strict(),
+  z.object({
+    method: z.literal("pointerDrag"),
+    fromX: z.number().finite(), fromY: z.number().finite(), toX: z.number().finite(), toY: z.number().finite(),
+  }).strict(),
+  z.object({ method: z.literal("pointerHover"), x: z.number().finite(), y: z.number().finite() }).strict(),
   z.object({ method: z.literal("enter_text"), targetId: z.number().int(), text: z.string() }).strict(),
   z.object({ method: z.literal("move_mouse"), x: z.number(), y: z.number() }).strict(),
   z.object({ method: z.literal("mouse_down"), button: z.number().int().min(0).max(2) }).strict(),
@@ -402,7 +405,7 @@ async function run(
         : `Could not prepare the action: ${error instanceof Error ? error.message : String(error)}`);
       return await finish();
     }
-    plan = withFrameGaps(plan);
+    plan = withFrameGaps(expandSteps(plan));
     if (plan.length > PLAY_LIMITS.act.maxSteps * 2) {
       termination = "precondition_failed";
       unmet.push("The plan is longer than allowed.");
@@ -436,7 +439,7 @@ async function run(
         return await finish();
       }
     }
-    const blocker = await checkTarget(deps.client, recipe, input.action?.target, remaining());
+    const blocker = await checkTarget(deps.client, recipe, input.action?.target, remaining(), firstAim(plan));
     if (blocker !== undefined) {
       termination = "precondition_failed";
       unmet.push(blocker);
@@ -681,7 +684,6 @@ async function planFromRecipe(
   }
 
   let point: { x: number; y: number } | undefined;
-  let targetId: number | undefined;
   if (target !== undefined) {
     if ("space" in target) {
       if (target.space === "screen") point = { x: target.x, y: target.y };
@@ -697,16 +699,18 @@ async function planFromRecipe(
         point = { x: projected.screen.x, y: projected.screen.y };
       }
     } else {
-      targetId = target.id;
+      // 엔터티 target 은 지금 화면 위 좌표로 바꾼다. 화면 밖이면 Unity 가 실패를 돌려준다.
+      const located = await client.call("play_query_space", [{ kind: "entity_screen_point", ref: target }], budgetMs);
+      if (!isRecord(located) || !isRecord(located.screen)
+        || typeof located.screen.x !== "number" || typeof located.screen.y !== "number") {
+        throw new InvalidRequest("The target entity has no on-screen point to aim at.");
+      }
+      point = { x: located.screen.x, y: located.screen.y };
     }
   }
 
   const substitute = (value: unknown): unknown => {
     if (typeof value === "string" && value.startsWith("$target")) {
-      if (value === "$target.id" || value === "$target") {
-        if (targetId === undefined) throw new InvalidRequest("This recipe needs an entity target.");
-        return targetId;
-      }
       if (value === "$target.x" || value === "$target.y") {
         if (point === undefined) throw new InvalidRequest("This recipe needs a screen or world point target.");
         return value === "$target.x" ? point.x : point.y;
@@ -747,11 +751,15 @@ async function checkTarget(
   recipe: Recipe | undefined,
   target: NonNullable<ActInput["action"]>["target"],
   budgetMs: number,
+  aim?: { x: number; y: number },
 ): Promise<string | undefined> {
   const entity = recipe?.entity ?? (target !== undefined && isEntityRef(target) ? target : undefined);
   if (entity === undefined) return undefined;
   try {
-    const raw = await client.call("play_query_space", [{ kind: "entity_input_check", ref: entity }], budgetMs);
+    // 처음 겨누는 화면 좌표에서 그 엔터티가 입력을 받는지 확인한다. 좌표가 없으면 엔터티 자체의 상태만 본다.
+    const raw = await client.call("play_query_space", [{
+      kind: "entity_input_check", ref: entity, ...(aim === undefined ? {} : { point: { space: "screen", ...aim } }),
+    }], budgetMs);
     if (isRecord(raw) && raw.ok === false) {
       return typeof raw.reason === "string" ? raw.reason : "The target cannot receive input right now.";
     }
@@ -868,12 +876,6 @@ async function releaseOwned(client: PlayClient, held: HeldState): Promise<void> 
 /// step 을 Unity wire method 와 위치 인자로 바꾼다. 인자 순서는 Unity 쪽 protocol 이다.
 function toWire(step: Step): { method: string; params: unknown[] } {
   switch (step.method) {
-    case "button_click":
-    case "pointer_click":
-    case "pointer_hover":
-      return { method: step.method, params: [step.targetId] };
-    case "pointer_drag":
-      return { method: step.method, params: [step.sourceId, step.targetId] };
     case "enter_text":
       return { method: step.method, params: [step.targetId, step.text] };
     case "move_mouse":
@@ -890,8 +892,39 @@ function toWire(step: Step): { method: string; params: unknown[] } {
       return { method: step.method, params: [step.name, step.value] };
     case "set_button":
       return { method: step.method, params: [step.name, step.pressed] };
+    case "pointerClick":
+    case "pointerDrag":
+    case "pointerHover":
     case "waitFrames":
     case "waitCondition":
-      throw new InvalidRequest(`${step.method} is not an input step`);
+      throw new InvalidRequest(`${step.method} must be expanded before it is sent`);
   }
+}
+
+/// 합성 pointer step 을 wire 수준 step 으로 펼친다. 누르기와 놓기는 항상 다른 프레임에 나간다.
+export function expandSteps(plan: Step[]): Step[] {
+  const out: Step[] = [];
+  for (const step of plan) {
+    if (step.method === "pointerClick") {
+      out.push({ method: "move_mouse", x: step.x, y: step.y }, { method: "mouse_down", button: 0 },
+        { method: "waitFrames", frames: 1 }, { method: "mouse_up", button: 0 });
+    } else if (step.method === "pointerHover") {
+      out.push({ method: "move_mouse", x: step.x, y: step.y });
+    } else if (step.method === "pointerDrag") {
+      out.push({ method: "move_mouse", x: step.fromX, y: step.fromY }, { method: "mouse_down", button: 0 },
+        { method: "waitFrames", frames: 1 }, { method: "move_mouse", x: step.toX, y: step.toY },
+        { method: "waitFrames", frames: 1 }, { method: "mouse_up", button: 0 });
+    } else {
+      out.push(step);
+    }
+  }
+  return out;
+}
+
+/// plan 에서 처음으로 포인터를 옮기는 화면 좌표.
+function firstAim(plan: Step[]): { x: number; y: number } | undefined {
+  for (const step of plan) {
+    if (step.method === "move_mouse") return { x: step.x, y: step.y };
+  }
+  return undefined;
 }
