@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import { toWireAction, type PerformAction } from "./tools.js";
 import { PlayCallError, type PlayClient } from "./play-client.js";
 import { InputGate, canonicalHash, isMutatingMethod, OperationLedger, busyText } from "./play-operations.js";
 import type { PlayObserver } from "./play-observe.js";
@@ -811,7 +810,7 @@ async function executeStep(
       }
     }
 
-    const wire = toWireAction(step as PerformAction);
+    const wire = toWire(step);
     if (!isMutatingMethod(wire.method)) throw new InvalidRequest(`${wire.method} is not an input step`);
     const returned = await deps.client.call(wire.method, wire.params, remaining());
     trackHolds(held, step);
@@ -864,4 +863,35 @@ async function releaseOwned(client: PlayClient, held: HeldState): Promise<void> 
   held.buttons.clear();
   held.axes.clear();
   held.named.clear();
+}
+
+/// step 을 Unity wire method 와 위치 인자로 바꾼다. 인자 순서는 Unity 쪽 protocol 이다.
+function toWire(step: Step): { method: string; params: unknown[] } {
+  switch (step.method) {
+    case "button_click":
+    case "pointer_click":
+    case "pointer_hover":
+      return { method: step.method, params: [step.targetId] };
+    case "pointer_drag":
+      return { method: step.method, params: [step.sourceId, step.targetId] };
+    case "enter_text":
+      return { method: step.method, params: [step.targetId, step.text] };
+    case "move_mouse":
+      return { method: step.method, params: [step.x, step.y] };
+    case "mouse_down":
+    case "mouse_up":
+      return { method: step.method, params: [step.button] };
+    case "key_click":
+      return { method: step.method, params: [step.key, step.seconds] };
+    case "key_down":
+    case "key_up":
+      return { method: step.method, params: [step.key] };
+    case "set_axis":
+      return { method: step.method, params: [step.name, step.value] };
+    case "set_button":
+      return { method: step.method, params: [step.name, step.pressed] };
+    case "waitFrames":
+    case "waitCondition":
+      throw new InvalidRequest(`${step.method} is not an input step`);
+  }
 }
