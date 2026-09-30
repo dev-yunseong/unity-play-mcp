@@ -124,7 +124,11 @@ export class UnityConnection {
     this.report = options.report ?? (() => undefined);
   }
 
-  async sendActions(actions: ActionRequest[]): Promise<ActionResult[]> {
+  /// `timeoutMilliseconds` 는 이 요청 하나의 상한이다. 안 주면 연결 전체의 기본값을 쓴다.
+  async sendActions(
+    actions: ActionRequest[],
+    options: { timeoutMilliseconds?: number } = {},
+  ): Promise<ActionResult[]> {
     if (actions.length === 0) {
       throw new Error("At least one action is required");
     }
@@ -138,11 +142,12 @@ export class UnityConnection {
       actions,
     };
 
+    const timeoutMilliseconds = options.timeoutMilliseconds ?? this.timeoutMilliseconds;
     const resultFrame = await new Promise<ActionResultFrame>((resolve, reject) => {
       const timeout = this.timers.setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(`ACTION ${requestId} timed out after ${this.timeoutMilliseconds}ms`));
-      }, this.timeoutMilliseconds);
+        reject(new Error(`ACTION ${requestId} timed out after ${timeoutMilliseconds}ms`));
+      }, timeoutMilliseconds);
 
       this.pending.set(requestId, { resolve, reject, timeout });
       try {

@@ -22,7 +22,7 @@ export interface PulseComponent {
 
 /// `Button.onClick` 같은 UnityEvent 에 걸린 persistent call 하나.
 ///
-/// 이 배열이 비어 있으면 `button_click` 을 보내도 아무 일도 일어나지 않을 수 있다.
+/// 이 배열이 비어 있으면 `click` 을 보내도 아무 일도 일어나지 않을 수 있다.
 export interface OfferedClick {
   event: string;
   method: string;

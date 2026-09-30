@@ -23,7 +23,9 @@ Send one or more actions in an `ACTION` message:
   "type": "ACTION",
   "id": 1,
   "actions": [
-    { "id": 1, "method": "button_click", "params": [12345] }
+    { "id": 1, "method": "move_mouse", "params": [640, 360] },
+    { "id": 2, "method": "mouse_down", "params": [0] },
+    { "id": 3, "method": "mouse_up", "params": [0] }
   ]
 }
 ```
@@ -31,8 +33,7 @@ Send one or more actions in an `ACTION` message:
 The game answers the batch with `ACTION_RESULT`. Match the response to the
 request with `requestId`, not the response message `id`.
 
-Supported methods are `button_click`, `enter_text`, `move_mouse`, `mouse_down`,
-`mouse_up`, `key_click`, `key_down`, `key_up`, `set_axis`, `set_button`,
+Supported methods are `enter_text`, `move_mouse`, `mouse_down`, `mouse_up`, `key_click`, `key_down`, `key_up`, `set_axis`, `set_button`,
 `pause_time`, `resume_time`, `reset_game`, `start_readings`, `stop_readings`,
 and `capture_screen`.
 

@@ -12,10 +12,22 @@ import {
   type Staleness,
   type UnreadableFrame,
 } from "./pulse.js";
+import {
+  clickWireActions,
+  dragWireActions,
+  hoverWireActions,
+  resolveObjectId,
+  resolvePoint,
+  targetRefIssue,
+  type Resolution,
+  type TargetRef,
+} from "./target-ref.js";
+import { busyText, defaultInputGate, isMutatingMethod } from "./play-operations.js";
 import { REDACTED_TEXT } from "./secrets.js";
 import { searchTargets } from "./search.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
+import { registerPlayTools } from "./play-tools.js";
 import { visibleElements } from "./visible.js";
 
 type ToolContent =
@@ -35,6 +47,21 @@ let nextActionId = 1;
 /// 하나를 공유하면 zod-to-json-schema 가 두 번째부터 처음 위치를 가리키는 `$ref` 로 적는다.
 /// 그 `$ref` 는 다른 union 멤버를 가리키고, 순서가 바뀌면 조용히 다른 곳을 가리킨다.
 const targetIdSchema = () => z.number().int();
+
+/// 대상을 가리키는 field 셋. 대상을 받는 모든 tool 이 이 모양을 쓴다(`target-ref.ts`).
+/// 부를 때마다 새로 만든다 — 이유는 위 주석과 같다.
+const targetRefShape = () => ({
+  targetId: targetIdSchema().optional(),
+  selector: z.string().min(1).optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+});
+const targetRefObjectSchema = () => z.object(targetRefShape()).strict();
+/// 게임 오브젝트만 받는 tool 용. 화면 좌표는 오브젝트를 가리키지 않는다.
+const objectRefShape = () => ({
+  targetId: targetIdSchema().optional(),
+  selector: z.string().min(1).optional(),
+});
 const mouseButtonSchema = () => z.number().int().min(0).max(2);
 const keySchema = () => z.string().min(1);
 const inputNameSchema = () => z.string().min(1);
@@ -65,11 +92,10 @@ const WAIT_MAX_TIMEOUT_MS = 30_000;
 /// `z.tuple` 은 draft-07 배열형 `items` 로 변환되고, draft 2020-12 는 `prefixItems` 만 받으므로
 /// Anthropic API 가 tool 목록 전체를 400 으로 거절한다. `params` 는 `toWireAction` 이 만든다.
 export const performActionSchema = z.discriminatedUnion("method", [
-  z.object({ method: z.literal("button_click"), targetId: targetIdSchema() }).strict(),
-  z.object({ method: z.literal("pointer_click"), targetId: targetIdSchema() }).strict(),
-  z.object({ method: z.literal("pointer_drag"), sourceId: targetIdSchema(), targetId: targetIdSchema() }).strict(),
-  z.object({ method: z.literal("pointer_hover"), targetId: targetIdSchema() }).strict(),
-  z.object({ method: z.literal("enter_text"), targetId: targetIdSchema(), text: z.string() }).strict(),
+  z.object({ method: z.literal("click"), ...targetRefShape() }).strict(),
+  z.object({ method: z.literal("hover"), ...targetRefShape() }).strict(),
+  z.object({ method: z.literal("drag"), from: targetRefObjectSchema(), to: targetRefObjectSchema() }).strict(),
+  z.object({ method: z.literal("enter_text"), ...objectRefShape(), text: z.string() }).strict(),
   z.object({ method: z.literal("move_mouse"), x: z.number(), y: z.number() }).strict(),
   z.object({ method: z.literal("mouse_down"), button: mouseButtonSchema() }).strict(),
   z.object({ method: z.literal("mouse_up"), button: mouseButtonSchema() }).strict(),
@@ -85,26 +111,115 @@ export const performActionSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("stop_readings") }).strict(),
   z.object({
     method: z.literal("capture_screen"),
-    targetId: targetIdSchema().optional(),
+    ...objectRefShape(),
     maxEdge: maxEdgeSchema().optional(),
     padding: paddingSchema().optional(),
   }).strict(),
 ]).superRefine((action, ctx) => {
-  // `maxEdge` 와 `padding` 은 `targetId` 가 있어야 의미가 있다. capture_screen tool 과 같은 규칙이다.
-  if (action.method !== "capture_screen") return;
-  if (action.targetId !== undefined) return;
-  if (action.maxEdge === undefined && action.padding === undefined) return;
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    path: ["targetId"],
-    message: "capture_screen requires targetId when maxEdge or padding is set.",
-  });
+  const report = (issue: string | undefined, path: string[] = []) => {
+    if (issue !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: issue });
+  };
+  switch (action.method) {
+    case "click":
+    case "hover":
+      return report(targetRefIssue(action, action.method));
+    case "drag":
+      report(targetRefIssue(action.from, "drag from"), ["from"]);
+      return report(targetRefIssue(action.to, "drag to"), ["to"]);
+    case "enter_text":
+      return report(objectRefIssue(action, "enter_text"));
+    case "capture_screen":
+      return report(captureScreenIssue(action));
+  }
 });
+
+/// 오브젝트만 받는 tool 의 대상 규칙: 하나만, 그리고 좌표는 없다.
+function objectRefIssue(ref: TargetRef, what: string): string | undefined {
+  if (ref.targetId !== undefined && ref.selector !== undefined) {
+    return `${what} takes either targetId or selector, not both.`;
+  }
+  return ref.targetId === undefined && ref.selector === undefined
+    ? `${what} requires targetId or selector.`
+    : undefined;
+}
+
+/// `maxEdge` 와 `padding` 은 잘라낼 대상을 두고 하는 말이라 대상 없이는 뜻이 없다. 대상은 아예 없어도 된다(전체 화면).
+function captureScreenIssue(capture: CaptureScreenArguments): string | undefined {
+  const hasTarget = capture.targetId !== undefined || capture.selector !== undefined;
+  if (hasTarget) return objectRefIssue(capture, "capture_screen");
+  return capture.maxEdge === undefined && capture.padding === undefined
+    ? undefined
+    : "capture_screen requires targetId or selector when maxEdge or padding is set.";
+}
 
 export type PerformAction = z.infer<typeof performActionSchema>;
 
+type WireAction = { method: string; params: unknown[] };
+
+/// batch 를 Unity 로 보낼 wire action 으로 편다.
+///
+/// `click`, `hover`, `drag` 는 대상을 화면 점으로 풀고 `move_mouse`/`mouse_down`/`mouse_up` 으로 편다.
+/// `enter_text`, `capture_screen` 은 selector 를 id 로 바꾼다. 풀려면 reading 이 필요해서 순수 변환인
+/// `toWireAction` 이 아니라 여기서 한다. 하나라도 풀지 못하면 아무것도 보내지 않고 그 이유를 낸다.
+///
+/// 같은 batch 안의 대상은 batch 가 돌기 전의 reading 으로 푼다. 앞선 action 이 대상을 옮기더라도 그 결과는
+/// 보지 못하므로, 그런 순서는 batch 를 나누라는 뜻이다.
+export function expandActions(
+  actions: readonly PerformAction[],
+  store: PulseStore,
+): { ok: true; wire: WireAction[] } | { ok: false; error: string } {
+  const wire: WireAction[] = [];
+  for (const action of actions) {
+    const expanded = expandAction(action, store);
+    if (!expanded.ok) return { ok: false, error: expanded.error };
+    wire.push(...expanded.value);
+  }
+  return { ok: true, wire };
+}
+
+function readingOf(store: PulseStore) {
+  const staleness = store.getStaleness();
+  return { state: store.getState(), staleNote: staleness === undefined ? undefined : stalenessMessage(staleness) };
+}
+
+function expandAction(action: PerformAction, store: PulseStore): Resolution<WireAction[]> {
+  const { state, staleNote } = readingOf(store);
+  const point = (ref: TargetRef, tool: string) => resolvePoint(ref, state, staleNote, tool);
+  switch (action.method) {
+    case "click":
+    case "hover": {
+      const at = point(action, action.method);
+      if (!at.ok) return at;
+      return { ok: true, value: (action.method === "click" ? clickWireActions : hoverWireActions)(at.value) };
+    }
+    case "drag": {
+      const from = point(action.from, "drag from");
+      if (!from.ok) return from;
+      const to = point(action.to, "drag to");
+      if (!to.ok) return to;
+      return { ok: true, value: dragWireActions(from.value, to.value) };
+    }
+    case "enter_text": {
+      const id = resolveObjectId(action, state, staleNote, "enter_text");
+      if (!id.ok) return id;
+      return { ok: true, value: [{ method: "enter_text", params: [id.value, action.text] }] };
+    }
+    case "capture_screen": {
+      if (action.targetId === undefined && action.selector === undefined) {
+        return { ok: true, value: [toWireAction(action)] };
+      }
+      const id = resolveObjectId(action, state, staleNote, "capture_screen");
+      if (!id.ok) return id;
+      return { ok: true, value: [toWireAction({ ...action, targetId: id.value })] };
+    }
+    default:
+      return { ok: true, value: [toWireAction(action)] };
+  }
+}
+
 interface CaptureScreenArguments {
   targetId?: number;
+  selector?: string;
   maxEdge?: number;
   padding?: number;
 }
@@ -122,16 +237,8 @@ function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
 /// 이름 있는 field 를 Unity 가 받는 위치 인자 배열로 바꾼다.
 ///
 /// 배열의 순서와 값은 Unity 쪽 protocol 이므로 바꿀 수 없다.
-export function toWireAction(action: PerformAction): { method: string; params: unknown[] } {
+export function toWireAction(action: Exclude<PerformAction, { method: "click" | "hover" | "drag" | "enter_text" }>): { method: string; params: unknown[] } {
   switch (action.method) {
-    case "button_click":
-    case "pointer_click":
-    case "pointer_hover":
-      return { method: action.method, params: [action.targetId] };
-    case "pointer_drag":
-      return { method: action.method, params: [action.sourceId, action.targetId] };
-    case "enter_text":
-      return { method: action.method, params: [action.targetId, action.text] };
     case "move_mouse":
       return { method: action.method, params: [action.x, action.y] };
     case "mouse_down":
@@ -170,6 +277,12 @@ export async function dispatchActions(
   connection: Pick<UnityConnection, "sendActions">,
   actions: ReadonlyArray<{ method: string; params: unknown[] }>,
 ): Promise<ToolResponse> {
+  // 진행 중인 act_and_observe 의 입력 사이에 끼어들지 않는다. 입력이 아닌 도구(capture, readings)는 통과한다.
+  const holder = defaultInputGate.activeOperationId;
+  if (holder !== undefined && actions.some((action) => isMutatingMethod(action.method))) {
+    return { content: [{ type: "text", text: busyText(holder) }], isError: true };
+  }
+
   const requests: ActionRequest[] = actions.map((action) => ({
     id: nextActionId++,
     method: action.method,
@@ -804,17 +917,23 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("capture_screen", {
-    description: "Capture the whole game screen (JPEG, longest edge 1024 by default) or one target (PNG, cropped with padding). Alongside the image it returns the Unity Screen.width/height that input uses, the captured region in top-left screen pixels, the image-per-screen-pixel scale, and a toScreen formula to turn an image pixel into move_mouse coordinates; plus the Unity frame and scene the image was taken on, and how the held scene reading relates to it (frames before/after, same scene or not). For a target crop, region includes the padding and is larger than the element. Never assume the screen size from the image size.",
+    description: "Capture the whole game screen (JPEG, longest edge 1024 by default) or one target given by targetId or selector (PNG, cropped with padding). Alongside the image it returns the Unity Screen.width/height that input uses, the captured region in top-left screen pixels, the image-per-screen-pixel scale, and a toScreen formula to turn an image pixel into move_mouse coordinates; plus the Unity frame and scene the image was taken on, and how the held scene reading relates to it (frames before/after, same scene or not). For a target crop, region includes the padding and is larger than the element. Never assume the screen size from the image size.",
     inputSchema: {
-      targetId: targetIdSchema().optional(),
+      ...objectRefShape(),
       maxEdge: maxEdgeSchema().optional(),
       padding: paddingSchema().optional(),
     },
-  }, async ({ targetId, maxEdge, padding }) => {
-    if (targetId === undefined && (maxEdge !== undefined || padding !== undefined)) {
-      return { ...text("capture_screen requires targetId when maxEdge or padding is set."), isError: true };
+  }, async (input) => {
+    const issue = captureScreenIssue(input);
+    if (issue !== undefined) return { ...text(issue), isError: true };
+    let targetId = input.targetId;
+    if (input.selector !== undefined) {
+      const { state, staleNote } = readingOf(store);
+      const id = resolveObjectId(input, state, staleNote, "capture_screen");
+      if (!id.ok) return { ...text(id.error), isError: true };
+      targetId = id.value;
     }
-    const params = captureScreenParams({ targetId, maxEdge, padding });
+    const params = captureScreenParams({ targetId, maxEdge: input.maxEdge, padding: input.padding });
     try {
       const requests: ActionRequest[] = [{ id: nextActionId++, method: "capture_screen", params }];
       const results = await connection.sendActions(requests);
@@ -847,30 +966,41 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     }
   });
 
+  const TARGET_HELP = "Aim with exactly one of targetId (instance id from get_scene_state), selector (the exact selector from get_scene_state or search_targets, e.g. \"Canvas[0]/Panel[1]/Button[0]\"), or x and y (game screen pixels from the top left, the same space as move_mouse). "
+    + "id and selector aim at the center of the last reading's rect and fail without moving when the target is inactive, off screen, covered, or the reading is stale.";
+
+  // click, hover, drag 는 같은 일을 한다: 대상을 점으로 풀어 가상 마우스로 보낸다. 각 handler 는 action 하나를 만들어
+  // `perform_actions` 와 같은 `expandActions` 로 보낸다.
+  const runAction = async (action: PerformAction) => {
+    const expanded = expandActions([action], store);
+    if (!expanded.ok) return { ...text(expanded.error), isError: true };
+    return dispatchActions(connection, expanded.wire);
+  };
+  const refIssue = (issue: string | undefined) => issue === undefined ? undefined : { ...text(issue), isError: true };
+
   server.registerTool("click", {
-    description: "Click a Unity UI Button by instance id, by invoking the Button directly. Use pointer_click instead for anything that is not a Button.",
-    inputSchema: { targetId: targetIdSchema() },
-  }, async ({ targetId }) => dispatchOne(connection, "button_click", [targetId]));
+    description: "Click a Unity object or screen position with the virtual mouse: move the pointer there, press the left button, release it. " + TARGET_HELP
+      + " It goes through the game's own input path, so Buttons, uGUI pointer handlers, and colliders (OnMouseDown) all respond, and something drawn on top of the target takes the click. A successful result only means the input was sent; read the state again to see the effect.",
+    inputSchema: targetRefShape(),
+  }, async (target) => refIssue(targetRefIssue(target, "click")) ?? runAction({ method: "click", ...target }));
 
-  server.registerTool("pointer_click", {
-    description: "Click a Unity object by instance id by moving the virtual pointer onto it and pressing the left mouse button there. Reaches colliders (OnMouseDown), uGUI pointer handlers, and Buttons. Reports the object the pointer actually hit, and fails with that object's name when something else is on top of the target.",
-    inputSchema: { targetId: targetIdSchema() },
-  }, async ({ targetId }) => dispatchOne(connection, "pointer_click", [targetId]));
+  server.registerTool("hover", {
+    description: "Rest the virtual pointer on a Unity object or screen position without pressing any button, so hover handlers run through the game's own input path: uGUI OnPointerEnter/OnPointerExit and collider OnMouseEnter/OnMouseOver. The pointer stays there until the next pointer input moves it. " + TARGET_HELP
+      + " Read tooltips or highlights afterwards with get_scene_state or capture_screen.",
+    inputSchema: targetRefShape(),
+  }, async (target) => refIssue(targetRefIssue(target, "hover")) ?? runAction({ method: "hover", ...target }));
 
-  server.registerTool("pointer_drag", {
-    description: "Drag from one Unity object to another by instance id: press the left mouse button on sourceId, glide the pointer to targetId, and release there. Both objects are checked before the button is pressed.",
-    inputSchema: { sourceId: targetIdSchema(), targetId: targetIdSchema() },
-  }, async ({ sourceId, targetId }) => dispatchOne(connection, "pointer_drag", [sourceId, targetId]));
-
-  server.registerTool("pointer_hover", {
-    description: "Rest the virtual pointer on a Unity object by instance id without pressing any button, so hover handlers run through the game's own input path: uGUI OnPointerEnter/OnPointerExit and collider OnMouseEnter/OnMouseOver. The pointer stays there until the next pointer input moves it. Reports the top-left-origin game screen x/y it used (the same space as move_mouse) and the object actually under the pointer after it arrived. Fails without moving when the target is destroyed (\"no live object has id\"), inactive (\"not active in the scene\"), off screen, or covered (naming what covers it), and fails if the target moved away, was deactivated, or was covered by the time the pointer arrived; in that case the pointer stays where it landed and whatever is under it has already received hover. Read tooltips or highlights afterwards with get_scene_state or capture_screen.",
-    inputSchema: { targetId: targetIdSchema() },
-  }, async ({ targetId }) => dispatchOne(connection, "pointer_hover", [targetId]));
+  server.registerTool("drag", {
+    description: "Drag from one place to another: press the left mouse button on `from`, glide the pointer to `to`, and release there. `from` and `to` each take exactly one of targetId, selector, or x and y, as click does. " + TARGET_HELP
+      + " Both ends are resolved before the button is pressed.",
+    inputSchema: { from: targetRefObjectSchema(), to: targetRefObjectSchema() },
+  }, async ({ from, to }) => refIssue(targetRefIssue(from, "drag from") ?? targetRefIssue(to, "drag to"))
+    ?? runAction({ method: "drag", from, to }));
 
   server.registerTool("enter_text", {
-    description: "Enter text into a Unity target by instance id.",
-    inputSchema: { targetId: targetIdSchema(), text: z.string() },
-  }, async ({ targetId, text: value }) => dispatchOne(connection, "enter_text", [targetId, value]));
+    description: "Enter text into a Unity input field. Give targetId (instance id) or selector (exact selector from get_scene_state or search_targets), not both; a screen position is not accepted.",
+    inputSchema: { ...objectRefShape(), text: z.string() },
+  }, async (input) => refIssue(objectRefIssue(input, "enter_text")) ?? runAction({ method: "enter_text", ...input }));
 
   server.registerTool("move_mouse", {
     description: "Move the virtual mouse in top-left-origin screen pixels.",
@@ -927,7 +1057,11 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}. "
       + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
-  }, async ({ actions }) => dispatchActions(connection, actions.map(toWireAction)));
+  }, async ({ actions }) => {
+    const expanded = expandActions(actions, store);
+    if (!expanded.ok) return { ...text(expanded.error), isError: true };
+    return dispatchActions(connection, expanded.wire);
+  });
 
   server.registerTool("wait_for_condition", {
     description: [
@@ -977,4 +1111,6 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       ...(isError ? { isError: true } : {}),
     };
   });
+
+  registerPlayTools(server, connection, store);
 }

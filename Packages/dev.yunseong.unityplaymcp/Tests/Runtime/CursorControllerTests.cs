@@ -79,58 +79,6 @@ namespace UnityPlayMcp.Tests
         }
 
         [Test]
-        public void ExecuteButtonClick_MovesCursorBeforeInvokingButton()
-        {
-            var controller = CreateController();
-            targetObject = NewButtonObject("button target");
-            var button = targetObject.GetComponent<Button>();
-            var cursorWasVisibleDuringClick = false;
-            button.onClick.AddListener(() =>
-            {
-                cursorWasVisibleDuringClick = controllerObject.transform
-                    .Find("Unity Play MCP Virtual Cursor Canvas/Unity Play MCP Virtual Cursor")
-                    .gameObject.activeSelf;
-            });
-            var targetLookup = new TargetLookup();
-            var executor = new ActionExecutor(targetLookup, controller, new PointerEventDispatcher());
-
-            ActionResultDto result = null;
-            var execution = executor.Execute(
-                7,
-                "button_click",
-                new List<object> { targetObject.GetInstanceID() },
-                value => result = value);
-            Drain(execution);
-
-            Assert.That(result.IsSuccess, Is.True);
-            Assert.That(cursorWasVisibleDuringClick, Is.True);
-        }
-
-        [Test]
-        public void ExecuteButtonClick_RefusesALockedButton()
-        {
-            var controller = CreateController();
-            targetObject = NewButtonObject("locked button");
-            var button = targetObject.GetComponent<Button>();
-            button.interactable = false;
-            var clicked = false;
-            button.onClick.AddListener(() => clicked = true);
-            var targetLookup = new TargetLookup();
-            var executor = new ActionExecutor(targetLookup, controller, new PointerEventDispatcher());
-
-            ActionResultDto result = null;
-            Drain(executor.Execute(
-                7,
-                "button_click",
-                new List<object> { targetObject.GetInstanceID() },
-                value => result = value));
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("not interactable"));
-            Assert.That(clicked, Is.False);
-        }
-
-        [Test]
         public void ExecuteEnterText_RefusesALockedField()
         {
             var controller = CreateController();
@@ -199,16 +147,6 @@ namespace UnityPlayMcp.Tests
                 .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(controller, null);
             return controller;
-        }
-
-        private static GameObject NewButtonObject(string name)
-        {
-            return new GameObject(
-                name,
-                typeof(RectTransform),
-                typeof(CanvasRenderer),
-                typeof(Image),
-                typeof(Button));
         }
 
         private static void Drain(System.Collections.IEnumerator routine)

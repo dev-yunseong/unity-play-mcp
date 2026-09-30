@@ -29,9 +29,6 @@ namespace UnityPlayMcp
         private readonly Action<Vector2> cursorMoved;
         private readonly Action<Vector2> pointerMoved;
 
-        /// <summary>id 로 겨누는 pointer click 과 drag 다. 프레임 순서를 다루므로 분리했다.</summary>
-        private readonly PointerActions pointerActions;
-
         // The time scale before pause_time, restored by resume_time. Null means not paused.
         private float? scaleBeforePause;
 
@@ -56,7 +53,7 @@ namespace UnityPlayMcp
             startupSceneBuildIndex = startupScene.buildIndex;
             startupScenePath = startupScene.path;
 
-            // button_click moves the pointer without hover events so existing callers see no change.
+            // enter_text moves the pointer without hover events so existing callers see no change.
             // Only move_mouse sends pointer events.
             cursorMoved = VirtualInput.MoveMouse;
             pointerMoved = position =>
@@ -64,10 +61,6 @@ namespace UnityPlayMcp
                 VirtualInput.MoveMouse(position);
                 pointerEvents.MoveTo(position);
             };
-
-            // 버튼 입력은 SetButton 한 곳에서만 처리한다.
-            pointerActions = new PointerActions(
-                targetLookup, cursorController, pointerEvents, SetButton, pointerMoved);
         }
 
         public IEnumerator Execute(
@@ -78,22 +71,6 @@ namespace UnityPlayMcp
         {
             switch (method)
             {
-                case "button_click":
-                    yield return ExecuteButtonClick(actionId, parameters, completed);
-                    yield break;
-
-                case "pointer_click":
-                    yield return pointerActions.Click(actionId, parameters, completed);
-                    yield break;
-
-                case "pointer_drag":
-                    yield return pointerActions.Drag(actionId, parameters, completed);
-                    yield break;
-
-                case "pointer_hover":
-                    yield return pointerActions.Hover(actionId, parameters, completed);
-                    yield break;
-
                 case "enter_text":
                     yield return ExecuteEnterText(actionId, parameters, completed);
                     yield break;
@@ -103,11 +80,11 @@ namespace UnityPlayMcp
                     yield break;
 
                 case "mouse_down":
-                    completed(ExecuteMouseButton(actionId, method, parameters, true));
+                    yield return ExecuteMouseButton(actionId, method, parameters, true, completed);
                     yield break;
 
                 case "mouse_up":
-                    completed(ExecuteMouseButton(actionId, method, parameters, false));
+                    yield return ExecuteMouseButton(actionId, method, parameters, false, completed);
                     yield break;
 
                 case "key_click":
@@ -157,43 +134,6 @@ namespace UnityPlayMcp
             }
 
             completed(ActionResultDto.Failure(actionId, "Unsupported method: " + method));
-        }
-
-        private IEnumerator ExecuteButtonClick(
-            int actionId,
-            List<object> parameters,
-            Action<ActionResultDto> completed)
-        {
-            if (!TryReadId(parameters, 0, out var targetId))
-            {
-                completed(ActionResultDto.Failure(actionId, "button_click requires params [targetId]."));
-                yield break;
-            }
-
-            if (!targetLookup.TryGetTarget(targetId, out var target))
-            {
-                completed(ActionResultDto.Failure(actionId, "Unknown target id: " + targetId));
-                yield break;
-            }
-
-            if (!target.CanClick)
-            {
-                completed(ActionResultDto.Failure(actionId, "Target is not a Button: " + targetId));
-                yield break;
-            }
-
-            if (!target.IsClickInteractable)
-            {
-                completed(ActionResultDto.Failure(actionId, NotInteractable(targetId)));
-                yield break;
-            }
-
-            yield return cursorController.MoveTo(target.RectTransform, cursorMoved);
-
-            // The Button was live before the move, so a refusal means the game locked or destroyed it meanwhile.
-            completed(target.Click()
-                ? ActionResultDto.Success(actionId)
-                : ActionResultDto.Failure(actionId, NotInteractable(targetId)));
         }
 
         private IEnumerator ExecuteEnterText(
@@ -256,18 +196,35 @@ namespace UnityPlayMcp
             completed(ActionResultDto.Success(actionId));
         }
 
-        private ActionResultDto ExecuteMouseButton(
-            int actionId, string method, List<object> parameters, bool press)
+        /// <summary>
+        /// 버튼을 누르거나 놓고, 한 프레임을 넘긴 뒤에 완료를 알린다.
+        /// </summary>
+        /// <remarks>
+        /// 프레임을 넘기는 이유는 <c>click</c> 이 <c>move_mouse</c>, <c>mouse_down</c>, <c>mouse_up</c> 을
+        /// 한 batch 로 잇기 때문이다. <c>VirtualMouseState.Press</c> 는 눌린 프레임의 <b>다음</b>
+        /// 프레임부터 눌린 것으로 답하므로, 누름 직후 같은 프레임에 놓으면
+        /// <see cref="VirtualMouseMessenger"/> 는 눌린 적이 없는 것으로 보고 <c>OnMouseDown</c> 이 빠진다.
+        /// 놓은 뒤에도 넘기는 것은 <c>OnMouseUp</c>/<c>OnMouseUpAsButton</c> 이 그 프레임에 배달되고,
+        /// 뒤따르는 action 이 그것을 앞지르지 않게 하려는 것이다.
+        /// </remarks>
+        private IEnumerator ExecuteMouseButton(
+            int actionId,
+            string method,
+            List<object> parameters,
+            bool press,
+            Action<ActionResultDto> completed)
         {
             if (!TryReadMouseButton(parameters, out var button))
             {
-                return ActionResultDto.Failure(
+                completed(ActionResultDto.Failure(
                     actionId,
-                    method + " requires params [] or [button], where button is 0, 1, or 2.");
+                    method + " requires params [] or [button], where button is 0, 1, or 2."));
+                yield break;
             }
 
             SetButton(button, press);
-            return ActionResultDto.Success(actionId);
+            yield return null;
+            completed(ActionResultDto.Success(actionId));
         }
 
         /// <summary>
@@ -769,9 +726,10 @@ namespace UnityPlayMcp
         /// 위치 인자 하나를 정수 id 로 읽는다.
         /// </summary>
         /// <remarks>
-        /// <see cref="PointerActions"/> 도 같은 규칙으로 id 를 읽도록 <c>internal</c> 이다.
+        /// wire 는 위치 인자라 "몇 번째 자리를 어떻게 정수로 읽는가" 가 계약의 일부이고, 그 계약이 두
+        /// 벌이면 한쪽만 <c>long</c> 을 받는 식으로 갈라진다.
         /// </remarks>
-        internal static bool TryReadId(List<object> parameters, int index, out int id)
+        private static bool TryReadId(List<object> parameters, int index, out int id)
         {
             id = 0;
             if (parameters == null || index < 0 || parameters.Count <= index ||
