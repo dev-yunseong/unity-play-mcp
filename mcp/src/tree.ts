@@ -182,7 +182,8 @@ export const UNLIMITED_DEPTH = Number.MAX_SAFE_INTEGER;
 
 /// 객체들로 hierarchy 를 만들어 `root` 아래를 `depth` 단계까지 돌려준다.
 ///
-/// `root` 에 맞는 node 가 없으면 빈 배열을 돌려준다.
+/// `root` 에 맞는 node 가 없으면 빈 배열을 돌려준다. 없는 root 와 자식 없는 root 를 가르려면
+/// `describeRoot` 를 쓴다.
 export function foldIntoTree(
   objects: readonly PulseObject[],
   latestOf: LatestReading,
@@ -195,4 +196,17 @@ export function foldIntoTree(
     return [];
   }
   return [...start.children.values()].map((child) => render(child, depth - 1, latestOf));
+}
+
+/// `root` 가 씬에 있는지와, 씬의 최상위 객체 이름들.
+///
+/// `foldIntoTree` 의 빈 배열만으로는 "root 는 맞는데 아래가 비었다" 와 "root 이름이 틀렸다" 를
+/// 가를 수 없어서 따로 묻는다. 이름은 sibling index 를 뗀 표시 이름이고 중복은 한 번만 적는다.
+export function describeRoot(
+  objects: readonly PulseObject[],
+  root: string,
+): { found: boolean; topLevel: string[] } {
+  const built = build(objects);
+  const topLevel = [...new Set([...built.children.values()].map((child) => child.segment))];
+  return { found: descend(built, root) !== undefined, topLevel };
 }

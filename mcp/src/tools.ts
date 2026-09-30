@@ -25,7 +25,7 @@ import {
 import { busyText, defaultInputGate, isMutatingMethod } from "./play-operations.js";
 import { REDACTED_TEXT } from "./secrets.js";
 import { searchTargets } from "./search.js";
-import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
+import { describeRoot, foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { registerPlayTools } from "./play-tools.js";
 import { visibleElements } from "./visible.js";
@@ -601,18 +601,26 @@ function stateResponse(
 
   // `root` 와 `depth` 가 없으면 기존 호출과 호환되도록 평평한 응답을 준다.
   if (root !== undefined || depth !== undefined) {
-    const considered = includeInactive ? [...active, ...deactive] : active;
+    const considered = (includeInactive ? [...active, ...deactive] : active) as PulseObject[];
     const tree = foldIntoTree(
-      considered as PulseObject[],
+      considered,
       latestReadingOf(store, scene),
       root,
       depth ?? UNLIMITED_DEPTH,
     );
+    const located = root === undefined ? undefined : describeRoot(considered, root);
     // `statics` 는 tree 로 표현되지 않지만 양이 적어 그대로 싣는다. `changed` 는 길어질 수 있고
     // node 의 `lastChangedReading` 이 같은 정보를 주므로 뺀다.
     return text(JSON.stringify(withRedactionNote({
       ...header,
       ...(root === undefined ? {} : { root }),
+      ...(located === undefined || located.found
+        ? {}
+        : {
+            rootNotFound: `No object matches root "${root}" in scene ${scene}. `
+              + "root is matched by exact name, level by level; start from one of topLevelObjects and ask again.",
+            topLevelObjects: located.topLevel,
+          }),
       ...staticsSection(state.statics, scoped, staticsQuery),
       gone: filterGone(record.gone),
       tree,
@@ -803,7 +811,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
