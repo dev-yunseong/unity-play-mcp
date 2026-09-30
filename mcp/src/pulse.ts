@@ -77,6 +77,11 @@ export interface PulseFrame {
   type: "PULSE";
   id: number;
   schema: number;
+  /// reading 번호가 속한 run. `Pulse.Begin` 마다 새로 정해진다.
+  ///
+  /// `reading` 은 run 마다 1부터 다시 세므로 run 이 다르면 번호끼리 비교할 수 없다. 이것을 싣지
+  /// 않는 package(0.2.x 이하)에서는 번호가 뒤로 간 것으로 새 run 을 알아낸다.
+  run?: string;
   reading: number;
   frame: number;
   scene: string;
@@ -119,6 +124,7 @@ export interface GoneObject {
 }
 
 export interface FoldedPulseState {
+  run?: string;
   reading: number;
   frame: number;
   scene: string;
@@ -359,6 +365,7 @@ function toPublicState(
     (held.activity === "active" ? active : deactive).push(held.object);
   }
   return {
+    ...(pulse.run === undefined ? {} : { run: pulse.run }),
     reading: pulse.reading,
     frame: pulse.frame,
     scene: pulse.scene,
@@ -458,11 +465,7 @@ function describeMismatch(mismatched: readonly UnreadComponent[], total: number)
 function foldInternal(
   previous: InternalPulseState | undefined,
   pulse: PulseFrame,
-): InternalPulseState | undefined {
-  if (previous !== undefined && pulse.reading <= previous.publicState.reading) {
-    return previous;
-  }
-  // reading 번호를 확인한 뒤에 옮긴다. 이미 지나간 reading 은 복사할 이유가 없다.
+): InternalPulseState {
   const readable = readComponents(pulse);
   const sceneChanged = previous !== undefined && readable.scene !== previous.publicState.scene;
   const replace = readable.whole || sceneChanged;
@@ -472,11 +475,39 @@ function foldInternal(
   };
 }
 
+/// 이 frame 이 지금 든 상태와 다른 run 의 것인지.
+///
+/// 두 쪽 중 하나라도 run 을 말하면 그것으로 가른다. 둘 다 말하지 않으면(0.2.x package) 번호가
+/// 앞으로 가지 않은 것을 새 run 으로 읽는다 — 한 run 안에서 `reading` 은 찍을 때마다 늘고,
+/// socket 은 순서를 바꾸지 않으므로 같은 run 의 frame 이 뒤로 갈 길이 없다.
+function startsNewRun(held: FoldedPulseState, pulse: PulseFrame): boolean {
+  if (held.run !== undefined || pulse.run !== undefined) {
+    return held.run !== pulse.run;
+  }
+  return pulse.reading <= held.reading;
+}
+
 /// frame 은 도착했지만 접을 수 없었다는 것. `get_unity_status` 가 이걸로 무엇을 못 읽었는지
 /// 말한다.
 export interface UnreadableFrame {
   at: number;
   reason: string;
+}
+
+/// 든 상태가 게임을 더 이상 따라가지 못하게 된 까닭.
+///
+/// - `restarted`: Unity 가 reading 을 새 run 으로 다시 시작했는데 그 run 의 전량 reading 이 아직
+///   안 왔다. 든 상태는 이전 run 의 것이다.
+/// - `disconnected`: 이 reading 뒤에 연결이 끊겼다. 그 사이의 차이를 놓쳤을 수 있다.
+/// - `stopped`: `stop_readings` 가 성공했다. 게임은 더 이상 reading 을 보내지 않는다.
+export type ReadingInterruption = "restarted" | "disconnected" | "stopped";
+
+export interface Staleness {
+  reason: ReadingInterruption;
+  /// 그 일이 일어난 시각.
+  at: number;
+  /// 든 상태를 실제로 만든 마지막 reading 이 접힌 시각.
+  lastReadingAt?: number;
 }
 
 function reasonOf(error: unknown): string {
@@ -488,6 +519,10 @@ export class PulseStore {
   private diagnostics: PulseDiagnostics = {};
   private lastReadingAt?: number;
   private lastUnreadableFrame?: UnreadableFrame;
+  private interruption?: { reason: ReadingInterruption; at: number };
+  /// 이전 상태를 잇지 않고 새로 세운 횟수. run 이 바뀌면 reading 번호끼리 비교할 수 없으므로
+  /// `wait.ts` 가 기다리는 사이 run 이 바뀌었는지를 이것으로 안다.
+  private generation = 0;
   /// `wait.ts` 가 새 reading 을 기다릴 때 건다. pulse 가 아예 안 오면 여기가 안 불리므로,
   /// 부르는 쪽이 timeout 을 별도로 걸어야 무한히 기다리지 않는다.
   private readonly readingListeners = new Set<(state: FoldedPulseState) => void>();
@@ -499,29 +534,45 @@ export class PulseStore {
   fold(frame: GamePush): boolean {
     if (frame.type === "PULSE") {
       const previous = this.pulseState;
-      let folded: InternalPulseState | undefined;
+      let base = previous;
+      if (previous !== undefined && startsNewRun(previous.publicState, frame)) {
+        // 새 run 의 차이 frame 은 이전 run 의 상태 위에 얹을 수 없다 — 그 차이가 말하지 않은
+        // 객체는 이전 장면의 것이다. 전량 reading 을 기다리며 든 상태를 낡았다고 표시한다.
+        if (!frame.whole) {
+          this.interruption = { reason: "restarted", at: this.now() };
+          return false;
+        }
+        base = undefined;
+      } else if (previous !== undefined && frame.reading <= previous.publicState.reading) {
+        // 같은 run 에서 이미 지나간 reading. 아무것도 바꾸지 않았으므로 시각도 건드리지 않는다 —
+        // 건드리면 `get_unity_status` 가 낡은 reading 을 방금 온 것처럼 말한다 (#69).
+        return false;
+      }
+      let folded: InternalPulseState;
       try {
-        folded = foldInternal(previous, frame);
+        folded = foldInternal(base, frame);
       } catch (error) {
         // 이 frame 은 읽지 못했다. 도착한 reading 으로 세면 `get_unity_status` 와
         // `get_scene_state` 가 서로 다른 말을 하게 되므로 `lastReadingAt` 은 건드리지 않는다.
         this.lastUnreadableFrame = { at: this.now(), reason: reasonOf(error) };
         return false;
       }
-      // 도착했다는 사실 자체가 게임이 돌고 있다는 증거다. 값이 하나도 안 바뀐 pulse 도 마찬가지다.
+      if (base === undefined) {
+        this.generation += 1;
+      }
       this.lastReadingAt = this.now();
       // 이번 fold 가 성공했으니 지난 실패는 더 이상 최신 사건이 아니다.
       this.lastUnreadableFrame = undefined;
-      this.pulseState = folded;
-      // `foldInternal` 은 실제로는 항상 정의된 상태를 돌려준다(`previous` 를 그대로 돌려주는
-      // 가지도 `previous !== undefined` 를 먼저 확인한 뒤에만 탄다) — 그래도 signature 가
-      // `| undefined` 라 여기서 좁혀 준다.
-      if (folded !== undefined) {
-        for (const listener of this.readingListeners) {
-          listener(folded.publicState);
-        }
+      // 중단은 전량 reading 만 지운다. 끊긴 동안 Unity 가 쌓아 둔 차이는 재연결 뒤에도 먼저 도착하는데,
+      // 그것은 놓친 차이를 채우지 못하므로 그 위의 상태는 여전히 낡았다.
+      if (frame.whole) {
+        this.interruption = undefined;
       }
-      return this.pulseState !== previous;
+      this.pulseState = folded;
+      for (const listener of this.readingListeners) {
+        listener(folded.publicState);
+      }
+      return true;
     }
     if (frame.type === "PERFORMANCE") {
       this.diagnostics = { ...this.diagnostics, performance: frame };
@@ -554,9 +605,32 @@ export class PulseStore {
     return this.diagnostics;
   }
 
-  /// 마지막 pulse 가 도착한 시각. 아직 하나도 안 왔으면 `undefined`.
+  /// 든 상태를 만든 마지막 reading 이 접힌 시각. 아직 하나도 안 왔으면 `undefined`.
+  ///
+  /// 도착했지만 적용하지 않은 frame 은 이 값을 움직이지 않는다.
   getLastReadingAt(): number | undefined {
     return this.lastReadingAt;
+  }
+
+  getGeneration(): number {
+    return this.generation;
+  }
+
+  /// 든 상태가 게임을 따라가지 못하게 된 일을 적는다. 든 상태가 없으면 낡을 것도 없다.
+  /// 다음 reading 이 적용되면 지워진다.
+  markInterrupted(reason: ReadingInterruption): void {
+    if (this.pulseState === undefined) {
+      return;
+    }
+    this.interruption = { reason, at: this.now() };
+  }
+
+  /// 든 상태가 낡았으면 그 까닭과 시각을, 아니면 `undefined` 를 돌려준다.
+  getStaleness(): Staleness | undefined {
+    if (this.interruption === undefined) {
+      return undefined;
+    }
+    return { ...this.interruption, lastReadingAt: this.lastReadingAt };
   }
 
   /// 마지막으로 시도한 fold 가 실패했고, 그 뒤로 아무 reading 도 성공하지 않았을 때만 값을

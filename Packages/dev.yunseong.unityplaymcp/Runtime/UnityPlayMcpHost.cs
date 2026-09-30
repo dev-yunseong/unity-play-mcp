@@ -41,6 +41,9 @@ namespace UnityPlayMcp
         /// <summary>지난 프레임의 전송 연결 상태. 새 연결이 열린 프레임을 집어내는 데만 쓴다.</summary>
         private bool transportWasConnected;
 
+        /// <summary>지난 프레임까지 본 client 연결 수. 새 client 가 붙은 프레임을 집어내는 데 쓴다.</summary>
+        private int clientsSeen;
+
         /// <summary>서버가 열린 동안 되돌려 줄 host game의 원래 설정.</summary>
         private bool hostRunInBackground;
         private long nextMessageId = 1;
@@ -335,6 +338,23 @@ namespace UnityPlayMcp
             var connected = webSocketTransport.IsConnected;
 
             transportWasConnected = connected;
+
+            // 새로 붙은 client 는 그 전의 차이를 하나도 받지 못했다. 소켓은 client 가 없어도 보내기에 실패하지 않으므로 Pulse 는
+            // 그것을 잃은 것으로 알지 못한다 — 여기서 전량 reading 을 청하지 않으면 끊겼다 붙은 MCP server 는 다음에 움직이는
+            // 값만 받고, 그 사이 바뀐 장면은 영영 못 받는다 (#69).
+            var opened = webSocketTransport.ClientsOpened;
+
+            if (opened == clientsSeen)
+            {
+                return;
+            }
+
+            clientsSeen = opened;
+
+            if (Reading)
+            {
+                Affordances.Scan.AffordanceBootstrap.RequestWholeReading();
+            }
         }
 
         public void StartTransport()
@@ -407,6 +427,9 @@ namespace UnityPlayMcp
         {
             if (Affordances.Scan.AffordanceBootstrap.Watching)
             {
+                // 이미 도는 채널에 다시 청하는 쪽은 대개 제 상태가 낡았다고 의심하는 쪽이다. 아무것도 안 바꾸고 참만 돌려주면
+                // 그 의심을 풀 reading 이 다음에 무언가 움직일 때까지 오지 않는다 (#69).
+                Affordances.Scan.AffordanceBootstrap.RequestWholeReading();
                 return true;
             }
 
@@ -467,6 +490,7 @@ namespace UnityPlayMcp
             webSocketTransport.Stop();
             webSocketTransport.Dispose();
             webSocketTransport = null;
+            clientsSeen = 0;
 
             // The connection this was taken for is gone, so the host game gets its setting back.
             Application.runInBackground = hostRunInBackground;

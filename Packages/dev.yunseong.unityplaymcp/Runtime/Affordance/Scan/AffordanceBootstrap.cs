@@ -220,6 +220,15 @@ namespace UnityPlayMcp.Affordances.Scan
         /// </remarks>
         public static bool Watching => Live.Pulse.InProgress;
 
+        /// <summary>도는 채널이 다음 reading 을 전량으로 보내게 한다. 돌고 있지 않으면 아무것도 하지 않는다.</summary>
+        /// <remarks>
+        /// 새로 붙은 독자나 <c>start_readings</c> 를 다시 보낸 독자가 쓴다. 차이만 받아서는 그 독자가 놓친 값을 영영 되찾지 못한다.
+        /// </remarks>
+        public static void RequestWholeReading()
+        {
+            Live.Pulse.RequestWhole();
+        }
+
         /// <summary>
         /// 건네받은 것이 아니라 여기서 연 것. 그것만 다시 닫도록.
         /// </summary>
