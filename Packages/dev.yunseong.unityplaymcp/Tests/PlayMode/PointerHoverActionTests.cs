@@ -10,7 +10,7 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// ID 로 겨누는 <c>pointer_hover</c> (#70).
+    /// ID 로 겨누는 <c>hover</c> (#70).
     /// </summary>
     /// <remarks>
     /// <see cref="PointerTargetActionTests"/> 와 같은 이유로 play mode 여야 하고 같은 방식으로 돈다: host 는 프레임과
@@ -62,14 +62,14 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(card.gameObject.GetInstanceID()), r => result = r);
+            yield return Run("hover", Params(card.gameObject.GetInstanceID()), r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(card.Events, Is.EqualTo(new[] { "enter" }));
             Assert.That(VirtualInput.GetMouseButton(0), Is.False, "hover pressed a button");
 
             var hit = result.ReturnValue as PointerHitDto;
-            Assert.That(hit, Is.Not.Null, "pointer_hover returned no PointerHitDto");
+            Assert.That(hit, Is.Not.Null, "hover returned no PointerHitDto");
             Assert.That(hit.TargetId, Is.EqualTo(card.gameObject.GetInstanceID()));
             Assert.That(hit.HitId, Is.EqualTo(card.gameObject.GetInstanceID()));
             Assert.That(hit.Hit, Is.EqualTo("hovered card"));
@@ -92,9 +92,9 @@ namespace UnityPlayMcp.Tests
             yield return null;
             IsolateFixtureRaycaster();
 
-            yield return Run("pointer_hover", Params(first.gameObject.GetInstanceID()), _ => { });
+            yield return Run("hover", Params(first.gameObject.GetInstanceID()), _ => { });
             var result = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(second.gameObject.GetInstanceID()), r => result = r);
+            yield return Run("hover", Params(second.gameObject.GetInstanceID()), r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(first.Events, Is.EqualTo(new[] { "enter", "exit" }));
@@ -112,11 +112,11 @@ namespace UnityPlayMcp.Tests
             yield return null;
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(target.gameObject.GetInstanceID()), r => result = r);
+            yield return Run("hover", Params(target.gameObject.GetInstanceID()), r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
-            Assert.That(target.Messages, Does.Contain("enter"), "pointer_hover did not reach OnMouseEnter");
-            Assert.That(target.OverCount, Is.GreaterThan(0), "pointer_hover did not reach OnMouseOver");
+            Assert.That(target.Messages, Does.Contain("enter"), "hover did not reach OnMouseEnter");
+            Assert.That(target.OverCount, Is.GreaterThan(0), "hover did not reach OnMouseOver");
             Assert.That(target.Messages, Does.Not.Contain("down"));
             Assert.That(VirtualInput.GetMouseButton(0), Is.False);
 
@@ -139,7 +139,7 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(covered.gameObject.GetInstanceID()), r => result = r);
+            yield return Run("hover", Params(covered.gameObject.GetInstanceID()), r => result = r);
 
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.Error, Does.Contain("covering card"));
@@ -170,9 +170,9 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var whenInactive = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(inactiveId), r => whenInactive = r);
+            yield return Run("hover", Params(inactiveId), r => whenInactive = r);
             var whenDestroyed = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(doomedId), r => whenDestroyed = r);
+            yield return Run("hover", Params(doomedId), r => whenDestroyed = r);
 
             Assert.That(whenInactive.IsSuccess, Is.False);
             Assert.That(whenInactive.Error, Does.Contain("not active in the scene"));
@@ -195,7 +195,7 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(card.gameObject.GetInstanceID()), r => result = r);
+            yield return Run("hover", Params(card.gameObject.GetInstanceID()), r => result = r);
 
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.Error, Does.Contain("was deactivated while the pointer moved onto it"));
@@ -215,7 +215,7 @@ namespace UnityPlayMcp.Tests
             card.Entered = () => CreateCard("card dealt on top", 0.5f);
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_hover", Params(card.gameObject.GetInstanceID()), r => result = r);
+            yield return Run("hover", Params(card.gameObject.GetInstanceID()), r => result = r);
 
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.Error, Does.Contain("rests on card dealt on top"));
@@ -229,10 +229,10 @@ namespace UnityPlayMcp.Tests
             yield return null;
 
             var result = default(ActionResultDto);
-            yield return Run("pointer_hover", Params("not an id"), r => result = r);
+            yield return Run("hover", Params("not an id"), r => result = r);
 
             Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("pointer_hover requires params [targetId]"));
+            Assert.That(result.Error, Does.Contain("hover requires params [targetId]"));
         }
 
         private void CreateRuntime()

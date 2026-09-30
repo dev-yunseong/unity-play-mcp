@@ -12,10 +12,10 @@ const wireCases: ReadonlyArray<{
   action: unknown;
   params: unknown[];
 }> = [
-  { name: "pointer_hover", action: { method: "pointer_hover", targetId: -3518 }, params: [-3518] },
+  { name: "hover", action: { method: "hover", targetId: -3518 }, params: [-3518] },
   {
-    name: "pointer_drag",
-    action: { method: "pointer_drag", sourceId: -4102, targetId: -2277 },
+    name: "drag",
+    action: { method: "drag", sourceId: -4102, targetId: -2277 },
     params: [-4102, -2277],
   },
   {
@@ -95,16 +95,16 @@ test("every method the schema accepts is covered by a wire case", () => {
 
 const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "an unknown method", action: { method: "quit_game" } },
-  { name: "a fractional pointer_hover targetId", action: { method: "pointer_hover", targetId: 1.5 } },
+  { name: "a fractional hover targetId", action: { method: "hover", targetId: 1.5 } },
   { name: "the removed button_click", action: { method: "button_click", targetId: 42 } },
   { name: "the removed pointer_click", action: { method: "pointer_click", targetId: 42 } },
-  { name: "a pointer_hover without a targetId", action: { method: "pointer_hover" } },
+  { name: "a hover without a targetId", action: { method: "hover" } },
   {
-    name: "a pointer_hover carrying coordinates it does not take",
-    action: { method: "pointer_hover", targetId: 7, x: 10, y: 20 },
+    name: "a hover carrying coordinates it does not take",
+    action: { method: "hover", targetId: 7, x: 10, y: 20 },
   },
-  { name: "a pointer_drag without a sourceId", action: { method: "pointer_drag", targetId: 7 } },
-  { name: "a pointer_drag without a targetId", action: { method: "pointer_drag", sourceId: 7 } },
+  { name: "a drag without a sourceId", action: { method: "drag", targetId: 7 } },
+  { name: "a drag without a targetId", action: { method: "drag", sourceId: 7 } },
   {
     name: "a click carrying a mouse button it does not take",
     action: { method: "click", targetId: 7, button: 0 },
@@ -128,7 +128,7 @@ const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "padding without a targetId", action: { method: "capture_screen", padding: 8 } },
   { name: "a zero maxEdge", action: { method: "capture_screen", targetId: 3, maxEdge: 0 } },
   { name: "a negative padding", action: { method: "capture_screen", targetId: 3, padding: -1 } },
-  { name: "the old positional params shape", action: { method: "pointer_hover", params: [42] } },
+  { name: "the old positional params shape", action: { method: "hover", params: [42] } },
 ];
 
 for (const { name, action } of rejectedCases) {

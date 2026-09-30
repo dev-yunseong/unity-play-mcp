@@ -67,11 +67,11 @@ namespace UnityPlayMcp
             if (!ActionExecutor.TryReadId(parameters, 0, out var targetId))
             {
                 completed(ActionResultDto.Failure(
-                    actionId, "pointer_hover requires params [targetId]."));
+                    actionId, "hover requires params [targetId]."));
                 yield break;
             }
 
-            if (!TryAim("pointer_hover", targetId, out var aim, out var error))
+            if (!TryAim("hover", targetId, out var aim, out var error))
             {
                 completed(ActionResultDto.Failure(actionId, error));
                 yield break;
@@ -84,7 +84,7 @@ namespace UnityPlayMcp
             {
                 completed(ActionResultDto.Failure(
                     actionId,
-                    "pointer_hover: target #" + targetId +
+                    "hover: target #" + targetId +
                     " was destroyed while the pointer moved onto it."));
                 yield break;
             }
@@ -93,7 +93,7 @@ namespace UnityPlayMcp
             {
                 completed(ActionResultDto.Failure(
                     actionId,
-                    "pointer_hover: target " + PointerTargeting.Describe(target, targetId) +
+                    "hover: target " + PointerTargeting.Describe(target, targetId) +
                     " was deactivated while the pointer moved onto it."));
                 yield break;
             }
@@ -103,7 +103,7 @@ namespace UnityPlayMcp
                 completed(ActionResultDto.Failure(
                     actionId,
                     string.Format(
-                        "pointer_hover: the pointer rests on {0} instead of {1} at ({2:0}, {3:0}). "
+                        "hover: the pointer rests on {0} instead of {1} at ({2:0}, {3:0}). "
                         + "The target moved or something was drawn on top of it after it was aimed at.",
                         hovered == null ? "nothing" : PointerTargeting.Describe(hovered, hovered.GetInstanceID()),
                         PointerTargeting.Describe(target, targetId),
@@ -145,12 +145,12 @@ namespace UnityPlayMcp
                 !ActionExecutor.TryReadId(parameters, 1, out var targetId))
             {
                 completed(ActionResultDto.Failure(
-                    actionId, "pointer_drag requires params [sourceId, targetId]."));
+                    actionId, "drag requires params [sourceId, targetId]."));
                 yield break;
             }
 
-            if (!TryAim("pointer_drag", sourceId, out var from, out var error) ||
-                !TryAim("pointer_drag", targetId, out var to, out error))
+            if (!TryAim("drag", sourceId, out var from, out var error) ||
+                !TryAim("drag", targetId, out var to, out error))
             {
                 completed(ActionResultDto.Failure(actionId, error));
                 yield break;

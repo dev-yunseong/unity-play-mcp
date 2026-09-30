@@ -83,11 +83,11 @@ namespace UnityPlayMcp
         {
             switch (method)
             {
-                case "pointer_drag":
+                case "drag":
                     yield return pointerActions.Drag(actionId, parameters, completed);
                     yield break;
 
-                case "pointer_hover":
+                case "hover":
                     yield return pointerActions.Hover(actionId, parameters, completed);
                     yield break;
 

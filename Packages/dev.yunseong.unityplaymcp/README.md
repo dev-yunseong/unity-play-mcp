@@ -33,7 +33,7 @@ Send one or more actions in an `ACTION` message:
 The game answers the batch with `ACTION_RESULT`. Match the response to the
 request with `requestId`, not the response message `id`.
 
-Supported methods are `enter_text`, `pointer_drag`, `pointer_hover`, `move_mouse`,
+Supported methods are `enter_text`, `drag`, `hover`, `move_mouse`,
 `mouse_down`, `mouse_up`, `key_click`, `key_down`, `key_up`, `set_axis`, `set_button`,
 `pause_time`, `resume_time`, `reset_game`, `start_readings`, `stop_readings`,
 and `capture_screen`.

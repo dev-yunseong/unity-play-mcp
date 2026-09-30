@@ -87,3 +87,8 @@ batch 로 연달아 보낸다. `Button.onClick` 을 직접 부르는 경로(`but
 ## Open Questions
 - (결정됨) `perform_actions` 에도 `click` 을 둔다. `expandActions` 가 tool 과 같은 해석을 쓴다.
 - selector 가 둘 이상 일치할 때 "실패 + 후보 나열" 로 충분한가?
+
+## Follow-up (same PR)
+
+- `pointer_drag`/`pointer_hover` 를 `drag`/`hover` 로 이름만 바꿨다(MCP tool, `perform_actions` method,
+  Unity wire method, 에러 문장, 문서, 테스트). 입력을 selector/좌표까지 받게 넓히는 것은 후속 PR.

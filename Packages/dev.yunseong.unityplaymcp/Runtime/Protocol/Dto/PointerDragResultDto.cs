@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 namespace UnityPlayMcp.Protocol.Dto
 {
     /// <summary>
-    /// <c>pointer_drag</c> 의 <c>returnValue</c>. 드래그의 두 끝.
+    /// <c>drag</c> 의 <c>returnValue</c>. 드래그의 두 끝.
     /// </summary>
     internal sealed class PointerDragResultDto
     {

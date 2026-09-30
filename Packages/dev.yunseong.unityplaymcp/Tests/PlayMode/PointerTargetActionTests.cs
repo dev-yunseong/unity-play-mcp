@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// ID 로 겨누는 <c>pointer_drag</c>, 그리고 MCP <c>click</c> 이 보내는 <c>move_mouse</c>/<c>mouse_down</c>/<c>mouse_up</c>.
+    /// ID 로 겨누는 <c>drag</c>, 그리고 MCP <c>click</c> 이 보내는 <c>move_mouse</c>/<c>mouse_down</c>/<c>mouse_up</c>.
     /// </summary>
     /// <remarks>
     /// 에디트 모드로 내려올 수 없다. <c>OnMouse*</c> 를 배달하는 것은 host 의 <c>Update</c> 안
@@ -159,7 +159,7 @@ namespace UnityPlayMcp.Tests
 
             var result = default(ActionResultDto);
             yield return Run(
-                "pointer_drag",
+                "drag",
                 Params(source.gameObject.GetInstanceID(), destination.gameObject.GetInstanceID()),
                 r => result = r);
 
@@ -190,7 +190,7 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             yield return Run(
-                "pointer_drag",
+                "drag",
                 Params(source.gameObject.GetInstanceID(), destination.gameObject.GetInstanceID()),
                 _ => { });
 
@@ -225,7 +225,7 @@ namespace UnityPlayMcp.Tests
 
             var result = default(ActionResultDto);
             yield return Run(
-                "pointer_drag",
+                "drag",
                 Params(source.gameObject.GetInstanceID(), doomedId),
                 r => result = r);
 
@@ -241,10 +241,10 @@ namespace UnityPlayMcp.Tests
             CreateRuntime();
 
             var drag = default(ActionResultDto);
-            yield return Run("pointer_drag", Params(7), r => drag = r);
+            yield return Run("drag", Params(7), r => drag = r);
 
             Assert.That(drag.IsSuccess, Is.False);
-            Assert.That(drag.Error, Does.Contain("pointer_drag requires params [sourceId, targetId]."));
+            Assert.That(drag.Error, Does.Contain("drag requires params [sourceId, targetId]."));
         }
 
         /// <summary>

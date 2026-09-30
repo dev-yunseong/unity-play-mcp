@@ -78,8 +78,8 @@ export const performActionSchema = z.discriminatedUnion("method", [
     x: z.number().optional(),
     y: z.number().optional(),
   }).strict(),
-  z.object({ method: z.literal("pointer_drag"), sourceId: targetIdSchema(), targetId: targetIdSchema() }).strict(),
-  z.object({ method: z.literal("pointer_hover"), targetId: targetIdSchema() }).strict(),
+  z.object({ method: z.literal("drag"), sourceId: targetIdSchema(), targetId: targetIdSchema() }).strict(),
+  z.object({ method: z.literal("hover"), targetId: targetIdSchema() }).strict(),
   z.object({ method: z.literal("enter_text"), targetId: targetIdSchema(), text: z.string() }).strict(),
   z.object({ method: z.literal("move_mouse"), x: z.number(), y: z.number() }).strict(),
   z.object({ method: z.literal("mouse_down"), button: mouseButtonSchema() }).strict(),
@@ -173,9 +173,9 @@ function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
 /// 배열의 순서와 값은 Unity 쪽 protocol 이라 바꿀 수 없다. 이 함수가 그 계약이 적힌 유일한 자리다.
 export function toWireAction(action: Exclude<PerformAction, { method: "click" }>): { method: string; params: unknown[] } {
   switch (action.method) {
-    case "pointer_hover":
+    case "hover":
       return { method: action.method, params: [action.targetId] };
-    case "pointer_drag":
+    case "drag":
       return { method: action.method, params: [action.sourceId, action.targetId] };
     case "enter_text":
       return { method: action.method, params: [action.targetId, action.text] };
@@ -924,15 +924,15 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     return dispatchActions(connection, clickWireActions(resolution.point));
   });
 
-  server.registerTool("pointer_drag", {
+  server.registerTool("drag", {
     description: "Drag from one Unity object to another by instance id: press the left mouse button on sourceId, glide the pointer to targetId, and release there. Both objects are checked before the button is pressed.",
     inputSchema: { sourceId: targetIdSchema(), targetId: targetIdSchema() },
-  }, async ({ sourceId, targetId }) => dispatchOne(connection, "pointer_drag", [sourceId, targetId]));
+  }, async ({ sourceId, targetId }) => dispatchOne(connection, "drag", [sourceId, targetId]));
 
-  server.registerTool("pointer_hover", {
+  server.registerTool("hover", {
     description: "Rest the virtual pointer on a Unity object by instance id without pressing any button, so hover handlers run through the game's own input path: uGUI OnPointerEnter/OnPointerExit and collider OnMouseEnter/OnMouseOver. The pointer stays there until the next pointer input moves it. Reports the top-left-origin game screen x/y it used (the same space as move_mouse) and the object actually under the pointer after it arrived. Fails without moving when the target is destroyed (\"no live object has id\"), inactive (\"not active in the scene\"), off screen, or covered (naming what covers it), and fails if the target moved away, was deactivated, or was covered by the time the pointer arrived; in that case the pointer stays where it landed and whatever is under it has already received hover. Read tooltips or highlights afterwards with get_scene_state or capture_screen.",
     inputSchema: { targetId: targetIdSchema() },
-  }, async ({ targetId }) => dispatchOne(connection, "pointer_hover", [targetId]));
+  }, async ({ targetId }) => dispatchOne(connection, "hover", [targetId]));
 
   server.registerTool("enter_text", {
     description: "Enter text into a Unity target by instance id.",

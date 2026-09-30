@@ -6,7 +6,7 @@ namespace UnityPlayMcp.Protocol.Dto
     /// 포인터가 한쪽 끝에서 무엇을 겨눴고 무엇을 맞혔는지.
     /// </summary>
     /// <remarks>
-    /// <c>pointer_hover</c> 의 <c>returnValue</c> 이자, <see cref="PointerDragResultDto"/> 의 두
+    /// <c>hover</c> 의 <c>returnValue</c> 이자, <see cref="PointerDragResultDto"/> 의 두
     /// 끝 각각이다. hover 에서는 포인터가 도착한 뒤 그 자리에서 다시 물은 hit 이다.
     /// </remarks>
     internal sealed class PointerHitDto
