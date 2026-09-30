@@ -272,9 +272,13 @@ namespace UnityPlayMcp.Play
 
             if (parameters.Count > 2)
             {
-                double.TryParse(
-                    Convert.ToString(parameters[2], System.Globalization.CultureInfo.InvariantCulture),
-                    System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ttlMs);
+                double parsed;
+                if (double.TryParse(
+                        Convert.ToString(parameters[2], System.Globalization.CultureInfo.InvariantCulture),
+                        System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out parsed))
+                {
+                    ttlMs = parsed;
+                }
             }
 
             var outcome = operations.Begin(operationId, hash, clientId, Now(), Math.Max(1d, ttlMs / 1000d));
@@ -371,6 +375,7 @@ namespace UnityPlayMcp.Play
             ObservationDto observation = null;
             var image = default(CapturedImage);
             var captureReturned = false;
+            string sampleError = null;
             string imageProblem = null;
             var captureMs = 0d;
 
@@ -388,7 +393,7 @@ namespace UnityPlayMcp.Play
                 {
                     image = captured;
                     captureReturned = true;
-                    observation = SampleObservation(request);
+                    observation = TrySample(request, out sampleError);
                 });
                 captureMs = captureTimer.Elapsed.TotalMilliseconds;
                 if (!captureReturned || !image.IsSuccess)
@@ -401,9 +406,16 @@ namespace UnityPlayMcp.Play
                 imageProblem = "this build cannot capture the screen";
             }
 
+            if (observation == null && sampleError == null)
+            {
+                observation = TrySample(request, out sampleError);
+            }
+
             if (observation == null)
             {
-                observation = SampleObservation(request);
+                // iterator 는 yield 를 감싼 try 를 둘 수 없어 여기서 실패로 돌려준다. 던지면 host 의 action queue 가 멈춘다.
+                completed(ActionResultDto.Failure(actionId, "play_observe failed: " + sampleError));
+                yield break;
             }
 
             observation.EncodeMs = captureMs;
@@ -468,6 +480,20 @@ namespace UnityPlayMcp.Play
                 Scene = image.Scene,
                 ToScreen = "screenX = region.x + imageX / scale.x; screenY = region.y + imageY / scale.y (top-left origin)"
             };
+        }
+
+        private ObservationDto TrySample(ObserveRequestDto request, out string error)
+        {
+            error = null;
+            try
+            {
+                return SampleObservation(request);
+            }
+            catch (Exception exception)
+            {
+                error = exception.GetType().Name + ": " + exception.Message;
+                return null;
+            }
         }
 
         /// <summary>지금 이 프레임의 상태를 한 번 수집한다. 매 프레임 수집하지 않는다.</summary>
