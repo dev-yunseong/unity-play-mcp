@@ -1,0 +1,23 @@
+{
+  "name": "UnityPlayMcp.Affordances.CodeGen.Tests",
+  "rootNamespace": "UnityPlayMcp.Tests.CodeGen",
+  "references": [
+    "Unity.UnityPlayMcp.Affordances.CodeGen"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "Mono.Cecil.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
