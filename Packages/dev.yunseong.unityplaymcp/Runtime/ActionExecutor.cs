@@ -30,9 +30,6 @@ namespace UnityPlayMcp
         private readonly Action<Vector2> cursorMoved;
         private readonly Action<Vector2> pointerMoved;
 
-        /// <summary>ID 로 겨누는 포인터 드래그와 hover. 프레임 순서를 쥔 쪽이라 따로 산다.</summary>
-        private readonly PointerActions pointerActions;
-
         // The time scale as it was when pause_time froze the game, so resume_time gives back the
         // speed the game was actually running at rather than assuming 1. Null means not paused.
         private float? scaleBeforePause;
@@ -68,11 +65,6 @@ namespace UnityPlayMcp
                 VirtualInput.MoveMouse(position);
                 pointerEvents.MoveTo(position);
             };
-
-            // SetButton 을 넘기는 것이지 버튼을 미는 두 번째 자리를 만드는 것이 아니다. 미는 일은
-            // 아래 SetButton 한 곳에만 있어야 하고, 그 이유는 그 메서드의 주석에 적혀 있다.
-            pointerActions = new PointerActions(
-                targetLookup, cursorController, pointerEvents, SetButton, pointerMoved);
         }
 
         public IEnumerator Execute(
@@ -83,14 +75,6 @@ namespace UnityPlayMcp
         {
             switch (method)
             {
-                case "drag":
-                    yield return pointerActions.Drag(actionId, parameters, completed);
-                    yield break;
-
-                case "hover":
-                    yield return pointerActions.Hover(actionId, parameters, completed);
-                    yield break;
-
                 case "enter_text":
                     yield return ExecuteEnterText(actionId, parameters, completed);
                     yield break;
@@ -789,11 +773,10 @@ namespace UnityPlayMcp
         /// 위치 인자 하나를 정수 id 로 읽는다.
         /// </summary>
         /// <remarks>
-        /// <c>internal</c> 인 것은 <see cref="PointerActions"/> 도 id 를 읽기 때문이다. wire 는
-        /// 위치 인자라 "몇 번째 자리를 어떻게 정수로 읽는가" 가 계약의 일부이고, 그 계약이 두
+        /// wire 는 위치 인자라 "몇 번째 자리를 어떻게 정수로 읽는가" 가 계약의 일부이고, 그 계약이 두
         /// 벌이면 한쪽만 <c>long</c> 을 받는 식으로 갈라진다.
         /// </remarks>
-        internal static bool TryReadId(List<object> parameters, int index, out int id)
+        private static bool TryReadId(List<object> parameters, int index, out int id)
         {
             id = 0;
             if (parameters == null || index < 0 || parameters.Count <= index ||

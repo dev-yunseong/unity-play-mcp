@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { performActionSchema, toWireAction } from "../src/tools.js";
+import { PulseStore } from "../src/pulse.js";
+import { expandActions, performActionSchema } from "../src/tools.js";
 
 /// agent 가 보내는 이름 있는 action 과, Unity 가 받아야 하는 `params` 배열의 짝.
 ///
@@ -12,12 +13,6 @@ const wireCases: ReadonlyArray<{
   action: unknown;
   params: unknown[];
 }> = [
-  { name: "hover", action: { method: "hover", targetId: -3518 }, params: [-3518] },
-  {
-    name: "drag",
-    action: { method: "drag", sourceId: -4102, targetId: -2277 },
-    params: [-4102, -2277],
-  },
   {
     name: "enter_text",
     action: { method: "enter_text", targetId: 7, text: "hello" },
@@ -80,9 +75,11 @@ for (const { name, action, params } of wireCases) {
     const parsed = performActionSchema.safeParse(action);
     assert.ok(parsed.success, `schema rejected ${JSON.stringify(action)}`);
 
-    assert.notEqual(parsed.data.method, "click", "click is expanded by expandActions, see click.test.ts");
-    if (parsed.data.method === "click") return;
-    const wire = toWireAction(parsed.data);
+    const expanded = expandActions([parsed.data], new PulseStore());
+    assert.ok(expanded.ok, "these actions carry an id or no target, so nothing needs a reading");
+    if (!expanded.ok) return;
+    assert.equal(expanded.wire.length, 1);
+    const wire = expanded.wire[0]!;
     assert.equal(wire.method, (action as { method: string }).method);
     assert.deepEqual(wire.params, params);
   });
@@ -90,7 +87,7 @@ for (const { name, action, params } of wireCases) {
 
 test("every method the schema accepts is covered by a wire case", () => {
   const covered = new Set(wireCases.map(({ action }) => (action as { method: string }).method));
-  assert.equal(covered.size, 17);
+  assert.equal(covered.size, 15);
 });
 
 const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
@@ -98,13 +95,17 @@ const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "a fractional hover targetId", action: { method: "hover", targetId: 1.5 } },
   { name: "the removed button_click", action: { method: "button_click", targetId: 42 } },
   { name: "the removed pointer_click", action: { method: "pointer_click", targetId: 42 } },
-  { name: "a hover without a targetId", action: { method: "hover" } },
-  {
-    name: "a hover carrying coordinates it does not take",
-    action: { method: "hover", targetId: 7, x: 10, y: 20 },
-  },
-  { name: "a drag without a sourceId", action: { method: "drag", targetId: 7 } },
-  { name: "a drag without a targetId", action: { method: "drag", sourceId: 7 } },
+  { name: "a hover without a target", action: { method: "hover" } },
+  { name: "a hover with an id and a coordinate", action: { method: "hover", targetId: 7, x: 10, y: 20 } },
+  { name: "a drag without a from", action: { method: "drag", to: { targetId: 7 } } },
+  { name: "a drag without a to", action: { method: "drag", from: { targetId: 7 } } },
+  { name: "a drag end with two ways to aim", action: { method: "drag", from: { targetId: 7, x: 1, y: 2 }, to: { targetId: 8 } } },
+  { name: "the old drag sourceId/targetId shape", action: { method: "drag", sourceId: 7, targetId: 8 } },
+  { name: "an enter_text with a coordinate", action: { method: "enter_text", x: 1, y: 2, text: "a" } },
+  { name: "an enter_text with an id and a selector", action: { method: "enter_text", targetId: 1, selector: "A[0]", text: "a" } },
+  { name: "an enter_text with no target", action: { method: "enter_text", text: "a" } },
+  { name: "a capture_screen aimed by coordinates", action: { method: "capture_screen", x: 1, y: 2 } },
+  { name: "maxEdge with only a selector missing", action: { method: "capture_screen", maxEdge: 100 } },
   {
     name: "a click carrying a mouse button it does not take",
     action: { method: "click", targetId: 7, button: 0 },

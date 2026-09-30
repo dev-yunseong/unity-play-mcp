@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// ID 로 겨누는 <c>drag</c>, 그리고 MCP <c>click</c> 이 보내는 <c>move_mouse</c>/<c>mouse_down</c>/<c>mouse_up</c>.
+    /// MCP <c>click</c> 과 <c>drag</c> 가 보내는 <c>move_mouse</c>/<c>mouse_down</c>/<c>mouse_up</c>.
     /// </summary>
     /// <remarks>
     /// 에디트 모드로 내려올 수 없다. <c>OnMouse*</c> 를 배달하는 것은 host 의 <c>Update</c> 안
@@ -158,10 +158,7 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var result = default(ActionResultDto);
-            yield return Run(
-                "drag",
-                Params(source.gameObject.GetInstanceID(), destination.gameObject.GetInstanceID()),
-                r => result = r);
+            yield return DragBetween(source.gameObject, destination.gameObject, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(source.Events.First(), Is.EqualTo("down"));
@@ -189,10 +186,7 @@ namespace UnityPlayMcp.Tests
             yield return null;
             IsolateFixtureRaycaster();
 
-            yield return Run(
-                "drag",
-                Params(source.gameObject.GetInstanceID(), destination.gameObject.GetInstanceID()),
-                _ => { });
+            yield return DragBetween(source.gameObject, destination.gameObject, _ => { });
 
             Assert.That(source.DragPositions, Is.Not.Empty);
             var sourceCentre = source.transform.position.x;
@@ -204,47 +198,6 @@ namespace UnityPlayMcp.Tests
                 Mathf.Abs(lastDrag - destinationCentre),
                 Is.LessThan(Mathf.Abs(lastDrag - sourceCentre)),
                 "the last drag was not reported near the destination");
-        }
-
-        /// <summary>
-        /// 목적지를 못 풀면 아무것도 쥐지 않은 채로 끝난다. 두 자리를 모두 누르기 전에 확인하는
-        /// 이유가 이것이다.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator PointerDrag_HoldsNothingWhenTheDestinationCannotBeResolved()
-        {
-            CreateRuntime();
-            var source = CreateGraphicTarget("drag source", 0.25f);
-            var doomed = CreateGraphicTarget("doomed target", 0.75f);
-            yield return null;
-            IsolateFixtureRaycaster();
-
-            var doomedId = doomed.gameObject.GetInstanceID();
-            Object.DestroyImmediate(doomed.gameObject);
-            yield return null;
-
-            var result = default(ActionResultDto);
-            yield return Run(
-                "drag",
-                Params(source.gameObject.GetInstanceID(), doomedId),
-                r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("no live object has id"));
-            Assert.That(VirtualInput.GetMouseButton(0), Is.False);
-            Assert.That(source.Events, Is.Empty, "the source was pressed before the destination was checked");
-        }
-
-        [UnityTest]
-        public IEnumerator PointerActions_RefuseParamsTheyCannotRead()
-        {
-            CreateRuntime();
-
-            var drag = default(ActionResultDto);
-            yield return Run("drag", Params(7), r => drag = r);
-
-            Assert.That(drag.IsSuccess, Is.False);
-            Assert.That(drag.Error, Does.Contain("drag requires params [sourceId, targetId]."));
         }
 
         /// <summary>
@@ -268,6 +221,34 @@ namespace UnityPlayMcp.Tests
         /// MCP 의 <c>click</c> 이 보내는 그 세 action 으로 대상의 겨눌 자리를 누른다. 자리는
         /// <see cref="PointerTargeting.TryAim"/> 이 고르고, 좌표는 <c>move_mouse</c> 가 받는 좌상단 기준이다.
         /// </summary>
+        /// <summary>
+        /// MCP 의 <c>drag</c> 가 보내는 네 action: 원본으로 옮기고, 누르고, 목적지로 활강하고, 놓는다.
+        /// </summary>
+        private IEnumerator DragBetween(
+            GameObject source, GameObject destination, System.Action<ActionResultDto> completed)
+        {
+            var failure = default(ActionResultDto);
+            System.Action<ActionResultDto> note = r => failure = failure ?? (r.IsSuccess ? null : r);
+
+            yield return MoveOnto(source, note);
+            yield return Run("mouse_down", Params(0d), note);
+            yield return MoveOnto(destination, note);
+            yield return Run("mouse_up", Params(0d), note);
+
+            completed(failure ?? ActionResultDto.Success(0));
+        }
+
+        private IEnumerator MoveOnto(GameObject target, System.Action<ActionResultDto> completed)
+        {
+            var aimed = PointerTargeting.TryAim(
+                "drag", target.GetInstanceID(), target, new PointerEventDispatcher(), out var aim, out var error);
+            Assert.That(aimed, Is.True, error);
+            yield return Run(
+                "move_mouse",
+                Params((double)aim.ScreenPosition.x, (double)(Screen.height - aim.ScreenPosition.y)),
+                completed);
+        }
+
         private IEnumerator ClickOn(GameObject target, System.Action<ActionResultDto> completed)
         {
             var aimed = PointerTargeting.TryAim(

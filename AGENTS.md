@@ -18,6 +18,7 @@ For non-trivial work, follow:
 Coding conventions:
 
 - `.agents/docs/coding-style.md`
+- `.agents/docs/tool-design.md` (when adding or changing an MCP tool)
 
 For tracked Git work, follow:
 

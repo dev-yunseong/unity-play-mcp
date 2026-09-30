@@ -90,5 +90,12 @@ batch 로 연달아 보낸다. `Button.onClick` 을 직접 부르는 경로(`but
 
 ## Follow-up (same PR)
 
-- `pointer_drag`/`pointer_hover` 를 `drag`/`hover` 로 이름만 바꿨다(MCP tool, `perform_actions` method,
-  Unity wire method, 에러 문장, 문서, 테스트). 입력을 selector/좌표까지 받게 넓히는 것은 후속 PR.
+- `pointer_drag`/`pointer_hover` 를 `drag`/`hover` 로 개명.
+- 대상 지정을 전 tool 에서 하나로: `TargetRef`(`targetId` | `selector` | `x`+`y`). 점을 겨누는 `click`/`hover`/`drag`
+  는 셋 다, 오브젝트가 필요한 `enter_text`/`capture_screen` 은 id/selector 만(좌표는 거절). `drag` 는
+  `{from, to}` 로 각각 `TargetRef` 를 받는다. selector→id/점 해석은 MCP(`target-ref.ts`), tool 과 `perform_actions`
+  가 `expandActions` 하나를 공유한다.
+- `hover` = `move_mouse`, `drag` = `move_mouse`/`mouse_down`/`move_mouse`/`mouse_up`. Unity 의 `hover`/`drag`
+  action 과 `PointerActions`, `PointerHitDto`, `PointerDragResultDto` 삭제. `PointerTargeting` 은 messenger 가
+  `ColliderUnder` 를 쓰고 테스트가 `TryAim` 을 쓰므로 남긴다(`StillReaches` 등 미사용분 정리는 후속).
+- 규칙을 `.agents/docs/tool-design.md` 로 명문화하고 `AGENTS.md`(=`CLAUDE.md`) 에서 링크.

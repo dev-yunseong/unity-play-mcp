@@ -10,7 +10,7 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// ID 로 겨누는 <c>hover</c> (#70).
+    /// MCP <c>hover</c> 가 보내는 <c>move_mouse</c> 로 대상 위에 올린다 (#70).
     /// </summary>
     /// <remarks>
     /// <see cref="PointerTargetActionTests"/> 와 같은 이유로 play mode 여야 하고 같은 방식으로 돈다: host 는 프레임과
@@ -62,22 +62,11 @@ namespace UnityPlayMcp.Tests
             IsolateFixtureRaycaster();
 
             var result = default(ActionResultDto);
-            yield return Run("hover", Params(card.gameObject.GetInstanceID()), r => result = r);
+            yield return HoverOn(card.gameObject, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(card.Events, Is.EqualTo(new[] { "enter" }));
             Assert.That(VirtualInput.GetMouseButton(0), Is.False, "hover pressed a button");
-
-            var hit = result.ReturnValue as PointerHitDto;
-            Assert.That(hit, Is.Not.Null, "hover returned no PointerHitDto");
-            Assert.That(hit.TargetId, Is.EqualTo(card.gameObject.GetInstanceID()));
-            Assert.That(hit.HitId, Is.EqualTo(card.gameObject.GetInstanceID()));
-            Assert.That(hit.Hit, Is.EqualTo("hovered card"));
-
-            // 좌상단 기준 게임 화면 좌표이고, 그 자리는 카드 안이다.
-            var cardCenterFromTop = Screen.height * 0.5f;
-            Assert.That(hit.X, Is.EqualTo(Screen.width * 0.5f).Within(30f));
-            Assert.That(hit.Y, Is.EqualTo(cardCenterFromTop).Within(30f));
         }
 
         /// <summary>
@@ -92,9 +81,9 @@ namespace UnityPlayMcp.Tests
             yield return null;
             IsolateFixtureRaycaster();
 
-            yield return Run("hover", Params(first.gameObject.GetInstanceID()), _ => { });
+            yield return HoverOn(first.gameObject, _ => { });
             var result = default(ActionResultDto);
-            yield return Run("hover", Params(second.gameObject.GetInstanceID()), r => result = r);
+            yield return HoverOn(second.gameObject, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(first.Events, Is.EqualTo(new[] { "enter", "exit" }));
@@ -112,127 +101,29 @@ namespace UnityPlayMcp.Tests
             yield return null;
 
             var result = default(ActionResultDto);
-            yield return Run("hover", Params(target.gameObject.GetInstanceID()), r => result = r);
+            yield return HoverOn(target.gameObject, r => result = r);
 
             Assert.That(result.IsSuccess, Is.True, result.Error);
             Assert.That(target.Messages, Does.Contain("enter"), "hover did not reach OnMouseEnter");
             Assert.That(target.OverCount, Is.GreaterThan(0), "hover did not reach OnMouseOver");
             Assert.That(target.Messages, Does.Not.Contain("down"));
             Assert.That(VirtualInput.GetMouseButton(0), Is.False);
-
-            var hit = result.ReturnValue as PointerHitDto;
-            Assert.That(hit, Is.Not.Null);
-            Assert.That(hit.HitId, Is.EqualTo(target.gameObject.GetInstanceID()));
         }
 
         /// <summary>
-        /// 가려진 카드는 거절하고 무엇이 가렸는지 말한다. 포인터는 옮기지 않으므로 가려진 카드도 가린 것도 hover 를 받지 않는다.
+        /// MCP 의 <c>hover</c> 가 보내는 그 한 action. 자리는 <see cref="PointerTargeting.TryAim"/> 이 고르고,
+        /// 좌표는 <c>move_mouse</c> 가 받는 좌상단 기준이다.
         /// </summary>
-        [UnityTest]
-        public IEnumerator PointerHover_RefusesACoveredCardAndNamesWhatCoveredIt()
+        private IEnumerator HoverOn(GameObject target, System.Action<ActionResultDto> completed)
         {
-            CreateRuntime();
-            var covered = CreateCard("covered card", 0.5f);
-            // 나중에 만든 형제가 위에 그려지고 raycast 에 먼저 답한다.
-            var coverer = CreateCard("covering card", 0.5f);
-            yield return null;
-            IsolateFixtureRaycaster();
+            var aimed = PointerTargeting.TryAim(
+                "hover", target.GetInstanceID(), target, new PointerEventDispatcher(), out var aim, out var error);
+            Assert.That(aimed, Is.True, error);
 
-            var result = default(ActionResultDto);
-            yield return Run("hover", Params(covered.gameObject.GetInstanceID()), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("covering card"));
-            Assert.That(result.Error, Does.Contain("covered card"));
-            Assert.That(covered.Events, Is.Empty);
-            Assert.That(coverer.Events, Is.Empty, "a refused hover must not move the pointer");
-        }
-
-        /// <summary>
-        /// 비활성, 파괴, 그리고 장면이 바뀐 뒤의 id. 셋 다 다른 대상으로 조용히 풀리지 않고 서로 다른 말로 실패한다.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator PointerHover_TellsInactiveAndDestroyedTargetsApart()
-        {
-            CreateRuntime();
-            var inactive = CreateCard("inactive card", 0.3f);
-            var doomed = CreateCard("doomed card", 0.7f);
-            yield return null;
-
-            var inactiveId = inactive.gameObject.GetInstanceID();
-            var doomedId = doomed.gameObject.GetInstanceID();
-            inactive.gameObject.SetActive(false);
-            Object.DestroyImmediate(doomed.gameObject);
-
-            // 파괴된 자리에 같은 이름의 새 카드가 선다. 장면이 바뀐 뒤 같은 모양의 UI 가 다시 만들어지는 경우다.
-            var replacement = CreateCard("doomed card", 0.7f);
-            yield return null;
-            IsolateFixtureRaycaster();
-
-            var whenInactive = default(ActionResultDto);
-            yield return Run("hover", Params(inactiveId), r => whenInactive = r);
-            var whenDestroyed = default(ActionResultDto);
-            yield return Run("hover", Params(doomedId), r => whenDestroyed = r);
-
-            Assert.That(whenInactive.IsSuccess, Is.False);
-            Assert.That(whenInactive.Error, Does.Contain("not active in the scene"));
-
-            Assert.That(whenDestroyed.IsSuccess, Is.False);
-            Assert.That(whenDestroyed.Error, Does.Contain("no live object has id"));
-            Assert.That(replacement.Events, Is.Empty, "a stale id was resolved to the object that replaced it");
-        }
-
-        /// <summary>
-        /// 겨눌 때는 맞았는데 도착하는 사이 게임이 대상을 끈 경우. 겨눈 때의 답을 그대로 성공으로 보고하지 않는다.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator PointerHover_FailsWhenTheTargetIsDeactivatedAsThePointerArrives()
-        {
-            CreateRuntime();
-            var card = CreateCard("vanishing card", 0.5f);
-            card.Entered = () => card.gameObject.SetActive(false);
-            yield return null;
-            IsolateFixtureRaycaster();
-
-            var result = default(ActionResultDto);
-            yield return Run("hover", Params(card.gameObject.GetInstanceID()), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("was deactivated while the pointer moved onto it"));
-        }
-
-        /// <summary>
-        /// 도착하는 사이 다른 것이 위에 덮인 경우 — 움직이는 카드 더미에서 hover 한 카드 위로 다른 카드가 올라오는 장면이다.
-        /// 포인터가 실제로 올라앉은 것을 이름으로 말한다.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator PointerHover_FailsWhenSomethingCoversTheTargetAsThePointerArrives()
-        {
-            CreateRuntime();
-            var card = CreateCard("buried card", 0.5f);
-            yield return null;
-            IsolateFixtureRaycaster();
-            card.Entered = () => CreateCard("card dealt on top", 0.5f);
-
-            var result = default(ActionResultDto);
-            yield return Run("hover", Params(card.gameObject.GetInstanceID()), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("rests on card dealt on top"));
-            Assert.That(result.Error, Does.Contain("buried card"));
-        }
-
-        [UnityTest]
-        public IEnumerator PointerHover_RefusesParamsItCannotRead()
-        {
-            CreateRuntime();
-            yield return null;
-
-            var result = default(ActionResultDto);
-            yield return Run("hover", Params("not an id"), r => result = r);
-
-            Assert.That(result.IsSuccess, Is.False);
-            Assert.That(result.Error, Does.Contain("hover requires params [targetId]"));
+            yield return Run(
+                "move_mouse",
+                Params((double)aim.ScreenPosition.x, (double)(Screen.height - aim.ScreenPosition.y)),
+                completed);
         }
 
         private void CreateRuntime()
