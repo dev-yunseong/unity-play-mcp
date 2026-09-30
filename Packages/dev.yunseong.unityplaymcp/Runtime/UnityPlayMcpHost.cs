@@ -494,13 +494,21 @@ namespace UnityPlayMcp
             while (actionRequests.Count > 0)
             {
                 var queued = actionRequests.Dequeue();
-                yield return ExecuteActionRequest(queued.Request, queued.ClientId);
+                yield return ExecuteQueuedAction(queued.Request, queued.ClientId);
             }
 
             processingActions = false;
         }
 
-        private IEnumerator ExecuteActionRequest(AgentRequestDto request, string clientId)
+        /// <summary>
+        /// 보낸 연결을 모르는 채 요청을 실행한다. 테스트가 reflection 으로 부르므로 인자를 늘리지 않는다.
+        /// </summary>
+        private IEnumerator ExecuteActionRequest(AgentRequestDto request)
+        {
+            return ExecuteQueuedAction(request, null);
+        }
+
+        private IEnumerator ExecuteQueuedAction(AgentRequestDto request, string clientId)
         {
             var results = new List<ActionResultDto>();
 
