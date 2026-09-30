@@ -185,6 +185,9 @@ namespace UnityPlayMcp.Affordances.Scan
         /// </remarks>
         public static bool Watching => Live.Pulse.InProgress;
 
+        /// <summary>돌고 있는 reading 의 run. 돌고 있지 않으면 null 이다.</summary>
+        public static string CurrentRun => Live.Pulse.CurrentRun;
+
         /// <summary>다음 reading 을 `whole` 로 보내게 한다. 돌고 있지 않으면 아무것도 하지 않는다.</summary>
         /// <remarks>
         /// 새로 붙거나 <c>start_readings</c> 를 다시 보낸 MCP server 가 쓴다. 차이만으로는 놓친 값을 되찾지 못한다.

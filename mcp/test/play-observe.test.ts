@@ -202,6 +202,10 @@ test("an incoherent image is reported with both stamps and never claimed as one 
   assert.deepEqual(result.body.imageStamp, { frame: 90, scene: "Main" });
   assert.ok((result.body.warnings as string[]).some((warning) => /same frame/.test(warning)));
   assert.equal(result.ok && result.image?.data, "AAAA");
+  const meta = result.body.image as Record<string, unknown>;
+  assert.equal(meta.width, 2);
+  assert.equal("data" in meta, false, "the base64 stays out of the structured body");
+  assert.equal(meta.observationId, result.body.observationId);
 });
 
 test("the envelope carries schema, policy, partial, omittedCounts and warnings", async () => {

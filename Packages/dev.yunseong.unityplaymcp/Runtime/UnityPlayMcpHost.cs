@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityPlayMcp.Capture;
 using UnityPlayMcp.Diagnostics;
+using UnityPlayMcp.Play;
 using UnityPlayMcp.Protocol.Dto;
 using UnityPlayMcp.Protocol.Mapping;
 using UnityPlayMcp.Serialization;
@@ -45,7 +46,18 @@ namespace UnityPlayMcp
         /// <summary>server 가 열린 동안 바꿔 두었다가 되돌릴 host game 의 원래 설정이다.</summary>
         private bool hostRunInBackground;
         private long nextMessageId = 1;
-        private readonly Queue<AgentRequestDto> actionRequests = new Queue<AgentRequestDto>();
+        private readonly Queue<QueuedAction> actionRequests = new Queue<QueuedAction>();
+
+        /// <summary>observe/act 도구 묶음이 쓰는 wire method. session 마다 새로 만든다.</summary>
+        private PlayApi playApi;
+
+        private struct QueuedAction
+        {
+            public AgentRequestDto Request;
+
+            /// <summary>보낸 연결. operation 이 입력을 소유했는지 가릴 때 쓴다.</summary>
+            public string ClientId;
+        }
         private bool processingActions;
 
         /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
@@ -175,6 +187,7 @@ namespace UnityPlayMcp
                 pointerEvents,
                 new ScreenCapturer(),
                 this);
+            playApi = new PlayApi(new ScreenCapturer());
             frameTimeRecorder = new FrameTimeRecorder();
             frameTimingSampler = new FrameTimingSampler();
 
@@ -454,7 +467,7 @@ namespace UnityPlayMcp
 
                 if (request.Type == "ACTION")
                 {
-                    EnqueueAction(request);
+                    EnqueueAction(request, message.ClientId);
                     return;
                 }
 
@@ -466,9 +479,9 @@ namespace UnityPlayMcp
             }
         }
 
-        private void EnqueueAction(AgentRequestDto request)
+        private void EnqueueAction(AgentRequestDto request, string clientId)
         {
-            actionRequests.Enqueue(request);
+            actionRequests.Enqueue(new QueuedAction { Request = request, ClientId = clientId });
             if (!processingActions)
             {
                 StartCoroutine(ProcessActions());
@@ -480,13 +493,22 @@ namespace UnityPlayMcp
             processingActions = true;
             while (actionRequests.Count > 0)
             {
-                yield return ExecuteActionRequest(actionRequests.Dequeue());
+                var queued = actionRequests.Dequeue();
+                yield return ExecuteQueuedAction(queued.Request, queued.ClientId);
             }
 
             processingActions = false;
         }
 
+        /// <summary>
+        /// 보낸 연결을 모르는 채 요청을 실행한다. 테스트가 reflection 으로 부르므로 인자를 늘리지 않는다.
+        /// </summary>
         private IEnumerator ExecuteActionRequest(AgentRequestDto request)
+        {
+            return ExecuteQueuedAction(request, null);
+        }
+
+        private IEnumerator ExecuteQueuedAction(AgentRequestDto request, string clientId)
         {
             var results = new List<ActionResultDto>();
 
@@ -498,11 +520,30 @@ namespace UnityPlayMcp
                     continue;
                 }
 
+                if (PlayApi.Handles(action.Method))
+                {
+                    yield return playApi.Execute(
+                        action.Id, action.Method, action.Parameters, clientId, result => results.Add(result));
+                    continue;
+                }
+
+                // 진행 중인 operation 이 다른 client 의 것이면 입력을 섞지 않고 거절한다. 기존 도구도 같은 규칙을 따른다.
+                if (PlayApi.IsMutating(action.Method) && !playApi.TryCheckInput(clientId, out var holder))
+                {
+                    results.Add(ActionResultDto.Failure(action.Id, PlayApi.BusyMessage(holder)));
+                    continue;
+                }
+
                 yield return actionExecutor.Execute(
                     action.Id,
                     action.Method,
                     action.Parameters,
                     result => results.Add(result));
+
+                if (PlayApi.IsMutating(action.Method))
+                {
+                    playApi.NoteInput();
+                }
             }
 
             var response = new ActionResultMessage

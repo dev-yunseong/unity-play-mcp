@@ -265,6 +265,12 @@ export class PlayObserver {
     body.timings = context.timings;
     if (parsed?.analysis !== undefined) body.analysis = parsed.analysis;
 
+    if (parsed?.image !== undefined) {
+      // 이미지는 별도 content block 이다. 좌표 변환 메타데이터는 구조화 결과에 남겨 픽셀 좌표를 해석할 수 있게 한다.
+      const { data: _data, ...meta } = parsed.image;
+      body.image = { ...meta, observationId: snapshot.observationId };
+    }
+
     return { ok: true, body, ...(parsed?.image === undefined ? {} : { image: parsed.image }) };
   }
 

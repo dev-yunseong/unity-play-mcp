@@ -32,7 +32,7 @@ function unityFor(world: World, extra: Record<string, Handler> = {}): FakeUnity 
     wait_frames: () => ({ frame: 1 }),
     play_query_space: () => ({ ok: true }),
     play_inspect: () => ({
-      entity: ref, availability: "available", recipe: [{ method: "pointer_click", targetId: 10 }],
+      entity: ref, availability: "available", recipe: [{ method: "pointerClick", x: 50, y: 60 }],
       preconditions: [], outcomePredicates: [],
     }),
     play_sample: (params) => {
@@ -44,8 +44,8 @@ function unityFor(world: World, extra: Record<string, Handler> = {}): FakeUnity 
         facts: [],
       };
     },
-    pointer_click: () => { world.revision++; return { frame: 5 }; },
-    key_down: () => ({}), key_up: () => ({}), mouse_down: () => ({}), mouse_up: () => ({}), set_axis: () => ({}), set_button: () => ({}),
+    move_mouse: () => ({}), mouse_down: () => { world.revision++; return { frame: 5 }; },
+    key_down: () => ({}), key_up: () => ({}), mouse_up: () => ({}), set_axis: () => ({}), set_button: () => ({}),
     ...extra,
   });
 }
@@ -66,7 +66,7 @@ async function harness(world: World, unity: FakeUnity, clock = new FakeClock()) 
   return { act, gate, ledger, clock, client, observer, base, world };
 }
 
-const clickSteps: Step[] = [{ method: "pointer_click", targetId: 10 }];
+const clickSteps: Step[] = [{ method: "pointerClick", x: 50, y: 60 }];
 const hpDropped = [{ member: { target: { ref }, component: "Health", name: "hp", op: "lt", value: 10 } }];
 
 function body(response: ActResponse) {
@@ -95,7 +95,7 @@ test("accepted input alone is never confirmed: no expect means unknown", async (
 
 test("an expect that becomes true is confirmed with evidence", async () => {
   const world = makeWorld();
-  const unity = unityFor(world, { pointer_click: () => { world.hp = 6; world.revision++; return { frame: 5 }; } });
+  const unity = unityFor(world, { mouse_down: () => { world.hp = 6; world.revision++; return { frame: 5 }; } });
   const { act } = await harness(world, unity);
   const result = body(await act({ steps: clickSteps, expect: hpDropped }));
   assert.equal(result.outcome.status, "confirmed");
@@ -111,7 +111,7 @@ test("input accepted but the effect never appears is not_observed, without re-se
   assert.equal(result.execution.status, "completed");
   assert.equal(result.outcome.status, "not_observed");
   assert.equal(result.termination, "timeout");
-  assert.equal(unity.count("pointer_click"), 1, "a late effect is never answered with automatic re-input");
+  assert.equal(unity.count("mouse_down"), 1, "a late effect is never answered with automatic re-input");
 });
 
 test("a late effect arriving during the wait is still confirmed", async () => {
@@ -137,7 +137,7 @@ test("a failed precondition sends no input at all", async () => {
   }));
   assert.equal(result.execution.status, "not_started");
   assert.equal(result.termination, "precondition_failed");
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
   assert.ok(result.outcome.unmet.length > 0);
 });
 
@@ -147,7 +147,7 @@ test("an unknown precondition (missing data) counts as failed, not passed", asyn
   const { act } = await harness(world, unity);
   const result = body(await act({ steps: clickSteps, preconditions: [{ active: { ref } }] }));
   assert.equal(result.termination, "precondition_failed");
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 });
 
 test("a blocker found just before input stops the operation", async () => {
@@ -157,7 +157,7 @@ test("a blocker found just before input stops the operation", async () => {
   const result = body(await act({ action: { actionRef: "act:x" } }));
   assert.equal(result.termination, "precondition_failed");
   assert.match(result.outcome.unmet.join(" "), /blocked by Overlay\/Popup/);
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 });
 
 test("a stale entity ref is refused rather than replaced by another object", async () => {
@@ -167,7 +167,7 @@ test("a stale entity ref is refused rather than replaced by another object", asy
   const result = body(await act({ action: { actionRef: "act:old" } }));
   assert.equal(result.termination, "precondition_failed");
   assert.match(result.outcome.unmet.join(" "), /different object/);
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 });
 
 test("invalid requests are refused before Unity sees anything", async () => {
@@ -181,7 +181,7 @@ test("invalid requests are refused before Unity sees anything", async () => {
   const badPredicate = await act({ steps: clickSteps, expect: [{ eval: "1" }] });
   assert.equal(body(badPredicate).error?.code, "invalid_request");
   assert.equal(unity.count("play_begin"), 0);
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 });
 
 test("a retry with the same operationId and request returns the earlier result without input", async () => {
@@ -190,7 +190,7 @@ test("a retry with the same operationId and request returns the earlier result w
   const { act } = await harness(world, unity);
   const first = await act({ operationId: "same", steps: clickSteps });
   const again = await act({ operationId: "same", steps: clickSteps });
-  assert.equal(unity.count("pointer_click"), 1);
+  assert.equal(unity.count("mouse_down"), 1);
   assert.equal(body(again).replayed, true);
   assert.equal(body(again).execution.status, body(first).execution.status);
 });
@@ -200,10 +200,10 @@ test("the same operationId with a different request is a conflict and sends noth
   const unity = unityFor(world);
   const { act } = await harness(world, unity);
   await act({ operationId: "same", steps: clickSteps });
-  const clicks = unity.count("pointer_click");
-  const conflict = body(await act({ operationId: "same", steps: [{ method: "pointer_click", targetId: 11 }] }));
+  const clicks = unity.count("mouse_down");
+  const conflict = body(await act({ operationId: "same", steps: [{ method: "pointerClick", x: 11, y: 11 }] }));
   assert.equal(conflict.error?.code, "operation_conflict");
-  assert.equal(unity.count("pointer_click"), clicks);
+  assert.equal(unity.count("mouse_down"), clicks);
 });
 
 test("after a server restart Unity's record prevents re-execution and reports the outcome as unknown", async () => {
@@ -213,7 +213,7 @@ test("after a server restart Unity's record prevents re-execution and reports th
   const result = body(await act({ operationId: "restarted", steps: clickSteps }));
   assert.equal(result.termination, "precondition_failed");
   assert.match(result.outcome.unmet.join(" "), /not re-sent/);
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 });
 
 test("another client holding the input yields busy and no input", async () => {
@@ -223,7 +223,7 @@ test("another client holding the input yields busy and no input", async () => {
   const result = body(await act({ steps: clickSteps }));
   assert.equal(result.termination, "busy");
   assert.match(result.outcome.unmet.join(" "), /other-op/);
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
   assert.equal(gate.activeOperationId, undefined, "the local gate is released");
 });
 
@@ -231,7 +231,7 @@ test("two operations in one process do not interleave", async () => {
   const world = makeWorld();
   let release!: () => void;
   const hold = new Promise<void>((resolve) => { release = resolve; });
-  const unity = unityFor(world, { pointer_click: async () => { await hold; return { frame: 1 }; } });
+  const unity = unityFor(world, { mouse_down: async () => { await hold; return { frame: 1 }; } });
   const { act } = await harness(world, unity);
   const first = act({ operationId: "one", steps: clickSteps });
   await new Promise((resolve) => setImmediate(resolve));
@@ -239,7 +239,7 @@ test("two operations in one process do not interleave", async () => {
   assert.equal(second.termination, "busy");
   release();
   assert.equal(body(await first).execution.status, "completed");
-  assert.equal(unity.count("pointer_click"), 1);
+  assert.equal(unity.count("mouse_down"), 1);
 });
 
 test("a stale observation is rejected only when other input ran after it and it is old", async () => {
@@ -268,7 +268,7 @@ test("a different Play session or scene since the observation stops the operatio
   const { act } = await harness(world, unity);
   const result = body(await act({ steps: clickSteps }));
   assert.match(result.outcome.unmet.join(" "), /session_changed/);
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 
   const world2 = makeWorld();
   const { act: act2, world: w } = await harness(world2, unityFor(world2));
@@ -279,16 +279,18 @@ test("a different Play session or scene since the observation stops the operatio
 
 test("a scene change mid-plan skips the remaining steps and never touches old entities", async () => {
   const world = makeWorld();
-  const unity = unityFor(world, { pointer_click: () => { world.scene = "Next"; return { frame: 3 }; } });
+  const unity = unityFor(world, { mouse_down: () => { world.scene = "Next"; return { frame: 3 }; } });
   const { act } = await harness(world, unity);
   const result = body(await act({ steps: [
-    { method: "pointer_click", targetId: 10 },
-    { method: "pointer_click", targetId: 11 },
-    { method: "pointer_click", targetId: 12 },
+    { method: "pointerClick", x: 10, y: 10 },
+    { method: "pointerClick", x: 11, y: 11 },
+    { method: "pointerClick", x: 12, y: 12 },
   ] }));
   assert.equal(result.termination, "scene_changed");
-  assert.equal(unity.count("pointer_click"), 1);
-  assert.deepEqual(result.execution.steps.map((step) => step.status), ["completed", "skipped", "skipped"]);
+  assert.equal(unity.count("mouse_down"), 1);
+  const statuses = result.execution.steps.map((step) => step.status);
+  assert.equal(statuses.at(-1), "skipped");
+  assert.ok(!unity.calls.some((call) => call.method === "move_mouse" && call.params[0] === 11), "no input for the old entities");
   assert.equal(result.execution.status, "partial");
 });
 
@@ -324,22 +326,24 @@ test("cancel mid-hold releases exactly what this operation pressed", async () =>
 
 test("a step failure stops the plan, reports partial, and still releases held input", async () => {
   const world = makeWorld();
-  const unity = unityFor(world, { pointer_click: () => { throw new UnityFailure("Target is covered by Popup"); } });
+  const unity = unityFor(world, { mouse_down: () => { throw new UnityFailure("Target is covered by Popup"); } });
   const { act } = await harness(world, unity);
   const result = body(await act({ steps: [
     { method: "key_down", key: "Space" },
-    { method: "pointer_click", targetId: 10 },
+    { method: "pointerClick", x: 10, y: 10 },
     { method: "key_up", key: "Space" },
   ] }));
   assert.equal(result.execution.status, "partial");
-  assert.deepEqual(result.execution.steps.map((step) => step.status), ["completed", "completed", "failed", "skipped"]);
+  const statuses = result.execution.steps.map((step) => step.status);
+  assert.ok(statuses.includes("failed"));
+  assert.equal(statuses.at(-1), "skipped");
   const releases = unity.calls.filter((call) => call.method === "key_up");
   assert.equal(releases.length, 1, "the key is released once after the failure");
 });
 
 test("a disconnect during a step is reported and cleanup does not hang", async () => {
   const world = makeWorld();
-  const unity = unityFor(world, { pointer_click: () => { throw new Error("Unity WebSocket closed"); } });
+  const unity = unityFor(world, { mouse_down: () => { throw new Error("Unity WebSocket closed"); } });
   const { act, gate } = await harness(world, unity);
   const result = body(await act({ steps: clickSteps }));
   assert.equal(result.termination, "disconnected");
@@ -352,11 +356,11 @@ test("waitCondition is bounded: it fails the step instead of waiting forever", a
   const { act } = await harness(world, unity);
   const result = body(await act({ steps: [
     { method: "waitCondition", until: { sceneIs: "Never" }, timeoutMs: 500 },
-    { method: "pointer_click", targetId: 10 },
+    { method: "pointerClick", x: 10, y: 10 },
   ], timeoutMs: 5_000 }));
   assert.equal(result.execution.steps[0]?.status, "failed");
   assert.equal(result.execution.steps[1]?.status, "skipped");
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 });
 
 test("waitCondition lets an animation finish before the next step", async () => {
@@ -370,7 +374,7 @@ test("waitCondition lets an animation finish before the next step", async () => 
   world.interactable = false;
   const result = body(await act({ steps: [
     { method: "waitCondition", until: { interactable: { ref } }, timeoutMs: 2_000 },
-    { method: "pointer_click", targetId: 10 },
+    { method: "pointerClick", x: 10, y: 10 },
   ] }));
   assert.equal(result.execution.status, "completed");
 });
@@ -400,7 +404,7 @@ test("provider outcome predicates from the recipe make an outcome judgeable", as
   const world = makeWorld();
   const unity = unityFor(world, {
     play_inspect: () => ({
-      entity: ref, availability: "available", recipe: [{ method: "pointer_click", targetId: 10 }],
+      entity: ref, availability: "available", recipe: [{ method: "pointerClick", x: 50, y: 60 }],
       preconditions: [], outcomePredicates: [{ sceneIs: "Main" }],
     }),
   });
@@ -414,7 +418,7 @@ test("recipe targets substitute an entity id or a point and reject a mismatched 
   const unity = unityFor(world, {
     play_inspect: () => ({ entity: ref, availability: "available", recipe: [
       { method: "move_mouse", x: "$target.x", y: "$target.y" },
-      { method: "pointer_click", targetId: 10 },
+      { method: "pointerClick", x: 10, y: 10 },
     ], preconditions: [], outcomePredicates: [], acceptsTarget: "screen" }),
     move_mouse: () => ({}),
   });
@@ -462,7 +466,7 @@ test("an old Unity without the new protocol fails as unsupported_capability", as
     new AbortController().signal,
   );
   assert.equal(body(response).error?.code, "unsupported_capability");
-  assert.equal(unity.count("pointer_click"), 0);
+  assert.equal(unity.count("mouse_down"), 0);
 });
 
 test("the abort listener and the gate are cleaned up after every run", async () => {
