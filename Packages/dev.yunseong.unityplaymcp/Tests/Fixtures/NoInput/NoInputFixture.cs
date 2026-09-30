@@ -4,14 +4,11 @@ namespace UnityPlayMcp.Tests.Fixtures.NoInput
     /// An assembly that references UnityPlayMcp.Runtime in its asmdef but calls no `Input` method.
     /// </summary>
     /// <remarks>
-    /// This is the other half of issue #47. The weaver now adds the `UnityPlayMcp.Runtime` assembly
-    /// reference itself, so something has to pin the rule that it only does so when it has a call to
-    /// rewrite. Without that rule every assembly in a project picks up a reference it never uses.
+    /// Pins the rule that the weaver adds the `UnityPlayMcp.Runtime` reference only when it rewrites
+    /// a call (#47); otherwise every assembly picks up an unused reference.
     ///
-    /// The asmdef reference to `UnityPlayMcp.Runtime` is load-bearing, not decoration: `WillProcess`
-    /// only lets an assembly through when the runtime dll is in its compiler references, and an
-    /// assembly defined by an asmdef gets only what its `references` list names. Drop it and the
-    /// postprocessor never runs here, leaving a test that proves nothing.
+    /// The asmdef reference is required: `WillProcess` only processes an assembly whose compiler
+    /// references include the runtime dll. Without it this test proves nothing.
     /// </remarks>
     public sealed class NoInputFixture
     {

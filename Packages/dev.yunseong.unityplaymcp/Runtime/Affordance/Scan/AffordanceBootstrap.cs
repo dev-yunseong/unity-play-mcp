@@ -9,14 +9,9 @@ namespace UnityPlayMcp.Affordances.Scan
     /// 씬에 아무것도 놓지 않고 스캔을 시작한다.
     /// </summary>
     /// <remarks>
-    /// 스스로 부팅하는 것이 패키지 설치가 통합의 전부라는 약속을 지키는 방법이다. 게임 팀에게 매니저 객체를 모든 씬에
-    /// 떨어뜨리라고 청하는 일은 그들의 씬을 바꾸는 일이고, 그것이 이것이 요구해서는 안 되는 그것이다.
-    ///
-    /// 로드되는 모든 씬이 읽혀 리포트에 더해지므로, 그저 게임을 하는 것만으로 다녀온 모든 곳에 대한 진술이 쌓인다. 아무도
-    /// 걸어가지 않은 화면에 닿는 일이 <see cref="WalkAllScenes"/> 의 몫이다.
-    ///
-    /// 부팅하는 것과 도는 것은 같지 않다. <see cref="Follow"/> 가 불리기 전까지 여기의 무엇도 아무것도 읽지 않고, 그것을
-    /// 부르는 일이 곧 인스턴스를 연결하는 일이다 — 패키지를 설치하는 것은 이것을 있는 채로 놀게 둘 뿐이다.
+    /// 게임 씬에 매니저 객체를 놓으라고 요구하지 않는다.
+    /// <see cref="Follow"/> 이후 로드되는 모든 씬을 읽어 리포트에 더하고, 방문하지 않은 씬은 <see cref="WalkAllScenes"/> 가 읽는다.
+    /// <see cref="Follow"/> 가 불리기 전에는 아무것도 읽지 않는다.
     /// </remarks>
     public static class AffordanceBootstrap
     {
@@ -34,19 +29,10 @@ namespace UnityPlayMcp.Affordances.Scan
         /// 게임이 씬을 로드하는 대로 읽기 시작하고, 시작됐는지를 말한다.
         /// </summary>
         /// <remarks>
-        /// 인스턴스가 연결될 때 불린다. 사람이 이것을 청한 순간이 그때이기 때문이다. 게임은 다른 이유로도 SDK 를 나른다 —
-        /// 스트리밍, 원격 입력, 프레임 타이밍 — 그리고 QA 런을 한 번도 열지 않는 사람이 씬 로드마다 스캔 값을 치르거나, 청한 적
-        /// 없는 리포트를 제 디스크에서 발견해서는 안 된다.
-        ///
-        /// 이것은 예전에 <c>RuntimeInitializeOnLoadMethod</c> 에서 구독했으므로, 그저 게임을 시작하는 것만으로 돌기에 충분했다 —
-        /// 패키지를 설치한 모든 프로젝트가, 읽을 사람이 있든 없든 스캔과 디스크 위의 리포트를 받았다.
-        ///
-        /// 멱등이다. 재연결도 연결이고 전송은 한 세션에 여러 번 열려도 되기 때문이다.
-        ///
-        /// 출시된 게임은 시작하는 대신 거절하고, <c>#if</c> 로 물어 출시된 플레이어가 구독도 콜백도 쥐지 않게 한다. 같은 심볼 쌍을
-        /// 반대쪽 <c>AffordanceILPostProcessor.IsDiscoveryBuild</c> 에서 읽고, 그쪽이 이것이 읽는 근거가 애초에 구워졌는지를
-        /// 결정한다. 하나를 바꾸면 다른 하나도 바꿔라: 이쪽은 그것과 상수를 공유할 수 없다. 전처리기 검사는 제 어셈블리가
-        /// 컴파일되는 자리에서 평가되고 어디서도 값을 읽을 수 없기 때문이다.
+        /// 인스턴스가 연결될 때 불린다. SDK 를 다른 용도로만 쓰는 게임이 스캔 비용을 치르거나 리포트 파일을 받지 않게 한다.
+        /// 재연결이 있으므로 멱등이다.
+        /// release 빌드는 <c>#if</c> 로 거절한다. 같은 심볼 조건을 <c>AffordanceILPostProcessor.IsDiscoveryBuild</c> 도 쓰므로
+        /// 하나를 바꾸면 다른 하나도 바꿔야 한다. 전처리기 조건은 어셈블리 사이에 공유할 수 없다.
         /// </remarks>
         public static bool Follow()
         {
@@ -59,14 +45,13 @@ namespace UnityPlayMcp.Affordances.Scan
             SceneManager.sceneLoaded += OnSceneLoaded;
             _following = true;
 
-            // 이미 올라와 있는 것은 아무도 듣기 전에 로드된 것이고, 다음에 로드되는 것만 받은 독자는 게임이 실제로 있는 화면을
-            // 놓치게 된다.
+            // 이미 로드된 씬은 sceneLoaded 로 오지 않으므로 지금 읽는다.
             CaptureNow();
 
             Debug.Log("[Unity Play MCP] Discovery is following scene loads. The report is written to " + ReportPath);
             return true;
 #else
-            // 출시된 빌드는 씬을 읽을 이유가 없고, 그렇다고 말하는 편이 호출자가 왜 아무것도 오지 않는지 궁금해하는 것보다 낫다.
+            // 호출자가 결과가 없는 이유를 알 수 있게 로그를 남긴다.
             Debug.Log("[Unity Play MCP] Discovery does not run in a release build.");
             return false;
 #endif
@@ -91,14 +76,12 @@ namespace UnityPlayMcp.Affordances.Scan
 
         private static void Capture(Scene scene)
         {
-            // 에디터에 저장된 상태가 아니라 씬이 올라온 뒤에 읽는다. 저장된 값은 무엇이 돌기 전에 필드가 쥐고 있던 것이라,
-            // 컴포넌트가 Awake 에서 채우는 텍스트는 여전히 자리표시자로 읽힌다.
+            // 저장된 씬 값이 아니라 로드 후 값을 읽는다. Awake 에서 채우는 텍스트가 자리표시자로 읽히지 않게 한다.
             try
             {
                 SceneEvidenceScan.Capture(scene);
 
-                // 순회 중에는 쓰지 않는다. 순회는 끝에 한 번 저장하고, 씬 로드 열두 번마다 파일을 쓰는 것은 같은 답을 위해 열두 배의
-                // 일을 하는 것이다.
+                // 순회는 끝에서 한 번 저장하므로 순회 중에는 쓰지 않는다.
                 if (!SceneWalk.InProgress)
                 {
                     Save();
@@ -121,8 +104,7 @@ namespace UnityPlayMcp.Affordances.Scan
         /// 빌드 설정의 모든 씬을 방문해 하나하나 읽는다.
         /// </summary>
         /// <remarks>
-        /// 진행 중이던 실행을 버리므로, 하는 것이 아니라 청하는 것이다. 순회가 이미 돌고 있으면 false 를 돌려준다. 둘이
-        /// 동시에 돌면 어느 씬이 로드될지를 두고 다투기 때문이다.
+        /// 진행 중이던 실행을 버리므로 명시적으로 요청할 때만 돈다. 두 순회가 씬 로드를 두고 다투므로 이미 돌고 있으면 false 다.
         /// </remarks>
         public static bool WalkAllScenes()
         {
@@ -137,24 +119,16 @@ namespace UnityPlayMcp.Affordances.Scan
 
         /// <summary>순회가 지금 돌고 있는지.</summary>
         /// <remarks>
-        /// <see cref="Watching"/> 와 같은 이유로 여기에 있다. <c>SceneWalk</c> 는 이 어셈블리 안에서만 뜻이 있어 internal 이고,
-        /// 순회를 청한 바깥쪽 — 원격 스캔 명령을 받는 자리 — 은 그것이 끝났는지 물어볼 다른 방법이 없다. 물어볼 수 없는 쪽은
-        /// 제 답을 따로 쥐고 있어야 하는데, 그것이 어긋나는 짝이다.
+        /// <c>SceneWalk</c> 가 internal 이라 원격 스캔 명령 쪽이 따로 상태를 들지 않고 여기서 묻는다.
         /// </remarks>
         public static bool Walking => SceneWalk.InProgress;
 
         /// <summary>
-        /// 근거가 이름 댄 모든 것의 살아 있는 값을 보내기 시작한다.
+        /// `evidence` 가 이름 댄 멤버들의 현재 값을 보내기 시작한다.
         /// </summary>
         /// <remarks>
-        /// 리포트는 무엇이 참이어야 하는지를 말하고, 이것은 지금 무엇이 참인지를 말한다. 명세를 읽는 것이 아니라 돌리려면
-        /// 그것이 필요하다. 그것을 위해 게임에서 표시해야 할 것은 없다 — 분석이 조건과 효과를 읽으면서 그 뒤의 멤버를 이미
-        /// 적어 두었고, 감시되는 것이 그 목록이다.
-        ///
-        /// 하는 것이 아니라 청하는 것이다. 필드 백 개를 초당 열 번 읽는 값은 그 채널을 원하는 쪽이 치를 것이고, 이 패키지를
-        /// 설치하는 프로젝트 대부분은 리포트만 원한다. 이미 돌고 있으면 false 를 돌려준다.
-        ///
-        /// sink 가 없으면 pulse 는 리포트 옆의 파일로 간다. 그래야 아무것도 듣고 있지 않을 때에도 채널을 지켜볼 수 있다.
+        /// 감시 대상은 분석이 조건과 효과에서 적어 둔 멤버 목록이다. 읽기 비용이 있으므로 요청할 때만 돌며, 이미 돌고 있으면 false 다.
+        /// sink 가 없으면 <c>pulse</c> 는 리포트 옆 파일로 간다.
         /// </remarks>
         public static bool WatchLiveState(Live.IPulseSink sink = null)
         {
@@ -164,10 +138,8 @@ namespace UnityPlayMcp.Affordances.Scan
                 return false;
             }
 
-            // 아무도 멈추지 않았는데 끝나 버린 감시 — 플레이 모드를 나갔거나, carrier 가 파괴됐거나, 아무도 파일을 닫으라고
-            // 청하지 않았거나. 도메인 리로드가 켜져 있으면 static 이 사라져 이것은 이미 null 이고, 꺼져 있으면 그것들이 살아남아
-            // 더는 존재하지 않는 감시가 핸들을 쥐고 있게 된다. 여기서 닫는 값은 없는 것이나 마찬가지이고, 그것이 채널이 시작하는
-            // 것과 채널이 거절하는 것의 차이다.
+            // Stop 없이 끝난 감시(플레이 모드 종료, carrier 파괴)의 파일을 닫는다. 도메인 리로드가 꺼져 있으면
+            // static 이 남아 파일을 쥐고 있고, 그대로 두면 다시 열 때 공유 위반으로 실패한다.
             var stale = _ours;
             _ours = null;
             stale?.Dispose();
@@ -193,15 +165,10 @@ namespace UnityPlayMcp.Affordances.Scan
             return true;
         }
 
-        /// <summary>이 project 에 대해 고른 <c>pulse</c> 사이의 초.</summary>
+        /// <summary>이 project 에 설정된 <c>pulse</c> 간격(초).</summary>
         /// <remarks>
-        /// 고른 값은 <c>EditorPrefs</c> 에 있고 그것은 editor 에만 있다. 이 어셈블리는 게임과 함께 빌드되므로
-        /// editor 어셈블리를 참조할 수 없고, 그래서 값을 읽는 코드는 editor 로 컴파일될 때에만 존재한다.
-        /// 값을 나르려고 <c>Resources</c> 나 <c>ProjectSettings</c> 아래에 asset 을 두는 길도 있었지만, 그것은
-        /// 사람이 청한 적 없는 파일을 프로젝트에 만드는 일이라 <c>#if</c> 하나로 갈랐다.
-        ///
-        /// 감시가 시작할 때 한 번 읽는다. 도는 중에 화면에서 값을 바꾸면 다음 시작부터 적용된다 — 박자를 도중에
-        /// 갈아 끼우면 이미 나간 <c>pulse</c> 들의 간격이 문서 어디에도 적히지 않은 채로 달라진다.
+        /// 값은 editor 전용 <c>EditorPrefs</c> 에 있어 <c>#if UNITY_EDITOR</c> 에서만 읽는다. 프로젝트에 설정 asset 을 만들지 않으려는 선택이다.
+        /// 감시 시작 때 한 번 읽으므로 도중에 바꾼 값은 다음 시작부터 적용된다.
         /// </remarks>
         private static float ReadingInterval()
         {
@@ -214,15 +181,13 @@ namespace UnityPlayMcp.Affordances.Scan
 
         /// <summary>라이브 채널이 돌고 있는지.</summary>
         /// <remarks>
-        /// 여기서 말하는 것은 박자 자체가 이 어셈블리 내부의 것이고 채널을 내놓는 에디터 메뉴는 다른 어셈블리에 살기 때문이다.
-        /// 바깥의 호출자는 물어볼 다른 방법이 없고, 물어볼 수 없는 쪽은 제 답을 따로 쥐고 있어야 하는데 — 그것이 어긋나는
-        /// 짝이다.
+        /// <c>Pulse</c> 가 internal 이라 다른 어셈블리의 에디터 메뉴가 따로 상태를 들지 않고 여기서 묻는다.
         /// </remarks>
         public static bool Watching => Live.Pulse.InProgress;
 
-        /// <summary>도는 채널이 다음 reading 을 전량으로 보내게 한다. 돌고 있지 않으면 아무것도 하지 않는다.</summary>
+        /// <summary>다음 reading 을 `whole` 로 보내게 한다. 돌고 있지 않으면 아무것도 하지 않는다.</summary>
         /// <remarks>
-        /// 새로 붙은 독자나 <c>start_readings</c> 를 다시 보낸 독자가 쓴다. 차이만 받아서는 그 독자가 놓친 값을 영영 되찾지 못한다.
+        /// 새로 붙거나 <c>start_readings</c> 를 다시 보낸 MCP server 가 쓴다. 차이만으로는 놓친 값을 되찾지 못한다.
         /// </remarks>
         public static void RequestWholeReading()
         {
@@ -230,13 +195,10 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 건네받은 것이 아니라 여기서 연 것. 그것만 다시 닫도록.
+        /// 여기서 연 기본 파일. 호출자가 건넨 sink 는 닫지 않는다.
         /// </summary>
         /// <remarks>
-        /// 제 sink 를 들고 온 호출자는 그것을 계속 쥔다 — 이 패키지가 열지 않은 것을 닫는 일은 호출자가 청한 적 없는 결정이다.
-        /// 기본 파일은 우리 것이고, 감시가 멈춘 뒤에도 그것을 열어 두는 것이 다음 시작을 실패하게 만든다: 파일이 여전히 잡혀
-        /// 있고, 다시 여는 것은 공유 위반이며, 게임은 불평하는 채널이 아니라 아예 채널 없이 돈다. 에디터에서 감시를 껐다 켜
-        /// 실측했다.
+        /// 감시가 멈춘 뒤에도 열어 두면 다음 시작에서 공유 위반으로 파일을 열지 못한다.
         /// </remarks>
         private static Live.PulseFile _ours;
 
@@ -245,7 +207,7 @@ namespace UnityPlayMcp.Affordances.Scan
         {
             Live.Pulse.Stop();
 
-            // 박자가 사라진 뒤에 한다. 닫힌 파일로 보내는 중인 것이 없도록.
+            // 닫힌 파일로 보내지 않도록 `pulse` 를 멈춘 뒤에 닫는다.
             var ours = _ours;
             _ours = null;
             ours?.Dispose();
@@ -267,8 +229,7 @@ namespace UnityPlayMcp.Affordances.Scan
             }
             catch (Exception exception)
             {
-                // 리포트 때문에 게임을 무너뜨리는 일은 결코 없다. discovery 는 곁가지 활동이고, 읽기 전용이거나 꽉 찬 디스크는
-                // 게임의 문제가 아니다.
+                // 리포트 쓰기 실패로 게임을 멈추지 않는다.
                 Debug.LogWarning("[Unity Play MCP] Could not write " + ReportPath + ": " + exception.Message);
                 return null;
             }

@@ -8,15 +8,10 @@ using UnityEngine.SceneManagement;
 namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
-    /// 코드가 하는 것으로 밝혀진 것과, 한 씬이 실제로 쥐고 있는 것을 잇는다.
+    /// 코드 분석 `evidence` 와 씬의 실제 객체, `wiring` 을 잇는다.
     /// </summary>
     /// <remarks>
-    /// 컴파일된 근거는 타입과 메서드를 알고 화면에 대해서는 아무것도 모른다. 씬은 어떤 객체가 존재하는지, 어느 것이 꺼져
-    /// 있는지, 어느 버튼이 어느 메서드에 연결됐는지를 알고, 그것들이 무엇을 하는지에 대해서는 아무것도 모른다. 어느 절반도
-    /// 홀로 명세가 아니다.
-    ///
-    /// 근거 문서는 손대지 않고 그대로 통과시킨다. 그 스키마는 그것을 쓴 분석기와 그것을 읽는 에이전트의 것이다. 여기서 다시
-    /// 파싱하면 그 둘 모두와 발을 맞춰야 하는 세 번째 의견을 한가운데 두게 된다.
+    /// `evidence` 는 스키마를 분석기와 읽는 쪽이 정하므로 파싱하지 않고 그대로 통과시킨다.
     /// </remarks>
     public static class SceneEvidenceScan
     {
@@ -25,15 +20,14 @@ namespace UnityPlayMcp.Affordances.Scan
         private const int MaxCallsPerComponent = 64;
 
         /// <summary>
-        /// 객체 아래로 그 라벨을 얼마나 깊이 찾는지.
+        /// 라벨을 찾아 내려가는 자식 깊이.
         /// </summary>
         /// <remarks>
-        /// 캡션은 자식 한둘 아래에 앉아 있다. 서브트리 전체를 걸으면 캔버스가 화면의 모든 단어를 제 것이라 주장하게 되고,
-        /// 그에 대한 답은 틀린 라벨이 아니라 라벨 없음이다 — 여기서 단어가 여럿이라는 것이 이미 뜻하는 바가 그것이다.
+        /// 캡션은 보통 자식 한두 단계 아래에 있다. 서브트리 전체를 보면 캔버스가 화면의 모든 텍스트를 가져간다.
         /// </remarks>
         private const int MaxLabelDepth = 3;
 
-        /// <summary>로드된 모든 씬을 리포트로 읽어 들인다.</summary>
+        /// <summary>로드된 모든 씬을 읽어 리포트에 더한다.</summary>
         public static int CaptureLoaded()
         {
             var captured = 0;
@@ -49,7 +43,7 @@ namespace UnityPlayMcp.Affordances.Scan
             return captured;
         }
 
-        /// <summary>씬 하나를 리포트로 읽어 들이고, 전에 그것에 대해 말한 것을 갈아치운다.</summary>
+        /// <summary>씬 하나를 읽어 리포트의 그 씬 항목을 교체한다.</summary>
         public static bool Capture(Scene scene)
         {
             if (!scene.IsValid())
@@ -75,8 +69,7 @@ namespace UnityPlayMcp.Affordances.Scan
             {
                 var root = roots[rootIndex];
 
-                // 비활성 객체를 일부러 포함한다. 지금 꺼져 있는 메뉴도 게임이 보여 줄 수 있는 것이고, 그것을 빼면 결과가 화면이 아니라
-                // 한순간에 대해서만 참이 된다.
+                // 지금 꺼져 있는 메뉴도 게임이 보여 줄 수 있으므로 비활성 객체도 포함한다.
                 foreach (var transform in root.GetComponentsInChildren<Transform>(true))
                 {
                     if (objects >= MaxObjects)
@@ -97,18 +90,12 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 게임이 씬 로드를 건너 쥐고 있던 객체들을 읽는다.
+        /// DontDestroyOnLoad 씬의 객체들을 읽는다.
         /// </summary>
         /// <remarks>
-        /// 그것들은 빌드 설정을 순회해서는 결코 닿지 않는 제 씬에 앉아 있고, 거기가 게임이 잃고 싶지 않은 것을 두는 자리다 —
-        /// 세이브 컨트롤러, 싱글턴, 실행의 진행 상황. 리포트의 모든 씬이 예전에는 그렇다고 말하는 공백을 나르고 있었다. 공백은
-        /// 아무도 들여다보지 않은 것에 대해 할 말로는 옳지만, 일단 누군가 들여다볼 수 있게 된 뒤에도 계속 할 말로는 틀렸다.
-        ///
-        /// 씬마다 복사해 넣지 않고 씬들과 떼어 둔다. 이 객체들 중 하나는 어느 화면에도 없으면서 모든 화면에 있고, 그것을 씬
-        /// 이름 아래에 쓰면 테스터가 거기서 찾을 수 있는 무엇처럼 보이게 된다.
-        ///
-        /// 게임이 돌기 전에는 여기 아무것도 없다. 에디터 순회는 씬을 저장된 대로 여는 것이므로 읽을 그런 씬이 아예 없고,
-        /// 리포트는 게임에 그런 것이 없는 척하는 대신 그렇다고 말한다.
+        /// 세이브 컨트롤러, 싱글턴 같은 객체가 여기 있으며 빌드 설정 순회로는 닿지 않는다.
+        /// 특정 씬에 속하지 않으므로 씬 항목과 분리해 <c>persistentObjects</c> 에 쓴다.
+        /// 게임이 돌기 전에는 이 씬이 없으며, 리포트는 그 사실을 gap 으로 남긴다.
         /// </remarks>
         public static bool CapturePersistent(Scene scene)
         {
@@ -126,7 +113,7 @@ namespace UnityPlayMcp.Affordances.Scan
             {
                 var root = roots[rootIndex];
 
-                // 순회 자신의 carrier 도 여기 산다. 그것을 보고하는 것은 게임이 아니라 계기를 보고하는 일이다.
+                // 순회의 `carrier` 같은 도구 객체는 게임의 것이 아니므로 뺀다.
                 if (root == null || root.hideFlags != HideFlags.None)
                 {
                     continue;
@@ -142,7 +129,7 @@ namespace UnityPlayMcp.Affordances.Scan
             return true;
         }
 
-        /// <summary>객체 하나를 쓰고, 쓸 값이 있었는지 말한다.</summary>
+        /// <summary>객체 하나를 쓴다. 쓸 내용이 없으면 false.</summary>
         private static bool Describe(
             StringBuilder text,
             GameObject subject,
@@ -178,8 +165,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
                 if (component == null)
                 {
-                    // 타입이 더는 존재하지 않는 스크립트. 빠진 컴포넌트는 망가진 객체이고, 그것을 조용히 건너뛰는 스캔은 씬을 멀쩡해
-                    // 보이게 만들기 때문에 보고한다.
+                    // 타입이 사라진 스크립트. 건너뛰면 망가진 객체가 멀쩡해 보이므로 gap 으로 보고한다.
                     gaps.Add("missing-script:" + subject.name);
                     continue;
                 }
@@ -190,13 +176,8 @@ namespace UnityPlayMcp.Affordances.Scan
                 }
             }
 
-            // 화면에 무언가를 그리는 컴포넌트를 나르는 객체는 쓸 컴포넌트가 하나도 없어도 쓴다. 리포트와 pulse 가 같은 규칙이어야
-            // 하고(`Worth` 의 remarks), pulse 는 그런 객체를 이제 들인다. 여기서 빼면 pulse 가 이름 댄 객체를 리포트가 없는 것으로
-            // 보고하게 된다.
-            //
-            // 넓어지는 것은 객체 목록뿐이다. 컴포넌트 목록은 안 넓혔다 — 텍스트와 이미지를 컴포넌트로 쓰면 정작 작용 대상인 몇 개가
-            // 그 아래 파묻힌다는 위의 이유가 그대로 유효하다. 그래서 이렇게 들어온 객체는 `label`/`sprite`/`visuals` 를 들고
-            // `components` 는 빈 채로 온다.
+            // 무언가를 그리는 객체는 쓸 컴포넌트가 없어도 쓴다. `pulse` 와 같은 규칙이어야 한다(`Worth` 의 remarks).
+            // 텍스트와 이미지는 컴포넌트로 쓰지 않으므로 이런 객체는 `components` 가 비어 있다.
             if (!wrote && !Drawn.Any(subject))
             {
                 return false;
@@ -215,7 +196,7 @@ namespace UnityPlayMcp.Affordances.Scan
             Json.Property(text, "path", path);
             text.Append(',');
 
-            // 한 종류의 적 다섯은 경로를 공유한다. 다섯 중 어느 것인지는 경로가 답할 수 없고 이것이 답할 수 있는 물음이다.
+            // 같은 경로를 공유하는 객체들을 `selector` 로 구분한다.
             Json.Property(text, "selector", ScenePath.SelectorOf(subject.transform, rootIndex));
             text.Append(',');
             Json.Property(text, "scene", scene);
@@ -282,37 +263,23 @@ namespace UnityPlayMcp.Affordances.Scan
             return true;
         }
 
-        /// <summary>플레이어가 누를 수 있는 것 위의 단어들.</summary>
+        /// <summary>플레이어가 누를 수 있는 것 위의 텍스트.</summary>
         private const string Caption = "control-caption";
 
-        /// <summary>그것을 보여 주는 것의 이름이 아니라, 읽으라고 거기 있는 단어들.</summary>
+        /// <summary>컨트롤 이름이 아니라 표시값인 텍스트.</summary>
         private const string Observed = "observed-text";
 
         /// <summary>무언가 위에 그려진 그림.</summary>
         private const string Picture = "sprite";
 
         /// <summary>
-        /// 객체가 무엇을 보여 주는가 — 그 위의 단어들, 그것이 없으면 그 위에 그려진 그림.
+        /// 객체가 보여 주는 텍스트나 그림 하나.
         /// </summary>
         /// <remarks>
-        /// 객체의 이름은 개발자가 그것을 부른 이름이고, 거기서 쓴 테스트 단계는 테스터에게 화면 어디에도 적혀 있지 않은 것을
-        /// 누르라고 시킨다. 샘플 게임에서 버튼 하나는 <c>Button (Legacy)</c> 라 불리는데 그것은 Unity 자신의 자리표시자이고
-        /// 아무 말도 하지 않으며, 다른 하나는 이야기를 여는데도 <c>MapSceneButton</c> 이라 불린다 — 답처럼 읽히기 때문에 없는
-        /// 것보다 나쁜 이름이다.
-        ///
-        /// 요점은 단어인데, 그 게임에서는 어떤 버튼에도 단어가 없다: 하나같이 그림이다. 그래서 텍스트가 없을 때 스프라이트의
-        /// 이름을 취하고, 애셋의 파일 이름은 화면이 말하는 바가 아니므로 제 필드에 따로 둔다 — 그것이 존재하는 것 중 그에 가장
-        /// 가까운 것이고, <c>MapSceneButton</c> 이 무엇인지 결판내기에는 충분했다 (<c>Sprite_Start_Button</c>).
-        ///
-        /// 둘 다 컴포넌트로 쓰지 않는다. 텍스트와 이미지는 테스트가 작용하는 것이 아니고, 그것들을 리포트에 넣으면 정작 작용
-        /// 대상인 몇 개가 그것들이 칠해진 배경 아래 파묻힌다.
-        ///
-        /// 한 객체 아래 서로 다른 단어가 여럿이면 아무것도 취하지 않는다. 그중 무엇이 라벨인지는 이것이 답할 수 없는 물음이고 —
-        /// 버튼은 캡션과 그림자와 개수를 함께 나를 수 있다 — 추측이야말로 답처럼 읽히는 이름이 애초에 만들어지는 방식이다. 같은
-        /// 단어 둘은 한 단어이므로, 캡션과 그 그림자는 불일치가 아니다.
-        ///
-        /// 이 전부는 관측이지 규칙이 아니다: 스캔이 도는 동안 화면이 보여 준 것이고, 게임이 런타임에 쓰는 라벨은 한순간 전에는
-        /// 다른 것이었다.
+        /// 객체 이름은 화면에 없는 개발자용 이름이므로 플레이어가 보는 텍스트를, 없으면 스프라이트 이름을 따로 쓴다.
+        /// 텍스트와 이미지는 컴포넌트로 쓰지 않는다. 쓰면 작용 대상인 컴포넌트가 파묻힌다.
+        /// 서로 다른 캡션이 여럿이면 추측하지 않고 라벨을 비운다. 같은 텍스트 둘(캡션과 그림자)은 하나로 본다.
+        /// 스캔 시점의 관측값이지 규칙이 아니다.
         /// </remarks>
         private sealed class Visual
         {
@@ -321,7 +288,7 @@ namespace UnityPlayMcp.Affordances.Scan
             internal string From;
             internal string Type;
 
-            /// <summary>플레이어가 누를 수 있는 것 위에 그려져 있어, 그 컨트롤의 이름일 수 있는 것.</summary>
+            /// <summary>누를 수 있는 컨트롤 위에 있어 컨트롤 이름일 수 있다.</summary>
             internal bool OnControl;
         }
 
@@ -338,7 +305,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
                 foreach (var seen in All)
                 {
-                    // 같은 단어 둘은 한 단어다 — 캡션과 그 그림자는 보여 주는 것 둘이 아니다.
+                    // 캡션과 그 그림자처럼 같은 값은 하나로 본다.
                     if (seen.Role == role && seen.Value == value)
                     {
                         return;
@@ -351,7 +318,7 @@ namespace UnityPlayMcp.Affordances.Scan
                 });
             }
 
-            /// <summary>그 컨트롤 위에 그려진 어떤 역할의 것이 몇 개인지. 그것이 컨트롤의 이름일 수 있는 것이다.</summary>
+            /// <summary>컨트롤 위에 있는 해당 역할 항목의 수.</summary>
             internal int Count(string role)
             {
                 var found = 0;
@@ -405,7 +372,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
             var path = ScenePath.Of(at);
 
-            // 내려가는 길에 누를 수 있는 것이 한 번 나오면, 그 아래에 그려진 모든 것은 눌리는 그것 위에 그려진 것이다.
+            // 누를 수 있는 객체 아래의 모든 것은 그 컨트롤 위에 있는 것으로 본다.
             pressable = pressable || Pressable(components);
 
             foreach (var component in components)
@@ -433,20 +400,11 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 플레이어가 이것을 누를 수 있는지. 그것이 캡션과 표시값을 가른다.
+        /// 플레이어가 누를 수 있는 객체인지. 캡션과 표시값을 가르는 기준이다.
         /// </summary>
         /// <remarks>
-        /// 리포트가 계속 틀리게 답하던 물음은 객체의 단어들 중 무엇이 그 이름인가였다. <c>20</c> 을 보여 주는 적은 스물이라고
-        /// 불리는 적이 아니고, 화자의 이름을 보여 주는 채팅 창은 그렇게 불리는 컨트롤이 아니다 — 그런데 둘 다 합치기 버튼의
-        /// <c>Combine</c> 과 같은 필드에 도착했고, 그 아래의 무엇도 그것들을 가릴 수 없었다. 개발 빌드에서 스물둘 중 열여섯이
-        /// 숫자였다.
-        ///
-        /// 단어가 어떻게 생겼는지가 아니라 객체가 무엇인지로 답한다. 플레이어가 누를 수 있는 것 아래의 텍스트는 눌리는 그것 위에
-        /// 쓰인 것이고, 무엇이라 적혀 있든 그것은 캡션이다. 그 밖의 자리에 있는 텍스트는 게임이 그 순간 보여 주고 있는 것이다.
-        /// 문자열의 모양으로 추측하는 것은 — "숫자는 이름이 아니다" — 여기서는 맞고 숫자로 라벨을 단 첫 버튼에서 틀린다.
-        ///
-        /// 이 파일의 나머지와 같은 이유로 타입 이름으로 맞춘다: 이 어셈블리는 uGUI 에 대고 빌드되지 않고, 그것이 없는
-        /// 프로젝트도 여전히 컴파일돼야 한다.
+        /// 텍스트 모양이 아니라 객체로 판단한다. <c>Selectable</c> 아래 텍스트는 캡션이고 그 밖은 표시값이다.
+        /// 이 어셈블리는 uGUI 를 참조하지 않으므로 타입 이름으로 비교한다.
         /// </remarks>
         private static bool Pressable(Component[] components)
         {
@@ -470,13 +428,11 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 텍스트 컴포넌트가 보여 주고 있는 문자열. 그것에 대고 빌드하지 않은 채로 읽는다.
+        /// 텍스트 컴포넌트의 현재 문자열. 텍스트 컴포넌트가 아니면 null.
         /// </summary>
         /// <remarks>
-        /// uGUI 와 TextMeshPro 는 프로젝트에 없을 수 있는 패키지이고 이 어셈블리는 둘 다 참조하지 않는다 — 리포트가 이미
-        /// 컴파일 대상 타입이 아니라 <c>GetType().FullName</c> 으로 컴포넌트의 이름을 대는 것과 같은 이유다. 기반 타입으로
-        /// 맞추면 둘 중 어느 이름도 대지 않고 <c>TextMeshProUGUI</c> 와 <c>TextMeshPro</c> 를 덮고, 둘 다 난독화가 건드리지
-        /// 않는 엔진 쪽 타입이다.
+        /// uGUI 와 TextMeshPro 는 없을 수 있는 패키지라 참조하지 않고 기반 타입 이름과 리플렉션으로 읽는다.
+        /// 기반 타입은 난독화되지 않고 <c>TextMeshProUGUI</c> 와 <c>TextMeshPro</c> 를 함께 덮는다.
         /// </remarks>
         internal static string TextOf(Component component)
         {
@@ -501,7 +457,7 @@ namespace UnityPlayMcp.Affordances.Scan
             }
             catch (Exception)
             {
-                // 던지는 프로퍼티는 컴포넌트 하나이지, 객체를 잃을 이유가 아니다.
+                // 프로퍼티가 던져도 객체 서술은 계속한다.
                 return null;
             }
         }
@@ -512,12 +468,10 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 컴포넌트 위에 그려진 그림의 이름. 그것이 Unity 가 준 것이 아닐 때.
+        /// 컴포넌트가 그리는 스프라이트 이름. Unity 기본 스프라이트면 null.
         /// </summary>
         /// <remarks>
-        /// Unity 는 제 것을 그리지 않은 사람을 위해 스프라이트 몇 개를 함께 보내고, 그중 하나를 그대로 둔 버튼은 아무도 이름을
-        /// 붙이지 않은 버튼이다 — <c>Button (Legacy)</c> 가 제 객체에 대해 말하는 것과 같다. <c>UISprite</c> 를 보고하면
-        /// 화면에도 없고 게임에도 없는 단어를 테스트 단계에 넣게 된다.
+        /// <c>UISprite</c> 같은 기본 스프라이트 이름은 게임에 대해 아무것도 말하지 않으므로 보고하지 않는다.
         /// </remarks>
         internal static string SpriteOf(Component component)
         {
@@ -566,7 +520,7 @@ namespace UnityPlayMcp.Affordances.Scan
             return false;
         }
 
-        /// <summary>컴포넌트 하나를 쓰고, 할 말이 있었는지 말한다.</summary>
+        /// <summary>컴포넌트 하나를 쓴다. 쓸 내용이 없으면 false.</summary>
         private static bool Describe(StringBuilder text, Component component, bool needsComma)
         {
             var evidence = AffordanceCatalog.For(component.GetType());
@@ -581,7 +535,7 @@ namespace UnityPlayMcp.Affordances.Scan
                 calls.Clear();
             }
 
-            // 컴포넌트 대부분은 배경이다. 모든 transform 과 스프라이트를 쓰면 테스트가 작용할 수 있는 몇 개가 파묻힌다.
+            // `evidence` 도 `wiring` 도 없는 컴포넌트는 쓰지 않는다. 쓰면 작용할 수 있는 컴포넌트가 파묻힌다.
             if (string.IsNullOrEmpty(evidence) && calls.Count == 0)
             {
                 return false;
@@ -589,8 +543,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
             var refs = new List<Reference>();
 
-            // 애초에 쓸 값이 있는 컴포넌트에 대해서만. 씬의 모든 스프라이트와 콜라이더의 모든 참조를 읽는 것은 아무 말도 하지 않기
-            // 위해 씬 전체만큼의 값을 치르는 일이다.
+            // 비용이 크므로 쓸 컴포넌트에 대해서만 참조를 읽는다.
             try
             {
                 SerializedReferences.Read(component, refs);
@@ -607,8 +560,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
             var type = component.GetType().FullName;
 
-            // 근거는 여기가 아니라 이 이름 아래의 표에 들어간다. 한 종류의 슬라임 열다섯은 작용할 자리 열다섯이고 그것들에 대해
-            // 알아야 할 것은 하나다.
+            // `evidence` 는 인스턴스마다 같으므로 객체가 아니라 `types` 표에 타입당 한 번 쓴다.
             Remember(type, evidence);
 
             text.Append('{');
@@ -626,7 +578,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
                 var call = calls[index];
 
-                // 이 컴포넌트 자신의 타입에 근거가 있을 때도 적어 둔다. 배선이 가리키는 것은 그 배선을 쥔 타입과 다른 타입이다.
+                // `wiring` 의 대상은 이 컴포넌트와 다른 타입이므로 이 컴포넌트에 `evidence` 가 있어도 기록한다.
                 AffordanceReport.Wired(call.TargetType);
 
                 text.Append('{');
@@ -662,8 +614,7 @@ namespace UnityPlayMcp.Affordances.Scan
                 Json.Property(text, "path", reference.Path);
                 text.Append(',');
 
-                // 프리팹과 씬 루트는 예전에 같은 방식으로 쓰였다. 이제는 대놓고 말한다. 둘 중 하나만이 테스트에게 가라고 시킬 수 있는
-                // 자리이기 때문이다.
+                // 테스트가 찾아갈 수 있는 것은 씬 객체뿐이므로 프리팹 애셋인지 명시한다.
                 Json.Property(text, "asset", reference.Asset);
                 text.Append(",\"carries\":[");
 
@@ -682,9 +633,8 @@ namespace UnityPlayMcp.Affordances.Scan
 
                 text.Append("]}");
 
-                // 소유자를 손에 쥐고 있는 동안 알아내고, 프리팹은 ScriptableObject 를 거쳐 쥐고 있는 일이 많으므로 한두 걸음 더
-                // 따라간다. 리포트는 이것을 반대 방향으로 필요로 하는데 — 아무도 만나지 못한 타입에서 그것을 만들어낼 필드로 —
-                // 씬을 뒤로하고 나면 그 물음을 물을 수 없다.
+                // 씬을 떠나면 소유 필드를 알 수 없으므로 지금 추적해 `createdBy` 를 채운다.
+                // 프리팹은 ScriptableObject 를 거쳐 참조되는 일이 많아 몇 단계 더 따라간다.
                 if (reference.Asset)
                 {
                     try
@@ -693,7 +643,7 @@ namespace UnityPlayMcp.Affordances.Scan
                     }
                     catch (Exception)
                     {
-                        // 걸을 수 없는 애셋 하나가 씬 서술을 멈출 이유는 아니다.
+                        // 추적에 실패해도 씬 서술은 계속한다.
                     }
                 }
             }
@@ -702,10 +652,9 @@ namespace UnityPlayMcp.Affordances.Scan
             return true;
         }
 
-        /// <summary>어떤 타입을 처음 만났을 때 그 타입의 근거를 표에 넣는다.</summary>
+        /// <summary>타입을 처음 만났을 때 그 `evidence` 를 표에 넣는다.</summary>
         /// <remarks>
-        /// 문서는 이미 조립된 채로 도착한다 — 타입마다 배열 하나이고, 분석기가 그렇게 써서 통째로 날라 온다. 있는 그대로
-        /// 통과시킨다. 문자열로 따옴표를 씌우면 이것을 읽는 쪽이 그것을 다시 벗겨야 한다.
+        /// `evidence` 는 이미 JSON 배열이므로 문자열로 감싸지 않고 그대로 넣는다.
         /// </remarks>
         private static void Remember(string type, string evidence)
         {

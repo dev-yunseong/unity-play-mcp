@@ -2,10 +2,9 @@ using System.Text;
 
 namespace UnityPlayMcp.Affordances.Scan
 {
-    /// <summary>문서를 쓰기에 딱 필요한 만큼의 JSON. 읽는 쪽은 없다.</summary>
+    /// <summary>문서 작성에 필요한 JSON 쓰기만 구현한다.</summary>
     /// <remarks>
-    /// 패키지가 직렬화 의존성을 게임 어셈블리로 들이지 않도록 손으로 썼다. 분석기가 구운 근거는 쓰인 그대로 통과하고
-    /// 여기서 파싱되는 일이 없으므로, 쓰는 절반만 있으면 된다.
+    /// 게임 어셈블리에 직렬화 의존성을 들이지 않으려고 직접 썼다. 분석기가 만든 `evidence` 는 그대로 통과하므로 파서는 필요 없다.
     /// </remarks>
     internal static class Json
     {

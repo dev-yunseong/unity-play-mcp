@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# Unity package 의 version 을 한 번에 옮긴다.
+# Unity package 의 version 을 한 번에 바꾼다.
 #
-# Unity Package Manager 는 git URL 설치에서 저장소에 commit 된 package.json 을 그대로 읽는다.
-# 그 사이에 값을 채워 넣을 build 단계가 없으므로 version 은 저장소에 적힌 literal 이어야 하고,
-# runtime 이 자기 version 을 말하려면 그 값을 C# 상수로도 들고 있어야 한다 (player build 에
-# package.json 이 들어가지 않는다). 그래서 손으로 맞추는 자리가 둘이다. 이 script 는 그 둘을
-# 함께 옮겨, release 마다 한 곳을 잊는 일이 없게 한다. 어긋나면 EditMode 의
-# PackageVersionTests 가 잡지만, 잡히기 전에 맞추는 편이 낫다.
+# UPM 은 git URL 설치 때 commit 된 package.json 을 그대로 읽으므로 version 은 literal 이어야 한다.
+# player build 에는 package.json 이 들어가지 않아 C# 상수(PackageVersion.cs)에도 같은 값을 둔다.
+# 어긋나면 EditMode 의 PackageVersionTests 가 잡는다.
 #
-# mcp/package.json 과 mcp-server-version.txt 는 건드리지 않는다. npm server 는 자기 release
-# 주기를 가지고, 그 둘의 일치는 publish-mcp.yml 이 확인한다.
+# mcp/package.json 과 mcp-server-version.txt 는 release 주기가 따로이므로 건드리지 않는다
+# (set-mcp-server-version.sh).
 set -euo pipefail
 
 if [ $# -ne 1 ]; then
@@ -43,7 +40,7 @@ node --input-type=module -e '
   writeFileSync(file, JSON.stringify(manifest, null, 2) + (trailingNewline ? "\n" : ""));
 ' "$manifest" "$version"
 
-# 상수는 한 줄뿐이라 그 줄만 갈아 끼운다.
+# 상수는 한 줄뿐이므로 그 줄만 바꾼다.
 python3 - "$constant" "$version" <<'PY'
 import io, re, sys
 

@@ -4,9 +4,8 @@ namespace UnityPlayMcp.McpConfig.Editor
     /// agent 설정 파일의 텍스트를 받아 텍스트를 돌려준다.
     /// </summary>
     /// <remarks>
-    /// 파일을 직접 열지 않으므로 disk 없이 테스트한다. 읽을 수 없는 텍스트에는 예외를 던지고, 호출자가 잡아
-    /// 화면에 error 를 띄운 뒤 파일을 그대로 둔다. 사람이 손으로 쓴 설정을 이 기능이 덮어써 없애는 것이
-    /// 여기서 낼 수 있는 가장 나쁜 결과다.
+    /// 파일을 직접 열지 않으므로 disk 없이 테스트한다. 읽을 수 없는 텍스트에는 예외를 던지고, 호출자는
+    /// error 를 띄운 뒤 파일을 그대로 둔다. 사람이 쓴 설정을 덮어써 잃지 않기 위해서다.
     /// </remarks>
     internal interface IMcpConfigFormat
     {

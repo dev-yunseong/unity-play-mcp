@@ -1,10 +1,9 @@
 import type { PulseStore, UnreadableFrame } from "./pulse.js";
 import { sameValue, type FoldedPulseState, type JsonValue, type PulseObject } from "./pulse.js";
 
-/// 대기 조건이 겨눈 멤버 하나. `selector` 는 `PulseObject.selector` 와 정확히 같은 문자열일
-/// 때만 맞는다 — `get_scene_state` 의 부분 일치 검색과 다르다. `among` 은 `PulseMember.among`
-/// 과 `===` 로 비교한다: 안 주면 `among` 이 없는 멤버에만 맞는다. 이것은 `pulse.ts` 의
-/// `memberKey` 가 멤버를 구별하는 규칙과 같다.
+/// 대기 조건이 가리키는 멤버 하나. `selector` 는 `PulseObject.selector` 와 정확히 같아야 맞는다
+/// (`get_scene_state` 의 부분 일치와 다르다). `among` 은 `===` 로 비교하므로 안 주면 `among` 이 없는
+/// 멤버에만 맞는다. `pulse.ts` 의 `memberKey` 와 같은 규칙이다.
 export interface MemberTarget {
   selector: string;
   on: string;
@@ -12,17 +11,16 @@ export interface MemberTarget {
   among?: number;
 }
 
-/// 멤버 하나가 특정 값과 같기를 바라는 조건.
+/// 멤버 하나가 특정 값과 같아야 하는 조건.
 export interface MemberCondition extends MemberTarget {
   equals: JsonValue;
 }
 
-/// 기다릴 조건. 주어진 field 는 전부 동시에 만족해야 한다(AND) — 안 준 field 는 조건이
-/// 아니다. `sinceReading`/`sinceFrame` 은 "그 값보다 큰" 이다. `timeoutMilliseconds` 는
-/// pulse 가 하나도 안 와도 반드시 끝을 내는 상한이다.
+/// 기다릴 조건. 준 field 는 모두 만족해야 한다(AND). `sinceReading`/`sinceFrame` 은 "그 값보다 큰" 이다.
+/// `timeoutMilliseconds` 는 pulse 가 오지 않아도 대기를 끝내는 상한이다.
 export interface WaitCondition {
-  /// `sinceReading`/`sinceFrame` 기준선을 잡은 reading 의 run. 지금 run 이 이것과 다르면 번호를 비교할 수
-  /// 없고, 그 run 의 reading 은 기준선 뒤에 온 것이므로 둘 다 충족한 것으로 본다.
+  /// `sinceReading`/`sinceFrame` 기준선을 잡은 reading 의 run. 현재 run 이 다르면 번호를 비교할 수 없고
+  /// 그 reading 은 기준선 뒤에 온 것이므로 둘 다 충족한 것으로 본다.
   sinceRun?: string;
   sinceReading?: number;
   sinceFrame?: number;
@@ -60,14 +58,12 @@ function findMemberValue(
   return { found: false };
 }
 
-/// 지금 상태가 이 조건을 만족하지 못하는 이유들. 빈 배열이면 전부 충족한 것이다.
+/// 현재 상태가 조건을 만족하지 못하는 이유들. 빈 배열이면 모두 충족한 것이다.
 ///
-/// `state` 가 `undefined` 면(pulse 가 한 번도 안 왔으면) 이유 하나만 돌려준다 — "조건이 안
-/// 맞았다" 와 "애초에 읽을 상태가 없다" 를 응답에서 갈라야 하기 때문이다.
+/// `state` 가 `undefined` 면 "조건 불일치" 와 "읽을 상태 없음" 을 구별하도록 이유 하나만 돌려준다.
 ///
-/// `newRun` 이 참이면 기다리는 사이 Unity 가 reading 을 새 run 으로 다시 시작했다는 뜻이다. 새 run
-/// 은 `reading` 과 `frame` 을 처음부터 다시 셀 수 있어 기준선과 번호로 비교할 수 없지만, 그 run 의
-/// reading 은 기준선을 잡은 뒤에 온 것이 분명하므로 `sinceReading`/`sinceFrame` 은 충족한 것으로 본다.
+/// `newRun` 이면 대기 중 Unity 가 새 run 을 시작한 것이다. 번호는 비교할 수 없지만 그 reading 은
+/// 기준선 뒤에 온 것이므로 `sinceReading`/`sinceFrame` 은 충족한 것으로 본다.
 export function unmetReasons(
   state: FoldedPulseState | undefined,
   condition: WaitCondition,
@@ -106,17 +102,15 @@ export interface WaitTimerApi {
   clearTimeout(timer: ReturnType<typeof setTimeout>): void;
 }
 
-/// `waitForCondition` 이 필요로 하는 것만 든 최소 의존성. `UnityConnection` 전체가 아니라
-/// `onDisconnect` 만 받는 이유는 이 함수가 연결을 만들거나 끊을 일이 없기 때문이다.
+/// `waitForCondition` 은 연결을 만들거나 끊지 않으므로 `onDisconnect` 만 받는다.
 export interface WaitConnectionLike {
   onDisconnect(listener: () => void): () => void;
 }
 
-/// 조건이 맞거나, timeout 이 되거나, 연결이 끊기거나, 호출이 취소될 때까지 기다린다.
+/// 조건 충족, timeout, 연결 끊김, 취소 중 하나가 일어날 때까지 기다린다.
 ///
-/// 변화가 없으면 게임은 pulse 를 아예 보내지 않는다(`PulseStore` 의 기존 정책) — 그래서
-/// `onReading` 구독만으로는 끝을 낼 수 없고, timeout 타이머가 반드시 함께 걸린다. 넷 중
-/// 무엇이 먼저 오든 나머지 구독과 타이머를 전부 정리하고 다시는 resolve 하지 않는다.
+/// 변화가 없으면 게임이 pulse 를 보내지 않으므로 `onReading` 과 함께 timeout 타이머를 반드시 건다.
+/// 먼저 일어난 하나로 끝내고 나머지 구독과 타이머를 모두 정리한다.
 export function waitForCondition(
   store: PulseStore,
   connection: WaitConnectionLike,
@@ -133,7 +127,7 @@ export function waitForCondition(
     const unmetNow = (state: FoldedPulseState | undefined) =>
       unmetReasons(state, condition, newRun(state));
     const initialUnmet = unmetNow(initialState);
-    // 낡은 상태가 조건에 맞는 것은 게임이 그렇다는 말이 아니다. 다음 reading 을 기다린다 (#69).
+    // 낡은 상태가 조건에 맞아도 게임 상태를 보장하지 않으므로 다음 reading 을 기다린다 (#69).
     if (initialUnmet.length === 0 && store.getStaleness() === undefined) {
       resolve({ kind: "met", state: initialState as FoldedPulseState });
       return;
@@ -196,8 +190,8 @@ export interface WaitResponsePayload {
   lastUnreadableFrame?: UnreadableFrame;
 }
 
-/// `WaitOutcome` 을 tool 응답 payload 로 바꾼다. `disconnected` 만 `isError` 다 — timeout 과
-/// cancelled 는 정상적으로 있을 수 있는 결과이지 tool 실행 자체의 실패가 아니다.
+/// `WaitOutcome` 을 tool 응답 payload 로 바꾼다. timeout 과 cancelled 는 정상 결과이므로
+/// `disconnected` 만 `isError` 다.
 export function describeWaitOutcome(
   outcome: WaitOutcome,
   lastUnreadableFrame: UnreadableFrame | undefined,

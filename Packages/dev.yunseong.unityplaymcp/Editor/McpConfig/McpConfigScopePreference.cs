@@ -7,9 +7,8 @@ namespace UnityPlayMcp.McpConfig.Editor
     /// 고른 <see cref="McpConfigScope"/> 를 Unity project 별로 기억한다.
     /// </summary>
     /// <remarks>
-    /// <c>EditorPrefs</c> 는 한 기계의 모든 project 가 함께 쓰므로 key 에 project 경로를 넣는다. 넣지 않으면
-    /// 한 project 에서 <c>User</c> 로 바꾼 것이 다른 project 의 화면에도 적용된다. key 앞의 <c>v1</c> 은 저장
-    /// 형식을 바꿔야 할 때 옛 값을 읽지 않고 버리기 위한 것이다.
+    /// <c>EditorPrefs</c> 는 한 기계의 모든 project 가 공유하므로 key 에 project 경로를 넣는다.
+    /// key 의 <c>v1</c> 은 저장 형식을 바꿀 때 옛 값을 버리기 위한 것이다.
     /// </remarks>
     internal static class McpConfigScopePreference
     {
@@ -22,8 +21,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         /// 이 project 의 저장 key.
         /// </summary>
         /// <remarks>
-        /// 같은 project 를 <c>/repo</c> 로도 <c>/repo/</c> 로도 <c>\repo</c> 로도 받을 수 있다. 그대로 key 에
-        /// 넣으면 같은 project 가 서로 다른 값을 갖는다.
+        /// 같은 project 가 <c>/repo</c>, <c>/repo/</c>, <c>\repo</c> 로 들어와도 같은 key 가 되도록 정규화한다.
         /// </remarks>
         internal static string KeyFor(string projectRoot)
         {
@@ -39,7 +37,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         {
             var stored = EditorPrefs.GetString(KeyFor(projectRoot), string.Empty);
 
-            // 이름으로 저장한다. 숫자로 저장하면 나중에 enum 순서를 바꿀 때 저장된 값의 뜻이 조용히 달라진다.
+            // enum 순서가 바뀌어도 뜻이 유지되도록 숫자가 아니라 이름으로 저장한다.
             return Enum.TryParse(stored, out McpConfigScope scope) && Enum.IsDefined(typeof(McpConfigScope), scope)
                 ? scope
                 : Default;

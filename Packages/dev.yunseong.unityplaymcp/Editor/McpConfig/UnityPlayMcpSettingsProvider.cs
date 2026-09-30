@@ -9,9 +9,8 @@ using UnityEngine;
 namespace UnityPlayMcp.McpConfig.Editor
 {
     /// <summary>
-    /// <c>Edit &gt; Project Settings &gt; Unity Play MCP</c>. agent 네 곳의 설정 파일에 이 저장소의 MCP server 를
-    /// 넣고 뺀다. 어느 자리의 설정을 볼지는 <see cref="McpConfigScope"/> 로 고르고, 살아 있는 값을 얼마나 자주 읽을지는
-    /// <see cref="PulseIntervalPreference"/> 로 고른다.
+    /// <c>Edit &gt; Project Settings &gt; Unity Play MCP</c>. agent 설정 파일에 MCP server 를 넣고 뺀다.
+    /// 설정 경로는 <see cref="McpConfigScope"/>, `pulse` 간격은 <see cref="PulseIntervalPreference"/> 로 고른다.
     /// </summary>
     internal static class UnityPlayMcpSettingsProvider
     {
@@ -56,8 +55,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         }
 
         /// <remarks>
-        /// project 루트는 여기서 한 번만 구해 server 를 찾는 쪽과 설정 파일 자리를 정하는 쪽에 함께 넘긴다.
-        /// 두 곳이 각자 계산하면 같은 개념이 두 가지 방식으로 갈라진다.
+        /// project root 는 여기서 한 번만 구해 server 탐색과 설정 파일 경로 계산에 함께 넘긴다.
         /// </remarks>
         private static void Reload()
         {
@@ -106,14 +104,12 @@ namespace UnityPlayMcp.McpConfig.Editor
                 }
             }
 
-            // 간격은 project 경로만 있으면 읽을 수 있다. agent 행이 그려지지 못하는 상황에서도 이 값은 보여야 하므로
-            // 아래의 이른 return 앞에서 읽는다.
+            // agent 행을 그리지 못해도 간격은 보여야 하므로 아래 early return 앞에서 읽는다.
             _readingInterval = string.IsNullOrEmpty(_projectRoot)
                 ? PulseIntervalPreference.Default
                 : PulseIntervalPreference.Read(_projectRoot);
 
-            // 둘 중 하나라도 비면 설정 파일 자리를 못 정한다. 그대로 Path.Combine 에 넘기면 화면이 예외로
-            // 매 frame 깨지거나, 홈 디렉터리 없이 상대경로가 만들어져 엉뚱한 자리에 파일을 새로 만든다.
+            // 경로가 비면 매 frame 예외가 나거나 상대경로로 엉뚱한 곳에 파일을 만들므로 여기서 멈춘다.
             if (string.IsNullOrEmpty(_projectRoot) || string.IsNullOrEmpty(homeDirectory))
             {
                 _rootsError =
@@ -137,7 +133,7 @@ namespace UnityPlayMcp.McpConfig.Editor
 
         /// <summary>고른 scope 의 catalog 로 화면의 행을 다시 만든다.</summary>
         /// <remarks>
-        /// scope 를 바꾸면 행마다 보는 파일이 통째로 달라지므로 status 만 다시 읽어서는 안 된다.
+        /// scope 를 바꾸면 행마다 보는 파일이 달라지므로 status 만 다시 읽으면 안 된다.
         /// </remarks>
         private static void BuildRows()
         {
@@ -153,8 +149,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         }
 
         /// <remarks>
-        /// Unity editor 는 세 운영체제에서만 돈다. 그 밖의 값이 오면 Linux 의 자리를 쓴다. Unity 가 아직 없는
-        /// 운영체제를 여기서 미리 나눠 두어도 확인할 방법이 없다.
+        /// Unity editor 는 세 운영체제에서만 돌므로 그 밖의 값은 Linux 로 본다.
         /// </remarks>
         private static McpHostPlatform HostPlatform()
         {
@@ -180,7 +175,7 @@ namespace UnityPlayMcp.McpConfig.Editor
                 }
                 catch (Exception exception)
                 {
-                    // 읽을 수 없는 파일은 쓸 수도 없다. 등록 여부를 모른다고 말하고 두 버튼을 다 막는다.
+                    // 읽을 수 없는 파일은 쓸 수도 없으므로 두 버튼을 모두 막는다.
                     row.Configured = false;
                     row.Error = exception.Message;
                 }
@@ -232,8 +227,7 @@ namespace UnityPlayMcp.McpConfig.Editor
 
             EditorGUILayout.Space();
 
-            // 뿌리 경로를 못 구한 상태에서도 이 버튼은 남는다. 경로를 못 구한 이유가 사라졌을 때 화면을
-            // 닫았다 여는 것 말고 다시 시도할 방법이 필요하다.
+            // root 경로를 구하지 못했을 때도 다시 시도할 수 있도록 이 버튼은 항상 그린다.
             if (GUILayout.Button("Refresh", GUILayout.Width(80f)))
             {
                 Reload();
@@ -241,8 +235,8 @@ namespace UnityPlayMcp.McpConfig.Editor
         }
 
         /// <remarks>
-        /// <c>DelayedFloatField</c> 를 쓰는 것은 범위 밖의 값을 잘라내기 때문이다. 보통의 <c>FloatField</c> 는
-        /// 글자를 칠 때마다 값을 돌려주므로, "0.25" 를 치는 사람이 "0" 에서 이미 최솟값으로 잘려 나머지를 칠 수 없다.
+        /// 범위 밖의 값을 잘라내므로 <c>DelayedFloatField</c> 를 쓴다. <c>FloatField</c> 는 입력 중인 "0" 을
+        /// 바로 최솟값으로 잘라 "0.25" 를 입력할 수 없다.
         /// </remarks>
         private static void DrawReadingInterval()
         {
@@ -258,8 +252,7 @@ namespace UnityPlayMcp.McpConfig.Editor
 
             if (typed != _readingInterval)
             {
-                // 저장한 값을 그대로 받아 화면에 되돌린다. 잘려 나간 값을 입력란이 계속 들고 있으면 다음에
-                // 화면을 열 때 숫자가 저 혼자 바뀐 것처럼 보인다.
+                // 입력란이 잘리기 전 값을 들고 있지 않도록 저장된 값으로 되돌린다.
                 _readingInterval = PulseIntervalPreference.Write(_projectRoot, typed);
             }
 
@@ -273,7 +266,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         }
 
         /// <remarks>
-        /// 고른 값은 파일에 손대지 않고 어느 파일을 볼지만 바꾼다. 그래서 고르는 즉시 저장하고 행을 다시 만든다.
+        /// scope 는 파일을 바꾸지 않고 볼 파일만 바꾸므로 고르는 즉시 저장하고 행을 다시 만든다.
         /// </remarks>
         private static void DrawScopePopup()
         {
@@ -341,7 +334,6 @@ namespace UnityPlayMcp.McpConfig.Editor
         {
             try
             {
-                // entry 는 넣을 때만 뜻이 있다. 빼는 쪽에서도 만들면 null 값이 args 에 실릴 수 있다.
                 if (add)
                 {
                     McpAgentConfigurator.Add(row.Agent, ServerName, _serverEntry);
@@ -353,7 +345,7 @@ namespace UnityPlayMcp.McpConfig.Editor
             }
             catch (Exception exception)
             {
-                // 변환이 실패했으면 아무것도 쓰지 않은 채로 여기 온다. 사람이 쓴 설정이 그대로 남는 것이 중요하다.
+                // 변환이 실패하면 파일을 쓰기 전에 여기로 오므로 기존 설정은 그대로 남는다.
                 row.Error = exception.Message;
                 Debug.LogException(exception);
                 return;

@@ -6,10 +6,8 @@ using UnityEngine.EventSystems;
 namespace UnityPlayMcp
 {
     /// <summary>
-    /// Turns the agent's pointer into the events uGUI listens for. Unity's own input module reads
-    /// the physical mouse and nothing else, so a game's <see cref="IDragHandler"/> would never hear
-    /// from a virtual pointer without this. The virtual mouse state covers the other half — games
-    /// that poll <c>Input</c> directly and never touch the EventSystem.
+    /// Sends uGUI pointer events for the agent's pointer. Unity's input module reads only the
+    /// physical mouse; games that poll <c>Input</c> are covered by the virtual mouse state instead.
     /// </summary>
     internal sealed class PointerEventDispatcher
     {
@@ -60,8 +58,7 @@ namespace UnityPlayMcp
                     }
 
                     data.dragging = true;
-                    // A pointer that travelled is no longer a click, which is what keeps a drag
-                    // from also firing the click handler of whatever it started on.
+                    // Keeps a drag from also firing the click handler it started on.
                     data.eligibleForClick = false;
                     ExecuteEvents.Execute(data.pointerDrag, data, ExecuteEvents.beginDragHandler);
                 }
@@ -75,8 +72,7 @@ namespace UnityPlayMcp
             var eventSystem = EventSystem.current;
             if (eventSystem == null)
             {
-                // Worth saying out loud: from the outside this is indistinguishable from a press
-                // that landed on nothing, and a game with a canvas is expected to have one.
+                // Otherwise indistinguishable from a press that hit nothing.
                 Debug.LogWarning("[Unity Play MCP] mouse_down found no EventSystem, so no uGUI element can answer it.");
                 return;
             }
@@ -106,8 +102,7 @@ namespace UnityPlayMcp
             if (target != null)
             {
                 data.rawPointerPress = target;
-                // The object that answers the press is rarely the one the ray hit — a Button's
-                // handler sits on the parent of the graphic that was actually under the pointer.
+                // The handler is often a parent of the hit graphic, e.g. a Button.
                 data.pointerPress = ExecuteEvents.ExecuteHierarchy(
                     target, data, ExecuteEvents.pointerDownHandler)
                     ?? ExecuteEvents.GetEventHandler<IPointerClickHandler>(target);
@@ -116,14 +111,11 @@ namespace UnityPlayMcp
 
             if (data.pointerDrag != null)
             {
-                // The handler may answer this by clearing useDragThreshold — a ScrollRect does —
-                // and the threshold check below has to respect that.
+                // The handler may clear useDragThreshold (ScrollRect does); the check below respects it.
                 ExecuteEvents.Execute(data.pointerDrag, data, ExecuteEvents.initializePotentialDrag);
             }
 
-            // One line per press, and a press is something the agent asked for, so this is not
-            // chatter. Without it a drag that does nothing is indistinguishable from a drag that
-            // was never delivered, and the difference is the whole diagnosis.
+            // One line per press tells a drag that did nothing apart from one never delivered.
             Debug.Log(string.Format(
                 "[Unity Play MCP] mouse_down at ({0}, {1}) over {2} hits: {3}. press={4} drag={5}",
                 position.x,
@@ -191,13 +183,11 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 그 화면 좌표에서 uGUI raycast 가 맨 위로 답하는 오브젝트. EventSystem 이 없거나 맞는
-        /// 것이 없으면 null.
+        /// 화면 좌표에서 uGUI raycast 의 맨 위 오브젝트다. EventSystem 이나 hit 이 없으면 null 이다.
         /// </summary>
         /// <remarks>
-        /// hover 를 건드리지 않는 것이 이 메서드의 요점이다. ID 로 겨누는 쪽은 커서를 옮기기 전에
-        /// 후보 좌표 여럿을 시험해 보는데, 그때마다 <c>pointerEnter</c> 와 <c>pointerExit</c> 가
-        /// 게임으로 나가면 에이전트가 하지 않은 hover 를 게임이 본 것이 된다.
+        /// hover 상태를 바꾸지 않아야 한다. targeting 은 커서를 옮기기 전에 여러 후보 좌표를 시험하므로,
+        /// 그때마다 <c>pointerEnter</c>/<c>pointerExit</c> 가 나가면 게임이 가짜 hover 를 본다.
         /// </remarks>
         public GameObject GraphicUnder(Vector2 screenPosition)
         {
@@ -211,8 +201,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Lets go of every button, dispatching the events that go with letting go. A run that ends
-        /// mid-drag would otherwise leave the game's handler waiting for an end that never comes.
+        /// Releases every button with its release events, so a run ending mid-drag still sends endDrag.
         /// </summary>
         public void ReleaseAll()
         {
@@ -225,11 +214,9 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Every 2D collider actually under the pointer, whether or not a raycast would return it.
-        /// A press that reaches nothing draggable is either aimed away from the target or aimed at
-        /// one the query skipped, and only the collider list tells the two apart — a trigger is
-        /// invisible to ray queries while <c>Physics2D.queriesHitTriggers</c> is off, and a drag
-        /// handler sitting on a collider nobody can hit looks exactly like no handler at all.
+        /// Logs every 2D collider under the pointer, whether or not a raycast returns it. This tells a
+        /// missed aim apart from a collider the query skipped, e.g. a trigger while
+        /// <c>Physics2D.queriesHitTriggers</c> is off.
         /// </summary>
         private static void LogCollidersUnder(Vector2 screenPosition)
         {
@@ -268,9 +255,8 @@ namespace UnityPlayMcp
                         : ", HAS drag handler)");
             }
 
-            // The overlap test above only looks at x and y. The raycaster shoots a ray from the
-            // camera instead, so a collider it skips is one the ray never reached: outside the clip
-            // range, off the event mask, or past a hit limit. These are the values that say which.
+            // The overlap test ignores depth; the raycaster's ray can miss a collider through clip
+            // range, event mask, or hit limit. These values show which.
             var ray = camera.ScreenPointToRay(screenPosition);
             var alongTheRay = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
             var rayHits = new StringBuilder();
@@ -300,9 +286,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Every hit and the raycaster that produced it. Which raycaster answered is the thing worth
-        /// knowing: a Canvas only brings a GraphicRaycaster, which cannot see a SpriteRenderer at
-        /// all, so a sprite needs a Physics2DRaycaster on the camera before any of this can reach it.
+        /// Every hit and its raycaster. A GraphicRaycaster cannot see a SpriteRenderer; sprites need a
+        /// Physics2DRaycaster on the camera.
         /// </summary>
         private string DescribeHits()
         {
@@ -393,9 +378,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// One reusable payload for the raycasts and hover transitions, since those happen every
-        /// frame of a drag. It is rebuilt only when the scene brings in a different EventSystem,
-        /// which the payload carries and cannot be told about after construction.
+        /// Reused payload for per-frame raycasts and hover transitions. Rebuilt only when the
+        /// EventSystem changes, since the payload is bound to it at construction.
         /// </summary>
         private PointerEventData HoverData(EventSystem eventSystem)
         {

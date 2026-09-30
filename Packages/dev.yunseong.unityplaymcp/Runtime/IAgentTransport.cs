@@ -6,10 +6,10 @@ namespace UnityPlayMcp
     {
         bool IsConnected { get; }
 
-        /// <summary>이 transport 에 지금까지 열린 client 연결의 수. 줄지 않는다.</summary>
+        /// <summary>지금까지 열린 client 연결 수다. 줄지 않는다.</summary>
         /// <remarks>
-        /// <see cref="IsConnected"/> 는 server 가 서 있는지만 말하고 누가 붙었는지는 말하지 않는다. 새 client 가 붙은 것을 알아야
-        /// 그 client 에게 전량 reading 을 보낼 수 있다 (#69).
+        /// 새 client 에게 전량 reading 을 보내려면 연결이 새로 열린 것을 알아야 한다.
+        /// <see cref="IsConnected"/> 는 server 상태만 알려 준다 (#69).
         /// </remarks>
         int ClientsOpened { get; }
         void Start();

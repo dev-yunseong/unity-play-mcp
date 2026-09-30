@@ -6,17 +6,12 @@ namespace UnityPlayMcp.Tests.Fixtures
     /// A game component that reads <see cref="Input"/> the way a game does.
     /// </summary>
     /// <remarks>
-    /// It sits in an assembly of its own because that is what the weaver acts on: the assembly
-    /// under test is a consumer of the package, not the package's own test assembly. A test that
-    /// wove itself would prove less than the one thing this fixture exists to prove — that a
-    /// game's own `Input` calls come out reading the virtual mouse and keyboard.
+    /// It lives in its own assembly because the weaver acts on consumer assemblies, not the
+    /// package's own test assembly.
     ///
-    /// It names no UnityPlayMcp type at all, which is what makes it a real game assembly. It once
-    /// carried a `UnityPlayMcpHost` field for the sole purpose of putting `UnityPlayMcp.Runtime`
-    /// into the fixture's IL metadata, because the weaver would not touch an assembly without that
-    /// reference. That field hid the defect in issue #47: the tests passed while every real game
-    /// went unwoven. Do not add one back — the weaver now adds the reference itself when it has a
-    /// call to rewrite.
+    /// It must not name any UnityPlayMcp type. A `UnityPlayMcpHost` field once added the runtime
+    /// reference and hid #47: tests passed while real games went unwoven. The weaver now adds the
+    /// reference itself when it rewrites a call.
     /// </remarks>
     public sealed class InputFixtureBehaviour : MonoBehaviour
     {

@@ -17,7 +17,7 @@ import sys
 
 REDACTED = "***REDACTED***"
 
-# 시크릿이 등록되지 않은 경우까지 덮으려는 일반 패턴. 값 기반 치환이 1차이고 이건 그물이다.
+# 시크릿이 등록되지 않은 경우를 위한 일반 패턴. 값 기반 치환을 보조한다.
 PATTERNS = [
     # 이메일
     re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
@@ -37,7 +37,7 @@ def secret_values():
         value = os.environ.get(name, "").strip()
         if len(value) > 4:
             values.append(value)
-    # 긴 것부터 지워야 짧은 값이 긴 값의 일부를 먼저 갉아먹지 않는다.
+    # 짧은 값이 긴 값의 일부를 먼저 지우지 않도록 긴 것부터 치환한다.
     return sorted(values, key=len, reverse=True)
 
 
@@ -71,7 +71,7 @@ def main():
             target = os.path.join(destination, relative)
             os.makedirs(os.path.dirname(target), exist_ok=True)
 
-            # 읽지 못한 파일을 원본째 넘기면 지우려던 것이 그대로 나간다. 건너뛰는 쪽이 안전하다.
+            # 읽지 못한 파일을 원본째 넘기면 자격 증명이 그대로 나가므로 건너뛴다.
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as handle:
                     text = handle.read()

@@ -3,9 +3,7 @@ using UnityEngine;
 
 namespace UnityPlayMcp.Capture
 {
-    /// <summary>
-    /// The screen pixels a capture reads, and whether the screen cut them short.
-    /// </summary>
+    /// <summary>The screen pixels a capture reads, and whether the screen clipped them.</summary>
     internal struct CaptureRegion
     {
         public Rect PixelRect;
@@ -21,9 +19,8 @@ namespace UnityPlayMcp.Capture
     /// Turns a UI element into the screen rectangle a capture should read.
     /// </summary>
     /// <remarks>
-    /// Kept apart from the pixel path so it can be tested without a screen: the projection is
-    /// where a crop actually goes wrong, and a wrong rectangle produces a plausible-looking image
-    /// of the wrong thing rather than an error.
+    /// Kept apart from the pixel path so it can be tested without a screen. A wrong rectangle
+    /// yields a plausible image of the wrong thing, not an error.
     /// </remarks>
     internal static class CaptureRect
     {
@@ -46,8 +43,8 @@ namespace UnityPlayMcp.Capture
             var corners = new Vector3[4];
             target.GetWorldCorners(corners);
 
-            // The camera is the canvas's, not the scene's. An overlay canvas has none, and handing
-            // one the scene camera throws the projection off by the whole view transform.
+            // Use the canvas camera, not the scene camera. An overlay canvas has none, and the
+            // scene camera would skew the projection by the whole view transform.
             var camera = CanvasCamera.For(target);
             var min = (Vector2)RectTransformUtility.WorldToScreenPoint(camera, corners[0]);
             var max = min;
@@ -73,8 +70,7 @@ namespace UnityPlayMcp.Capture
             region = new CaptureRegion
             {
                 PixelRect = visible,
-                // Reported rather than treated as failure: a half-visible button is exactly the
-                // kind of defect the agent is looking at the screen to find.
+                // Reported, not a failure: a half-visible button is a defect the agent wants to see.
                 Clipped = visible != requested,
                 Requested = requested
             };
@@ -83,8 +79,8 @@ namespace UnityPlayMcp.Capture
 
         /// <summary>Unity 화면 좌표(좌하단 기준)의 영역을 좌상단 기준으로 옮긴다.</summary>
         /// <remarks>
-        /// 뒤집기는 보고하는 이 자리에서만 한다. <c>move_mouse</c> 와 scene 의 rect 가 좌상단 기준이라 agent 는 이 값을 그대로
-        /// 되쓴다.
+        /// 뒤집기는 보고할 때만 한다. <c>move_mouse</c> 와 scene 의 rect 가 좌상단 기준이라
+        /// agent 가 이 값을 그대로 쓸 수 있다.
         /// </remarks>
         public static CaptureAreaDto TopLeft(Rect area, int screenHeight)
         {
@@ -108,11 +104,8 @@ namespace UnityPlayMcp.Capture
         }
 
         /// <summary>
-        /// The size a capture is stored at: the same shape, with the longest edge capped.
+        /// The stored size: same aspect, longest edge capped. Never enlarges.
         /// </summary>
-        /// <remarks>
-        /// Never enlarges. A 200px button upscaled to the cap costs bytes and adds no detail.
-        /// </remarks>
         public static Vector2Int Downscale(int width, int height, int maxEdge)
         {
             if (maxEdge <= 0 || (width <= maxEdge && height <= maxEdge))

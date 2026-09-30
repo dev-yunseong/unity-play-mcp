@@ -10,11 +10,11 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// MCP <c>hover</c> 가 보내는 <c>move_mouse</c> 로 대상 위에 올린다 (#70).
+    /// MCP <c>hover</c> 가 보내는 <c>move_mouse</c> 로 대상 위에 올리는 동작을 확인한다 (#70).
     /// </summary>
     /// <remarks>
-    /// <see cref="PointerTargetActionTests"/> 와 같은 이유로 play mode 여야 하고 같은 방식으로 돈다: host 는 프레임과
-    /// <c>OnMouse*</c> 배달만 맡고, 액션은 여기서 만든 executor 가 돌려 결과 DTO 를 직접 읽는다.
+    /// <see cref="PointerTargetActionTests"/> 와 같은 방식이다. host 는 프레임과 <c>OnMouse*</c> 배달만 맡고,
+    /// action 은 여기서 만든 executor 로 실행해 결과 DTO 를 읽는다.
     /// </remarks>
     public sealed class PointerHoverActionTests
     {
@@ -51,7 +51,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 카드 hover 그 자체. 버튼을 누르지 않고 uGUI 의 pointer enter 만 게임에 닿는다.
+        /// 버튼을 누르지 않고 uGUI pointer enter 만 게임에 전달한다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_EntersAuGuiCardWithoutPressingIt()
@@ -70,7 +70,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 다른 카드로 옮기면 먼저 것이 exit 를 받는다. 툴팁을 닫는 게임 코드가 기대하는 순서다.
+        /// 다른 카드로 옮기면 이전 카드가 exit 를 받는다. 툴팁을 닫는 게임 코드가 이 순서에 의존한다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_MovingToAnotherCardExitsTheFirst()
@@ -91,7 +91,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// collider 대상의 hover 는 엔진과 같은 <c>OnMouseEnter</c>/<c>OnMouseOver</c> 로 닿는다.
+        /// collider 대상 hover 는 엔진과 같이 <c>OnMouseEnter</c>/<c>OnMouseOver</c> 로 전달된다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_ReachesTheOnMouseEnterOfAColliderTarget()
@@ -144,7 +144,7 @@ namespace UnityPlayMcp.Tests
             string method, List<object> parameters, System.Action<ActionResultDto> completed)
         {
             yield return executor.Execute(NextActionId(), method, parameters, completed);
-            // 결과를 받은 프레임과 마지막 OnMouse* 가 배달되는 프레임이 같아, 한 프레임을 더 준다.
+            // 결과가 온 프레임에 마지막 OnMouse* 가 배달되므로 한 프레임을 더 기다린다.
             yield return null;
         }
 
@@ -177,7 +177,7 @@ namespace UnityPlayMcp.Tests
             return targetObject.AddComponent<MouseMessageFixtureBehaviour>();
         }
 
-        /// <param name="acrossTheScreen">화면 가로에서 차지할 자리, 0 에서 1 사이.</param>
+        /// <param name="acrossTheScreen">화면 가로 위치 비율 (0–1).</param>
         private HoverFixtureBehaviour CreateCard(string name, float acrossTheScreen)
         {
             if (canvasObject == null)

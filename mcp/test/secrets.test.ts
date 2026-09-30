@@ -10,8 +10,8 @@ import { registerTools } from "../src/tools.js";
 
 /// #72 의 회귀 test.
 ///
-/// 실제 인증 값은 어디에도 쓰지 않는다. 아래 토큰은 `{"fake":"test"}`·`{"not":"real"}`·`fake-signature` 를 base64url
-/// 로 적어 이은 것이라 JWT 모양일 뿐 아무것도 증명하지 않는다.
+/// 실제 인증 값은 쓰지 않는다. 아래 토큰은 `{"fake":"test"}`, `{"not":"real"}`, `fake-signature` 를
+/// base64url 로 이은 JWT 모양의 가짜 값이다.
 const FAKE_JWT = ["eyJmYWtlIjoidGVzdCJ9", "eyJub3QiOiJyZWFsIn0", "ZmFrZS1zaWduYXR1cmU"].join(".");
 const FAKE_API_KEY = "test0000fake1111ABCDEFGHIJKLMNOPqrstuvwx";
 

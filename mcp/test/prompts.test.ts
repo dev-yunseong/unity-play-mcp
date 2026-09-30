@@ -3,8 +3,8 @@ import test from "node:test";
 
 import { registerPrompts, unityPrompts } from "../src/prompts.js";
 
-/// prompt 는 사용자가 slash command 로 고르는 것이라, 이름과 설명이 곧 사용자가 보는 목록이다.
-/// 그리고 render 가 만드는 message 는 agent 가 그대로 받는 지시다. 둘 다 계약이다.
+/// prompt 의 이름과 설명은 사용자가 보는 slash command 목록이고, render 결과는 agent 가 받는
+/// 지시이므로 둘 다 계약이다.
 
 function named(name: string) {
   const found = unityPrompts.find((prompt) => prompt.name === name);
@@ -31,7 +31,7 @@ test("a prompt without its optional argument still renders", () => {
 
   assert.match(rendered, /start_readings/);
   assert.match(rendered, /get_scene_state/);
-  // 인자가 없으면 selector 를 지어내지 않고, 좁히는 방법만 알려 준다.
+  // 인자가 없으면 selector 를 지어내지 않고 좁히는 방법만 알려 준다.
   assert.doesNotMatch(rendered, /selector "/);
 });
 

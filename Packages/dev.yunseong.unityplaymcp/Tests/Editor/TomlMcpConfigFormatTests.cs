@@ -74,8 +74,8 @@ namespace UnityPlayMcp.Tests.McpConfig
         }
 
         /// <remarks>
-        /// Codex 문서가 환경 변수를 이 sub-table 로 적으라고 안내한다. block 을 여기서 끊으면 지운 뒤에
-        /// command 없는 env table 만 남아 server 정의가 깨진 채 살아남는다.
+        /// Codex 문서가 환경 변수를 이 sub-table 로 적게 한다. 여기서 block 을 끊으면 지운 뒤 command 없는
+        /// env table 만 남아 server 정의가 깨진다.
         /// </remarks>
         [Test]
         public void RemovesItsOwnSubTableWithTheBlock()
@@ -112,8 +112,7 @@ namespace UnityPlayMcp.Tests.McpConfig
         }
 
         /// <remarks>
-        /// 다음 table 바로 위의 주석은 그 table 을 설명하려고 적은 것이다. 우리 block 에 넣고 지우면 남의
-        /// 주석이 사라진다.
+        /// 다음 table 바로 위 주석은 그 table 의 것이다. 우리 block 에 포함해 지우면 남의 주석이 사라진다.
         /// </remarks>
         [Test]
         public void LeavesACommentThatIntroducesTheNextTable()
@@ -136,8 +135,8 @@ namespace UnityPlayMcp.Tests.McpConfig
         }
 
         /// <remarks>
-        /// TOML 은 두 형태를 같은 이름으로 본다. 못 알아보면 table 을 하나 더 붙이게 되고, table 중복 정의는
-        /// parse error 라 Codex 가 설정 파일 전체를 읽지 못한다.
+        /// TOML 은 두 형태를 같은 이름으로 본다. 구분하지 못해 table 을 하나 더 붙이면 중복 정의 parse error 로
+        /// Codex 가 설정 파일 전체를 읽지 못한다.
         /// </remarks>
         [Test]
         public void RecognisesAQuotedHeader()

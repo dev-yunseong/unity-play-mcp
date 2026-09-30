@@ -6,10 +6,8 @@ namespace UnityPlayMcp
     /// The camera Unity's screen-point helpers need for a RectTransform.
     /// </summary>
     /// <remarks>
-    /// A ScreenSpaceOverlay canvas draws straight onto the screen and has no camera; handing one
-    /// the scene's camera throws the result off by the whole projection. Every caller that turns a
-    /// RectTransform into a screen point goes through here, so the cursor the player sees and the
-    /// coordinates a scan reports cannot drift apart.
+    /// A ScreenSpaceOverlay canvas has no camera; passing the scene camera skews the result.
+    /// All RectTransform-to-screen conversions go through here so the cursor and scan coordinates agree.
     /// </remarks>
     internal static class CanvasCamera
     {
@@ -20,8 +18,7 @@ namespace UnityPlayMcp
                 return null;
             }
 
-            // A nested canvas reports its root's render mode and camera, so the first one above the
-            // target answers for the whole chain.
+            // A nested canvas reports its root's render mode and camera.
             var canvas = target.GetComponentInParent<Canvas>();
             if (canvas == null)
             {

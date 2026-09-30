@@ -3,16 +3,11 @@ using UnityEngine;
 namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
-    /// 객체가 화면에서 차지하는 면적. 에이전트가 겨누는 숫자로.
+    /// 객체가 화면에서 차지하는 면적. 좌상단 기준 픽셀이다.
     /// </summary>
     /// <remarks>
-    /// 좌상단에서 잰 픽셀이고, 그것은 Unity 가 일하는 공간이 아니다. 엔진은 좌하단에서 재고 액션 프로토콜은 위에서 재므로,
-    /// 뒤집기는 와이어의 이쪽 아니면 저쪽에서 일어나야 한다. 여기서 일어난다. 그래야 호출자가 스캔이 보고한 숫자를 그대로
-    /// 겨눌 곳으로 되보낼 수 있다.
-    ///
-    /// SDK 에는 같은 규칙의 reader 가 제 것으로 있다. 그것을 공유하려면 이 어셈블리가 SDK 런타임을 참조해야 하는데, SDK
-    /// 런타임이 곧 이쪽을 참조하려 한다 — 연결이 열릴 때 스캔이 시작될 수 있어야 하기 때문이다. 두 방향 중 하나는 복사여야
-    /// 하고, 그 복사는 SDK 가 전혀 없어도 계속 돌아야 하는 쪽에 있어야 한다.
+    /// Unity 는 좌하단 기준이고 액션 프로토콜은 좌상단 기준이므로 여기서 뒤집어, 호출자가 보고된 값을 그대로 액션에 쓸 수 있게 한다.
+    /// SDK 런타임에 같은 규칙의 코드가 있지만, SDK 런타임이 이 어셈블리를 참조하므로 공유하지 못하고 복사해 둔다.
     /// </remarks>
     internal static class ScreenArea
     {
@@ -20,9 +15,9 @@ namespace UnityPlayMcp.Affordances.Scan
 
         private static Camera _camera;
 
-        /// <summary>객체마다가 아니라 스캔 전체에 대해 카메라를 한 번 푼다.</summary>
+        /// <summary>스캔마다 카메라를 한 번 찾는다.</summary>
         /// <remarks>
-        /// <c>Camera.main</c> 은 태그로 찾고, 그것은 씬 전체 조회다. 객체마다 치르면 웬만한 크기의 씬에서 순회를 잡아먹는다.
+        /// <c>Camera.main</c> 은 태그로 씬 전체를 조회하므로 객체마다 부르면 느리다.
         /// </remarks>
         internal static void Begin()
         {
@@ -34,7 +29,7 @@ namespace UnityPlayMcp.Affordances.Scan
             _camera = null;
         }
 
-        /// <summary>이것이 화면의 어디인지, 또는 아무 데도 아닐 때 크기 0 인 면적.</summary>
+        /// <summary>화면상의 면적. 대상이 없으면 크기 0 이다.</summary>
         internal static Rect Of(Transform subject)
         {
             if (subject == null)
@@ -47,9 +42,7 @@ namespace UnityPlayMcp.Affordances.Scan
                 return FromCorners(rect);
             }
 
-            // 스프라이트는 RectTransform 이 아니고, 맨 transform 은 넓이가 없는 점이다. renderer 자신의 bounds 를 읽는 것이
-            // 그런 것을 겨눌 수 있게 만드는 유일한 방법이다 — 그것이 없으면 모든 월드 객체가 제 한가운데의 너비 0 인 면적을
-            // 보고하게 된다.
+            // 월드 객체의 transform 은 넓이가 없는 점이므로 renderer 의 bounds 로 면적을 구한다.
             var renderer = subject.GetComponent<Renderer>();
 
             return renderer == null ? AtPoint(subject.position) : FromBounds(renderer.bounds);
@@ -61,8 +54,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
             var canvas = subject.GetComponentInParent<Canvas>();
 
-            // 스크린 공간에 그려지는 캔버스는 그것과 화면 사이에 카메라가 없다. 그런 캔버스에 코너를 투영하라고 청하면 플레이어가
-            // 결코 보지 못하는 데로 옮겨 놓게 된다.
+            // ScreenSpaceOverlay 캔버스의 코너는 이미 화면 좌표이므로 카메라로 투영하지 않는다.
             var through = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
                 ? null
                 : _camera;
@@ -116,7 +108,7 @@ namespace UnityPlayMcp.Affordances.Scan
             return new Rect(point.x, point.y, 0f, 0f);
         }
 
-        /// <summary>월드에서 화면으로. 위에서 아래로 재도록 이미 뒤집은 것.</summary>
+        /// <summary>월드 좌표를 좌상단 기준 화면 좌표로 바꾼다.</summary>
         private static Vector2 Project(Vector3 world, Camera through)
         {
             var point = through == null

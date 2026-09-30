@@ -44,9 +44,8 @@ namespace UnityPlayMcp.CodeGen
 
                 using (var assembly = AssemblyDefinition.ReadAssembly(peStream, reader))
                 {
-                    // WillProcess가 통과시켰다고 해서 바꿀 게 있다는 뜻은 아니다. 거기서 보는
-                    // 컴파일러 참조 목록에는 autoReferenced 때문에 UnityPlayMcp.Runtime이 항상 들어 있고,
-                    // 실제로 바꿀 Input 호출이 있는지는 Process가 IL을 훑어 봐야 안다.
+                    // autoReferenced 때문에 references 에는 `UnityPlayMcp.Runtime` 이 항상 있으므로,
+                    // 바꿀 `Input` 호출이 있는지는 IL 을 훑어 봐야 안다.
                     var changed = new InputMethodWeaver(assembly.MainModule).Process();
                     if (!changed)
                     {

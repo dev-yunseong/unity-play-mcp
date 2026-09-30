@@ -9,39 +9,30 @@ using UnityEngine.SceneManagement;
 namespace UnityPlayMcp.Affordances.Live
 {
     /// <summary>
-    /// 감시 대상 멤버가 지금 쥐고 있는 것을, 리포트가 그것들을 부르는 방식으로 쓴다.
+    /// 감시 대상 멤버의 현재 값을 리포트와 같은 이름으로 pulse 문서에 쓴다.
     /// </summary>
     /// <remarks>
-    /// 리포트는 <c>MapMove.position == 0</c> 이라고 말하는데 지금까지 아무것도 <c>position</c> 이 무엇을 쥐고 있는지 볼 수
-    /// 없었으므로, 명세의 모든 줄이 제 전제를 확인할 방법이 없는 규칙이었다. 이것이 그 문장의 반대쪽이다.
+    /// static 값은 <c>statics</c> 목록에, 인스턴스 값은 그것을 가진 객체의 경로 아래에 쓴다. 객체마다 값이 다르므로 합치거나
+    /// 고르지 않는다.
     ///
-    /// 둘을 일부러 갈라 둔다. static 필드는 값이 하나이고 소유자가 없으며, 인스턴스 필드는 그것을 나르는 객체마다 값이 하나다 —
-    /// 만들어진 적 다섯은 <c>hp</c> 에 대한 답 다섯이고, 그것들을 하나로 접는 것은 두 객체에 대한 조건을 한 문장에 쓰는 것과
-    /// 같은 실수다. static 은 제 목록으로 쓰고, 인스턴스 값은 그것을 쥔 객체의 경로 아래에 쓰며, 평균 내거나 합하거나 골라
-    /// 내지 않는다.
-    ///
-    /// 여기서는 아무것도 해석하지 않는다. 값은 필드가 준 대로 쓰고 분석이 선언한 대로 타입을 붙이며, <c>flag == 1</c> 이
-    /// 무엇을 뜻하는지는 이것을 읽는 쪽의 물음이다.
+    /// 값은 해석하지 않는다. 필드 값을 그대로 쓰고 분석이 선언한 타입을 붙인다.
     /// </remarks>
     internal static class LiveState
     {
-        /// <summary>감시 대상 멤버 하나를 몇 개의 객체에서까지 찾고 나머지를 버리는지.</summary>
+        /// <summary>감시 대상 멤버 하나를 읽는 최대 객체 수. 넘는 객체는 버린다.</summary>
         /// <remarks>
-        /// 풀에서 꺼내 쓰는 발사체는 수백 개가 존재할 수 있고, 풀과 함께 커지는 페이로드는 변화 게이트가 쓸 수 없는 것이다 —
-        /// 어떤 조건도 언급하지 않는 이유로 폴링마다 달라지기 때문이다. 무엇이 버려졌는지는 완전해 보이는 개수에서 유추하게 두지
-        /// 않고 그 멤버에 적는다.
+        /// 풀링된 발사체처럼 수백 개가 생기면 문서가 커지고 매 pulse 가 변화로 판정된다. 버린 수는 그 멤버에 적는다.
         /// </remarks>
         private const int MaxHolders = 16;
 
-        /// <summary>객체마다 장부에 하나씩 두는 키. 사라짐을 읽어내는 자리이기도 하다.</summary>
+        /// <summary>객체마다 <c>ledger</c> 에 하나씩 두는 key. 사라진 객체를 찾는 데 쓴다.</summary>
         private const string Active = "|active";
 
         /// <summary>
         /// 감시 대상 멤버를 전부 읽고 문서 하나를 쓴다.
         /// </summary>
         /// <remarks>
-        /// 타입마다 따로 찾아다니는 대신, 씬을 한 번 걷고 모든 컴포넌트를 모든 감시 대상 타입에 내놓는다. 감시 대상 멤버가 백 개인
-        /// 게임은 그러지 않으면 폴링마다 계층을 백 번 걷게 되고, 걷기가 비싼 절반이다.
+        /// 타입마다 계층을 찾지 않고 씬을 한 번 walk 하며 모든 컴포넌트를 대조한다. 계층 walk 가 비용의 큰 부분이다.
         /// </remarks>
         internal static string Compose(
             long reading, Scene persistent, Restless restless, Restless pixels,
@@ -75,21 +66,15 @@ namespace UnityPlayMcp.Affordances.Live
 
             text.Append("{\"schema\":").Append(Pulse.SchemaVersion);
 
-            // pulse 를 그것이 서술하는 프레임 옆에 놓을 수 있도록 말해 둔다. 명세는 화면과 이것을 동시에 대고 확인되는데, 시간 위의
-            // 자리가 없으면 그 둘은 어느 순간에 속하는지 가릴 방법이 없는 두 진술이다. 프레임은 게임 자신이 세는 것이므로 같은
-            // 프레임을 읽는 다른 무엇도 일치한다.
+            // 화면 캡처 등 다른 관측과 같은 시점인지 맞춰 볼 수 있도록 게임의 frame 번호를 싣는다.
             text.Append(",\"reading\":").Append(reading);
             text.Append(",\"frame\":").Append(Time.frameCount);
 
             text.Append(",\"scene\":");
             Json.String(text, active.IsValid() ? active.name : null);
 
-            // 첫 pulse 는 차이를 잴 대상이 없고, 화면이 바뀌면 어차피 그 위의 모든 것이 갈아치워진다 — 그래서 전량 상태를 보내는 값이
-            // 거기서는 거의 들지 않으면서 독자에게 확신할 수 있는 지점을 준다. 그 밖의 모든 pulse 는 움직인 것만 나른다.
-            //
-            // 그리고 전달되지 못한 pulse 뒤에도 그렇다. 차이를 놓친 독자는 무언가 다시 그 값을 움직이기 전까지 그것에 대해 틀린 채로
-            // 있고, 그것은 전량 pulse 가 고치지 또 다른 차이가 고치지 못한다. 잃어버린 문서를 다시 보내는 것은 sink 가 이미 언짢아하는
-            // 홍수가 되지만, 전체 상태를 한 번 보내는 것은 그렇지 않다.
+            // whole pulse 를 보내는 경우: 첫 pulse, 씬이 바뀔 때, 전달 실패나 요청 뒤(repair). 나머지는 움직인 값만 싣는다.
+            // 놓친 차이는 다른 차이로 복구되지 않으므로 whole 로 한 번 보낸다.
             since.TryGetValue("scene", out var was);
 
             var everything = repair || since.Count == 0 ||
@@ -101,8 +86,7 @@ namespace UnityPlayMcp.Affordances.Live
                 Everything = everything
             };
 
-            // 테스터가 있는 화면은 pulse 가 주장하는 것의 일부이므로, 화면이 바뀌는 것은 그 위의 모든 값이 마침 같게 읽히더라도
-            // 소식이다.
+            // 다른 값이 모두 같아도 씬이 바뀌면 변화로 본다.
             ledger.Say("scene", active.IsValid() ? active.name : null);
 
             text.Append(",\"statics\":[");
@@ -112,7 +96,7 @@ namespace UnityPlayMcp.Affordances.Live
             var showing = new Bin();
             var hidden = new Bin();
 
-            // Camera.main 은 태그로 하는 씬 전체 조회다. 객체마다 한 번이면 순회를 잡아먹으므로 pulse 전체에 대해 한 번 푼다.
+            // Camera.main 은 태그로 씬 전체를 조회하므로 객체마다가 아니라 pulse 마다 한 번 구한다.
             ScreenArea.Begin();
 
             var truncated = Objects(
@@ -123,8 +107,7 @@ namespace UnityPlayMcp.Affordances.Live
             showing.WriteTo(text, "active");
             hidden.WriteTo(text, "deactive");
 
-            // 독자가 어떤 종류의 pulse 를 쥐고 있는지 알도록 말해 둔다. 그것이 없으면 델타와 전량 pulse 가 똑같아 보이고, 하나를 다른
-            // 하나로 오인한 독자는 아직 필요한 상태를 버리거나 사라진 상태를 계속 쥐게 된다.
+            // 읽는 쪽이 차이 pulse 와 whole pulse 를 구분해야 상태를 잘못 버리거나 남기지 않는다.
             text.Append(",\"whole\":").Append(everything ? "true" : "false");
 
             text.Append(",\"watching\":").Append(watched.Count);
@@ -136,14 +119,8 @@ namespace UnityPlayMcp.Affordances.Live
                 text.Append(",\"gaps\":[\"holder-limit:").Append(truncated).Append("\"]");
             }
 
-            // 직전 pulse 와 무엇이 다른가. 비어 있을 때도 쓴다. 빈 목록과 없는 필드는 다른 주장이기 때문이다 — 앞의 것은 값들이
-            // 비교됐고 아무것도 움직이지 않았다는 말인데, 그것은 한 실행의 첫 pulse 가 할 수 없는 말이다.
-            //
-            // 들썩이는 값을 찾을 수 있게 만드는 절반이 이것이다. pulse 가 거의 다 나가는 실행은 어떤 조건도 언급하지 않는 무언가가
-            // 움직이고 있는 실행이고, 이것이 없으면 독자는 그런 일이 일어난다는 것만 볼 뿐 어느 멤버가 그러는지는 영영 못 본다.
-            // 끝에 세지 않고 pulse 마다 말하므로 첫 pulse 에서 눈에 띈다.
-            // 사라진 것도 변화다. 직전 pulse 에 있었고 이번에 없는 키는 파괴된 객체이거나 떠나온 화면이고, 지금 여기 있는 것만 비교하면
-            // 게임에서 가장 분주한 순간 — 모든 것이 헐리는 순간 — 을 아무 일도 없었다고 보고하게 된다.
+            // 직전 pulse 에 있고 이번에 없는 key 도 변화로 센다. 그러지 않으면 객체가 파괴되거나 씬을 떠날 때 변화가 없다고
+            // 판정된다.
             foreach (var pair in since)
             {
                 if (!now.ContainsKey(pair.Key))
@@ -152,8 +129,7 @@ namespace UnityPlayMcp.Affordances.Live
                 }
             }
 
-            // 그리고 무엇이 사라졌는지도 말한다. 위의 것은 pulse 를 나가게 만들 뿐 — 이름은 `changed` 에 멤버 키로 실리고, 읽는 쪽에서
-            // 그것은 "이 값이 움직였다" 로 읽힌다. 객체가 없어졌다는 것은 다른 문장이고, 아무도 그것을 말하지 않고 있었다.
+            // `changed` 의 key 는 "값이 바뀌었다" 로 읽히므로, 객체가 사라진 것은 `gone` 으로 따로 싣는다.
             var gone = Gone(since, now, everything, truncated);
 
             if (gone != null)
@@ -200,14 +176,11 @@ namespace UnityPlayMcp.Affordances.Live
             return text.ToString();
         }
 
-        /// <summary>이번 pulse 가 한 말, 직전 pulse 가 한 말, 그리고 그 차이.</summary>
         /// <summary>
-        /// pulse 의 객체들이 나뉘어 들어가는 두 목록 중 하나.
+        /// pulse 의 <c>active</c>/<c>deactive</c> 목록 중 하나.
         /// </summary>
         /// <remarks>
-        /// 켜짐과 꺼짐은 객체 위의 필드가 아니라 그것이 어느 목록으로 도착하는지로 가린다. 샘플 게임 명세의 한 줄이 <em>계속 버튼이
-        /// 비활성으로 보인다</em> 이므로 꺼진 것들도 날라야 하는데, 그것들을 나머지와 섞어 나르면 독자가 채널에 물은 바로 그 물음에
-        /// 답하려고 목록을 필터링하게 된다. 정렬은 같은 일을 여기서 한 번 하는 것이다.
+        /// 꺼진 객체도 확인 대상이라 싣는다. 활성 여부는 필드가 아니라 목록으로 나눠 읽는 쪽이 필터링하지 않게 한다.
         /// </remarks>
         private sealed class Bin
         {
@@ -231,15 +204,14 @@ namespace UnityPlayMcp.Affordances.Live
             }
         }
 
+        /// <summary>이번 pulse 의 값, 직전 pulse 의 값, 그 차이.</summary>
         private sealed class Ledger
         {
             internal Restless Restless;
 
-            /// <summary>화면 좌표에 대한 같은 데드밴드. 그 경계가 픽셀이다.</summary>
+            /// <summary>화면 좌표용 <see cref="Restless"/>. 경계는 픽셀이다.</summary>
             /// <remarks>
-            /// 월드 쪽과 갈라 둔다. 둘은 같은 측정이 아니기 때문이다. 월드 단위에서 안전할 만큼 작은 경계는 — 여기의 무엇도 그 축척을
-            /// 알 수 없는 게임에서 천분의 일 — 천 픽셀 너비 화면을 가로질러서는 필터가 전혀 아니고, 사각형은 감시 대상 몇 개가 아니라
-            /// 모든 객체에 붙는다. 하나를 공유하면 둘 중 어느 쪽에 대해 틀릴지를 골라야 한다.
+            /// 월드 경계 0.001 은 픽셀에서는 아무것도 거르지 못하고, 사각형은 모든 객체에 붙으므로 따로 둔다.
             /// </remarks>
             internal Restless Pixels;
 
@@ -248,11 +220,10 @@ namespace UnityPlayMcp.Affordances.Live
             internal List<string> Moved;
 
             /// <summary>
-            /// 값 하나를 제 이름 아래에 기록하고 그것이 새것인지 적어 둔다.
+            /// 값을 key 아래에 기록하고, 직전과 다르면 <c>Moved</c> 에 넣는다.
             /// </summary>
             /// <remarks>
-            /// 값이 무엇이라 불리는지가 아니라 어디에 사는지로 키를 잡으므로, 두 객체 위의 같은 필드는 두 항목이다. 각자 독립적으로
-            /// 움직이는 다섯 적에게 나타나는 멤버는 각각 움직였음을 볼 수 있는 다섯 가지이고, 그 사실이 쓸모 있는 형태는 그것뿐이다.
+            /// key 는 멤버 이름이 아니라 값이 있는 위치(객체 경로)를 포함하므로 두 객체의 같은 필드는 따로 판정된다.
             /// </remarks>
             internal bool Say(string key, string value)
             {
@@ -268,46 +239,31 @@ namespace UnityPlayMcp.Affordances.Live
             }
 
             /// <summary>
-            /// 이 pulse 가 움직인 것만이 아니라 전부를 나르는지.
+            /// 이 pulse 가 움직인 값만이 아니라 전부를 싣는지(<c>whole</c>).
             /// </summary>
             /// <remarks>
-            /// 차이만 나르는 pulse 가 요점 전부다 — watch list 는 이제 근거가 청한 전부가 아니라 읽을 수 있는 전부를 쥐고 있고, 그중
-            /// 아무것도 움직이지 않았다고 말하려고 게임의 상태 전체를 초당 열 번 보내는 것이 그렇게 넓힌 값이 될 뻔했다.
-            ///
-            /// 하지만 차이만 본 독자는 값이 무엇인지 한 번도 들은 적이 없고, pulse 하나를 놓친 독자는 무언가 각각을 움직이기 전까지 그
-            /// 값들에 대해 틀린 채로 있다. 그래서 독자가 반드시 가지고 있으리라 셈할 수 있는 지점에서 전체 상태가 나간다: 첫 pulse 와,
-            /// 화면이 바뀔 때마다. 씬 전환이 자연스러운 지점이다 — 화면 위의 모든 것이 어차피 갈아치워지므로 거기서 전량 pulse 는 거의
-            /// 값이 들지 않고, 명세가 대고 쓰이는 경계이기도 하다.
+            /// 읽을 수 있는 멤버 전부를 매 pulse 보내면 트래픽이 커서 평소에는 차이만 싣는다. 차이만으로는 처음 값이나 놓친 값을
+            /// 알 수 없으므로 첫 pulse, 씬 전환, 복구 요청 때 전부 싣는다.
             /// </remarks>
             internal bool Everything;
 
-            /// <summary>값을 말하고, 그것이 이번 pulse 에 들어가는지 답한다.</summary>
+            /// <summary>값을 기록하고, 이번 pulse 에 실을지 돌려준다.</summary>
             internal bool Keep(string key, string value)
             {
                 return Say(key, value) | Everything;
             }
         }
 
-        /// <summary>사라진 객체들. 직전 pulse 에 있었고 이번 걷기가 만나지 못한 것.</summary>
+        /// <summary>직전 pulse 에 있었고 이번 walk 에서 만나지 못한 객체의 경로.</summary>
         /// <remarks>
-        /// 통이 둘뿐이었다 — <c>active</c> 와 <c>deactive</c>. 파괴된 객체는 어느 쪽에도 안 실린다: 걷기가 살아 있는 계층만 걷고,
-        /// 그래서 그것은 언급이 없어질 뿐이다. 읽는 쪽은 그 없음을 "이번에 소식이 없다" 로 읽고 마지막으로 본 좌표와 누를 수 있다는
-        /// 말을 계속 들고 있는다. 샘플 게임이 카드를 파괴하는데, 조합이 끝난 카드를 에이전트가 계속 집어 넣으려 했다.
+        /// 파괴된 객체는 <c>active</c>/<c>deactive</c> 어디에도 실리지 않아, 알려 주지 않으면 읽는 쪽이 마지막 값을 계속 쥔다.
         ///
-        /// 객체마다 <c>|active</c> 를 하나씩 장부에 말해 두므로 — 멤버도 offer 도 없는 객체까지 — 그 키가 사라졌다는 것이 곧 이번
-        /// 걷기가 그것을 만나지 못했다는 뜻이다. 멤버 키로 세면 값을 안 든 객체는 영영 못 지운다.
+        /// 객체마다 <c>|active</c> key 를 기록하므로 멤버가 없는 객체도 이 key 가 사라진 것으로 찾는다.
         ///
-        /// **걷지 못한 것과 없는 것을 가를 수 있는 것은 걷는 쪽뿐이다.** 읽는 쪽은 델타만 보는데 거기서 그 둘이 똑같은 없음으로
-        /// 보인다 — 장부는 읽은 전부를 쥐고 델타는 그중 움직인 것만 나르기 때문이다. 그것이 이 문장을 pulse 가 말해야 하는 이유다.
+        /// 잘린 pulse 에서는 null 을 돌려준다. 한도 때문에 walk 하지 못한 객체를 사라졌다고 하면 읽는 쪽이 살아 있는 객체를
+        /// 지운다. whole pulse 에서도 읽는 쪽이 전부 교체하므로 필요 없다.
         ///
-        /// 그래서 pulse 가 잘렸으면 아무 말도 하지 않는다. 한도에 걸려 안 걸은 객체를 사라졌다고 하면 읽는 쪽이 살아 있는 것을
-        /// 지운다. 침묵의 값은 잔상이 한 pulse 더 남는 것이고 그것은 다음 전량 pulse 가 걷어가지만, 잘못 지운 카드는 아무도 되돌려
-        /// 주지 않는다.
-        ///
-        /// 전량 pulse 에도 필요 없다. 읽는 쪽이 그 pulse 에서 쥔 것을 통째로 갈아치운다.
-        ///
-        /// statics 는 이 병이 없다. 그 목록은 걷기가 아니라 watch list 에서 오므로 pulse 마다 같은 키를 말하고, 소유자가 죽으면
-        /// 키가 사라지는 것이 아니라 값이 <c>null</c> 이 된다.
+        /// statics 는 watch list 에서 오므로 key 가 사라지지 않고, 소유자가 없으면 값이 <c>null</c> 이 된다.
         /// </remarks>
         internal static List<string> Gone(
             Dictionary<string, string> since, Dictionary<string, string> now, bool everything, int truncated)
@@ -376,27 +332,14 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 테스트가 작용할 수 있는 모든 객체를, 그것이 앉은 경로 아래에.
+        /// 쓸 객체를 경로 아래에 쓴다.
         /// </summary>
         /// <remarks>
-        /// 리포트가 가진 것과 같은 객체들이고 같은 방식으로 정한다. 그것은 편의가 아니다: 명세는 이 게임에 대한 리포트 자신의
-        /// 순회에서 쓰였으므로, 순회가 적어 둔 객체는 어떤 줄이 이름 댈 수 있는 객체다 — 그리고 그 순회보다 좁은 pulse 는 패키지가
-        /// 내내 가지고 있던 줄의 전제를 없는 것으로 보고한다.
+        /// 리포트와 같은 규칙(<see cref="Worth"/>)으로 객체를 고른다. 더 좁으면 리포트가 이름 댄 객체가 pulse 에 없다.
+        /// watch list 는 무엇을 읽을지만 정하고 무엇을 방문할지는 정하지 않는다.
         ///
-        /// 실제로 좁았다. 이것은 예전에 근거가 이름 댄 멤버를 나르는 객체만 방문했고, 그래서 <c>Canvas/ExitButton</c> 과 버튼
-        /// 셋이 모든 pulse 에서 빠졌다. 정작 리포트는 그것들을 경로와 켜짐 상태와 함께 나열하고 있었다. 오직 그 이유로 여섯 줄이
-        /// 답할 수 없는 것이었다.
-        ///
-        /// 그래서 watch list 는 무엇을 *읽을지* 를 정하지 무엇을 *방문할지* 를 결코 정하지 않는다. 그것의 일 전부는 순회가 볼 수
-        /// 없는 값이고 — private 필드, 아무 객체에도 매달리지 않은 static — 그것으로 순회를 정하는 일은 한 가지에 두 가지 일을
-        /// 맡긴 것이었다.
-        ///
-        /// 로드된 모든 씬과 영속 씬. 인터페이스를 매니저 씬 위에 얹는 게임은 둘 다 플레이하고 있는 것이고, 게임이 씬 로드를 건너
-        /// 쥐고 있는 것은 Unity 가 로드된 씬으로 아예 세지 않는 자리에 정리돼 있다.
-        ///
-        /// 로드되지 않은 씬은 읽지 않는다: 읽을 것이 없고 테스터도 거기 없다. 로드된 씬 안의 비활성 객체는 읽는다. 계속 버튼이
-        /// 켜져 있는지가 한 줄이 확인하는 것의 전부이기 때문이다 — 그리고 없는 버튼과 꺼진 버튼이 똑같아 보이므로, 그 화면의
-        /// 녹화가 답할 수 없는 유일한 것이 그것이다.
+        /// 로드된 모든 씬과 DontDestroyOnLoad 씬을 walk 한다. 로드된 씬의 비활성 객체도 읽는다. 없는 버튼과 꺼진 버튼은
+        /// 화면에서 구분되지 않는다.
         /// </remarks>
         private static int Objects(
             Scene persistent, string top, Dictionary<Type, List<Watched>> byOwner, Ledger ledger,
@@ -417,12 +360,7 @@ namespace UnityPlayMcp.Affordances.Live
                 dropped += In(scene, top, byOwner, seen, ledger, showing, hidden);
             }
 
-            // 게임이 씬 로드를 건너 쥐고 있던 것. Unity 는 그것을 로드된 씬으로 세지 않으므로 그것들만 걷는 순회는 이것을 놓치고 —
-            // 게임이 화면보다 오래 사는 것들을 두는 자리가 여기다. 샘플 게임은 스테이지 번호를 거기 두는데, 명세 스물여섯 줄이 그것을
-            // 검사한다.
-            //
-            // 다른 화면의 데이터가 아니다. 이 객체들은 이 플레이 세션 안에 지금 살아 있고, 두 번 말해야 하는 유일한 이유는 Unity 가
-            // 그것들을 따로 정리해 두기 때문이다.
+            // DontDestroyOnLoad 씬은 sceneCount 에 포함되지 않아 따로 walk 한다. 씬을 넘어 유지되는 게임 상태가 여기 있다.
             if (persistent.IsValid() && persistent.isLoaded)
             {
                 dropped += In(persistent, top, byOwner, seen, ledger, showing, hidden);
@@ -443,8 +381,7 @@ namespace UnityPlayMcp.Affordances.Live
             var dropped = 0;
             var roots = scene.GetRootGameObjects();
 
-            // 한 요소가 가려졌는지는 그 뒤에 그려지는 것들의 사각형에 달려 있으므로, 한 번 걷는 동안에는 나올 수 없는 값이다.
-            // 그래서 걷기와 쓰기를 나눈다. 씬은 여전히 한 번만 걷는다 — 걷기가 비싼 절반이라는 것이 이 파일의 전제다.
+            // 가려짐은 뒤에 그려지는 요소를 알아야 판정되므로 walk 와 쓰기를 나눈다. walk 는 여전히 한 번이다.
             var walked = new List<Transform>();
             var from = new List<int>();
 
@@ -452,7 +389,7 @@ namespace UnityPlayMcp.Affordances.Live
             {
                 if (roots[index] == null || roots[index].hideFlags != HideFlags.None)
                 {
-                    // pulse 자신의 carrier 도 다른 것과 마찬가지로 씬 안에 산다. 그것을 보고하는 것은 게임이 아니라 계기를 보고하는 일이다.
+                    // pulse 자신의 carrier 같은 숨겨진 객체는 게임이 아니므로 뺀다.
                     continue;
                 }
 
@@ -470,10 +407,8 @@ namespace UnityPlayMcp.Affordances.Live
                         continue;
                     }
 
-                    // 화면 요소는 제 예산으로 센다. `seen` 은 타입을 키로 세는데 GameObject 는 언제나 한 타입이라 상한은 pulse 하나에
-                    // 객체 256 개이고, `seen` 은 모든 씬이 나눠 쓴다. 화면 요소가 그 예산을 함께 쓰면 canvas 하나가 그것을 다 먹고
-                    // 앞의 세 길로 들어온 객체 — pulse 가 존재하는 이유인 그 객체들 — 가 밀려난다. 키를 갈라 두면 상한 검사는 한
-                    // 줄도 안 바뀌면서 예산만 둘이 된다.
+                    // 화면 요소는 별도 예산으로 센다. `seen` 의 상한은 모든 씬을 합쳐 pulse 당 256 개라, 같이 세면 canvas 하나가
+                    // 예산을 다 써서 evidence 객체가 밀려난다.
                     var kind = admitted == Worth.Admitted.Drawn
                         ? typeof(Drawn)
                         : transform.gameObject.GetType();
@@ -503,21 +438,19 @@ namespace UnityPlayMcp.Affordances.Live
                     continue;
                 }
 
-                // 어느 통에 들어가는가가 곧 그 진술이므로, 객체가 같은 말을 하는 플래그를 따로 나르지 않는다. 차이를 쥔 독자는 그 객체가
-                // 어디로 도착했는지로 꺼져 있음을 알고, 이번 pulse 에 아무 말도 하지 않는 객체는 마지막으로 놓인 자리에 그대로 있다 —
-                // 그것이 옳다. 그것이 바뀌는 일 자체가 차이이고 그러면 그 객체를 여기로 데려왔을 것이기 때문이다.
+                // 활성 여부는 들어가는 목록이 나타내므로 플래그를 따로 싣지 않는다. 활성 여부가 바뀌면 그 자체가 차이라 객체가
+                // 이번 pulse 에 실린다.
                 (walked[at].gameObject.activeInHierarchy ? showing : hidden).Add(said);
             }
 
             return dropped;
         }
 
-        /// <summary>객체 하나를 쓴다: 어디 있는지, 보이고 있는지, 무엇을 쥐고 있는지.</summary>
+        /// <summary>객체 하나의 위치, 보임 여부, 멤버 값을 쓴다.</summary>
         /// <remarks>
-        /// 컴포넌트마다가 아니라 객체마다 기록 하나이고, 그것이 리포트가 이미 쓰는 모양이다. 줄이 이름 대는 것과 테스터가 작용하는
-        /// 것이 객체다. 그 컴포넌트 둘이 각각 감시 대상 필드를 쥐고 있다는 것은 그 안의 배치다.
+        /// 리포트와 같이 컴포넌트가 아니라 객체마다 기록 하나를 쓴다.
         /// </remarks>
-        /// <returns>이 객체에 대해 무엇이든 pulse 에 들어갈 것이 있으면 참.</returns>
+        /// <returns>이 객체에 대해 pulse 에 실을 것이 있으면 true.</returns>
         private static bool Object(
             StringBuilder into,
             Transform transform,
@@ -530,28 +463,18 @@ namespace UnityPlayMcp.Affordances.Live
         {
             var selector = ScenePath.SelectorOf(transform, rootIndex);
 
-            // 경로가 아니라 selector 로 키를 잡는다. 만들어진 적 다섯은 경로 하나를 공유하므로 —
-            // `TurnBattleScene/RangedCat(Clone)` 이 다섯 번 — 경로로 키를 잡은 장부는 그것들이 서로를 덮어쓰게 하고, 한 번도 움직이지
-            // 않은 객체에 대해 pulse 마다 변화를 보고한다. 실측: 그것 하나가 한 실행에서 게이트를 연 것의 대부분이었다.
+            // 같은 이름의 복제 객체는 경로를 공유하므로 selector 로 key 를 잡는다. 경로로 잡으면 서로 덮어써 매 pulse 가
+            // 변화로 판정된다.
             var identity = scene.name + "/" + selector;
 
-            // 객체를 아예 쓸지가 그 멤버들을 읽고 나서야 알려지므로 옆에 만들어 둔다. 어떤 값도 움직이지 않은 객체는 pulse 가 그것에
-            // 대해 할 말이 없는 객체이고, 그렇다고 말하기 위해 그것이 쥔 전부를 치르는 것은 틀린 값이다.
+            // 멤버를 읽은 뒤에야 객체를 쓸지 알 수 있으므로 별도 버퍼에 쓴다. 바뀐 값이 없는 객체는 싣지 않는다.
             var text = new StringBuilder(256);
 
-            // 어디 있는지는 언제나 쓴다. selector 의 경로를 한 번도 듣지 못한 독자는 그것에 대한 델타로 아무것도 할 수 없고, 이것들은
-            // 멤버들 옆에서 아무 값도 들지 않는다.
-            //
-            // id 가 여기 있는 것은 독자가 자기가 읽은 것에 대해 행동할 수 있게 하기 위해서다. 모든 액션이 대상을 instance id 로
-            // 지목하는데 지금까지 그 숫자는 씬 보고에만 실려 왔다 — 그래서 pulse 를 쥔 독자는 무엇이 바뀌었는지 알면서 그것을 건드릴
-            // 방법이 없었다. 바뀔 때만이 아니라 매 기록에 쓰는 것은 경로와 같은 이유다: 그것은 결코 바뀌지 않고, id 를 한 번도 받은
-            // 적 없는 객체에 대한 델타는 아무도 행동할 수 없는 차이다.
-            //
-            // instance id 는 프로세스를 넘어 살아남지 못하고, selector 도 여기 있는 이유가 그것이다. 새로 생긴 약점은 아니지만 —
-            // 씬 보고도 같은 숫자로 주소지정한다 — 결국 selector 가 액션이 지목할 것이 되어야 하는 이유다.
+            // id, path, selector 는 매 기록에 쓴다. 차이만 받는 쪽이 이것 없이는 대상을 특정하거나 액션을 보낼 수 없다.
+            // instance id 는 프로세스를 넘어 유지되지 않으므로 selector 도 싣는다.
             text.Append('{');
 
-            // 최상위가 이미 씬을 말한다. 다른 씬의 객체만 제 이름을 댄다 — persistent 씬이 그렇다.
+            // 문서 최상위의 씬과 다른 씬(DontDestroyOnLoad 등)의 객체만 씬 이름을 싣는다.
             if (scene.name != top)
             {
                 Json.Property(text, "scene", scene.name);
@@ -564,20 +487,14 @@ namespace UnityPlayMcp.Affordances.Live
             text.Append(',');
             Json.Property(text, "selector", selector);
 
-            // 객체에 써넣지 않고 장부에 말해 둔다. 어느 목록에 들어가는지가 이미 그것을 말하고, 두 번 말하는 것은 한 사실이 어긋날
-            // 자리를 둘 두는 일이다. 장부는 여전히 그것이 필요하다. 꺼지는 일이 차이가 되어 그 객체를 독자에게 데려오도록.
+            // 활성 여부는 문서가 아니라 ledger 에만 기록한다. 문서에서는 목록이 나타내고, ledger 는 바뀔 때 객체를 싣기 위해 필요하다.
             var live = transform.gameObject.activeInHierarchy;
 
             var flipped = ledger.Keep(identity + Active, live ? "true" : "false");
             var moved = flipped;
 
-            // 꺼져 있는 동안은 값을 싣지 않는다. 독자가 그것을 그리지 않기 때문이다 — 화면에 없고
-            // 누를 수도 없어 조준 후보가 아니다. 풀에서 대기하는 적 열여덟이 전량 pulse 의 41% 를
-            // 차지하고 있었고, 그 32 KB 는 실려 가서 버려졌다.
-            //
-            // **버리는 것이 아니라 미룬다.** 켜지는 순간 그 객체의 값을 전부 싣는다. 그러지 않으면
-            // 적이 웨이브에 나올 때 독자가 그 HP 를 영영 모른다 — 값이 안 변했으면 델타에 안 실리고,
-            // held 에 들어간 적도 없기 때문이다. 실제로 값만 빼 봤다가 렌더 대조에서 그것이 걸렸다.
+            // 꺼진 객체는 화면에 없고 조작할 수 없으므로 멤버 값을 싣지 않는다(풀에서 대기하는 객체가 문서를 키운다).
+            // 대신 켜지는 pulse 에서 값을 전부 싣는다. 그러지 않으면 꺼진 동안 안 바뀐 값은 읽는 쪽에 영영 전달되지 않는다.
             var silent = !live && !flipped;
             var everything = live && flipped;
 
@@ -589,18 +506,13 @@ namespace UnityPlayMcp.Affordances.Live
 
             moved |= Offered(text, transform, ledger, identity);
 
-            // 컴포넌트별로 묶어 낸다. `on` 을 멤버마다 되풀이하지 않는다.
+            // 컴포넌트별로 묶어 `on` 을 멤버마다 되풀이하지 않는다.
             text.Append(",\"by\":[");
 
             var written = 0;
 
-            // 이 객체에서 각 타입이 몇 개나 지나갔는지. GameObject 가 한 behaviour 를 둘 나르는 것을 막는 것은 없고, 샘플 게임이
-            // 그렇게 한다 — `CombineZone/Zone1` 에 `DropZone` 이 둘 있다. 이것이 없으면 그 둘이 장부에서 항목 하나를 나눠 갖는다:
-            // 둘째가 첫째를 덮어쓰므로 첫째의 값은 다음 pulse 가 대고 비교할 것이 되지 못하고, 보고되지 않은 채 움직이거나 움직이지
-            // 않았는데 움직였다고 보고된다.
-            //
-            // 한 단계 위에서 selector 가 이미 고친 것과 같은 결함이다. 거기서는 만들어진 적 다섯이 경로 하나를 나눠 갖고 pulse 마다
-            // 그것들이 전부 바뀌었다고 했다. 객체는 셀 수 있게 만들어졌는데 그 위의 컴포넌트는 아니었다.
+            // 이 객체에서 타입별로 지나간 컴포넌트 수. 한 객체에 같은 behaviour 가 둘 있으면 ledger key 가 겹쳐 서로 덮어쓰므로
+            // 순번으로 구분한다.
             var counted = new Dictionary<Type, int>();
 
             foreach (var component in transform.GetComponents<Component>())
@@ -615,14 +527,12 @@ namespace UnityPlayMcp.Affordances.Live
                 counted.TryGetValue(type, out var ordinal);
                 counted[type] = ordinal + 1;
 
-                // 둘째 이후만 표시하므로, 한 타입을 하나만 나르는 객체는 — 거의 전부가 그렇다 — 전과 정확히 같은 방식으로 키를 잡고
-                // 읽힌다.
+                // 둘째 이후만 표시하므로 타입당 하나인 대부분의 객체는 key 가 바뀌지 않는다.
                 var among = ordinal == 0 ? string.Empty : ordinal.ToString(Invariant) + "#";
 
                 byOwner.TryGetValue(type, out var named);
 
-                // 근거가 청한 것과, 같은 컴포넌트에서 읽을 수 있는 그 밖의 것. 아무도 청하지 않은 멤버도, 분석이 놓친 줄을 누군가 쓰는
-                // 순간 누군가 청할 멤버다.
+                // evidence 가 청한 멤버와 이 컴포넌트에서 읽을 수 있는 나머지 멤버.
                 var members = Readable.On(type, named);
 
                 if (members == null)
@@ -630,8 +540,7 @@ namespace UnityPlayMcp.Affordances.Live
                     continue;
                 }
 
-                // 이 컴포넌트가 내놓은 것들. `on` 을 멤버마다 되풀이하지 않고 한 번만 쓰기 위해 모은다 —
-                // 한 문서에서 `on` 316개 중 295개가 같은 값이었다.
+                // `on` 을 한 번만 쓰도록 이 컴포넌트의 멤버를 모은다.
                 var mine = new StringBuilder(128);
                 var count = 0;
 
@@ -642,12 +551,9 @@ namespace UnityPlayMcp.Affordances.Live
                     said.Append('{');
                     Json.Property(said, "member", Named(member));
 
-                    // `type` 은 싣지 않는다. 어셈블리 정규화된 이름이 멤버 하나에 200~350 B 인데
-                    // 아무 독자도 읽지 않는다 — 에이전트의 `PulseMember` 에는 필드조차 없고, SDK 의
-                    // 뷰어도 orchestration 도 만지지 않는다. 값의 모양으로 해석하지 이름으로 하지 않는다.
+                    // `type` 은 싣지 않는다. 멤버마다 200~350 B 인데 MCP server 의 `PulseMember` 가 읽지 않는다.
 
-                    // 장부에 두는 것뿐 아니라 문서에도 말한다. 같은 타입과 같은 멤버의 이름을 댄 두 항목을 받은 독자는 각각이 그 객체의 어느
-                    // 컴포넌트에서 왔는지 가릴 방법이 없다.
+                    // 같은 타입의 둘째 이후 컴포넌트를 읽는 쪽도 구분할 수 있게 문서에도 순번을 싣는다.
                     if (ordinal > 0)
                     {
                         said.Append(",\"among\":").Append(ordinal.ToString(Invariant));
@@ -660,8 +566,7 @@ namespace UnityPlayMcp.Affordances.Live
 
                     said.Append(',');
 
-                    // 장부는 언제나 말한다. 안 보내는 것과 안 아는 것은 다르다 — 여기서 빼먹으면
-                    // 다음 pulse 가 그 값을 처음 보는 것으로 알고 전부 변화라고 보고한다.
+                    // 싣지 않는 값도 ledger 에는 기록한다. 빠지면 다음 pulse 가 그 값을 새 값으로 보고 변화로 판정한다.
                     var wrote = Value(
                         said, member, component, ledger, identity + "|" + among + member.Key,
                         everything);
@@ -708,34 +613,27 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 값, 또는 값이 없는 이유.
+        /// 값, 또는 값을 읽지 못한 이유를 쓴다.
         /// </summary>
         /// <remarks>
-        /// 읽을 때 던지는 필드는 0 이라는 값이 아니다. 파괴된 객체의 프로퍼티형 필드에 리플렉션을 걸면 실제로 던지고, 그 예외를
-        /// 숫자로 보고하면 명세에 거짓 전제를 넣게 되는데 — 이 패키지 전체가 피하려고 짜인 유일한 실패가 그것이다.
+        /// 읽다 예외가 나면 0 같은 값이 아니라 읽지 못했다고 쓴다. 잘못된 값은 조건 판정을 틀리게 한다.
         ///
-        /// 참조는 그것이 무엇인지가 아니라 거기 있는지로 쓴다. <c>SaveLoadController</c> 가 쥔 것은 게임 자신의 데이터다. 어떤
-        /// 조건이 그것을 <c>null</c> 과 비교한다는 것은 있음/없음으로 온전히 답해지고, 그 이상 가면 상태 채널이 세이브 파일의
-        /// 덤프가 된다.
+        /// 참조는 내용이 아니라 있음/없음만 쓴다. 조건은 대개 <c>null</c> 비교이고, 내용을 따라가면 게임 데이터 전체가 덤프된다.
         /// </remarks>
-        /// <returns>값이 이번 pulse 에 들어갈 때 참 — 움직였거나, 전부가 나가는 중이거나.</returns>
+        /// <returns>값이 바뀌었거나 whole pulse 라서 이번 pulse 에 실리면 true.</returns>
         private static bool Value(
             StringBuilder text, Watched member, Component on, Ledger ledger, string key,
             bool always = false)
         {
-            // 장부가 실제로 나간 것을 정확히 쥘 수 있도록 먼저 옆에 써 둔다. 값이 아니라 조각을 비교한다는 것은 그 둘이 결코 어긋날 수
-            // 없다는 뜻이다 — 데드밴드가 붙잡아 둔 좌표는 두 번째 규칙이 그래야 한다고 말해서가 아니라 그것이 *같은 텍스트이기
-            // 때문에* 바뀌지 않은 것으로 읽힌다.
+            // 값이 아니라 쓸 JSON 조각을 ledger 로 비교하므로 보낸 내용과 변화 판정이 어긋나지 않는다.
             var said = new StringBuilder(64);
 
             Read(said, member, on, ledger, key);
 
-            // 쓰이든 쓰이지 않든 장부에는 말한다. pulse 가 나르는 것과 pulse 가 아는 것은 다른 것이다: 가만히 있어서 빠진 값도 여전히
-            // 기록돼야 하고, 그러지 않으면 다음 pulse 가 그것이 없다고 보고 그것을 변화라고 부른다.
+            // 싣지 않는 값도 ledger 에 기록해야 다음 pulse 가 변화로 오판하지 않는다.
             var kept = ledger.Keep(key, said.ToString());
 
-            // `always` 는 이 객체가 방금 켜졌다는 뜻이다. 꺼져 있는 동안 값을 안 보냈으므로 독자는
-            // 아무것도 모르고, 장부는 "안 바뀌었다" 고 말한다 — 그 둘이 겹치면 값이 영영 안 간다.
+            // `always` 는 객체가 방금 켜졌다는 뜻이다. 꺼진 동안 보내지 않은 값은 ledger 상 안 바뀌었어도 보낸다.
             if (!kept && !always)
             {
                 return false;
@@ -746,15 +644,11 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// pulse 가 멤버를 부르는 이름: 그것을 통해 찾아낸 필드가 아니라 청해진 그것.
+        /// pulse 에 쓸 멤버 이름. 필드 이름 뒤에 <see cref="Watched.Via"/> 경로를 붙인다.
         /// </summary>
         /// <remarks>
-        /// 근거는 <c>IsStreaming</c> 을 청하고 찾아볼 자리는 <c>chatWindowController</c> 다. pulse 를 필드의 이름으로 부르면 독자는
-        /// <c>chatWindowController = true</c> 를 쥐게 되는데, 그것은 아무도 그것에 대고 줄을 쓴 적 없는 문장이다 — 게다가 크기를
-        /// 보려고 읽은 목록과 그 자체로 읽은 목록이 둘 다 목록의 이름으로 불리면서 그 아래 값이 다르게 된다.
-        ///
-        /// 그래서 이름은 걸어간 경로다. 필드는 그 앞에 남는다. 두 객체가 같은 프로퍼티를 내놓을 수 있고 줄은 자기가 뜻하는 쪽의
-        /// 이름을 대기 때문이다.
+        /// <c>chatWindowController</c> 에서 <c>IsStreaming</c> 을 읽었다면 필드 이름만으로는 다른 값과 구분되지 않는다.
+        /// 필드 이름을 앞에 남기는 것은 두 필드가 같은 프로퍼티를 가질 수 있어서다.
         /// </remarks>
         private static string Named(Watched member)
         {
@@ -764,15 +658,8 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 필드의 값에서 출발해 근거가 실제로 이름 댄 것까지 걷는다.
+        /// 필드 값에서 분석이 기록한 경로를 따라간다. 각 단계는 필드이거나 인자 없는 프로퍼티다.
         /// </summary>
-        /// <remarks>
-        /// 이름마다 한 걸음이고 각각은 필드이거나 인자 없는 프로퍼티다. 분석이 적어 둔 그대로다. 여기서 고르는 것은 없다: 경로는
-        /// 코드가 읽힐 때 결정됐고, 그것을 따라가는 일은 산수다.
-        ///
-        /// 거기 없는 걸음은 없는 값이 아니라 이름으로 보고한다. 난독화는 멤버의 이름을 바꾸고, null 로 답하는 pulse 는 게임의 입에
-        /// 말을 넣는 일이 된다 — 읽을 수 없는 필드가 0 대신 <c>unread</c> 라고 말하는 것과 같은 이유다.
-        /// </remarks>
         private static object Along(object from, string path)
         {
             const BindingFlags Flags =
@@ -815,19 +702,13 @@ namespace UnityPlayMcp.Affordances.Live
 
             try
             {
-                // `Field` 가 null 이면 컴포넌트 자신에서 `Member` 를 읽으라는 뜻이다. `Drawn` 이 그런 멤버를 만든다 —
-                // `Text.text` 뒤의 필드는 `m_Text` 이고 그것은 Unity 버전마다 달라질 수 있는 이름이라 프로퍼티로 읽는다.
-                //
-                // 이 길은 `Along` 이 pulse 마다 `GetProperty` 를 다시 푼다. 필드 쪽은 `Readable` 이 한 번 잡아 둔
-                // `FieldInfo` 를 쓰므로 그만큼이 값이다 — 그려지는 요소마다 초당 열 번 조회 하나. 아래의 `Via` 경로가 이미
-                // 정확히 같은 값을 치르고 있어 새로운 종류는 아니다. `PropertyInfo` 를 멤버에 캐시하는 것은 그것이 실제로
-                // 문제인지 잰 뒤에 할 일이다.
+                // `Field` 가 null 이면 컴포넌트에서 `Member` 프로퍼티를 읽는다(`Drawn` 멤버). 이 경우 `Along` 이 pulse 마다
+                // `GetProperty` 를 다시 조회한다. `PropertyInfo` 캐시는 비용을 잰 뒤에 판단한다.
                 held = member.Field == null
                     ? Along(on, member.Member)
                     : member.Field.GetValue(on);
 
-                // 근거는 그 필드를 청한 것이 아니라 거기서 닿는 무언가를 청했다 — 목록의 개수이거나, 필드만 걷는 메서드였다면 돌려줬을
-                // 것. 메서드를 부르는 대신 여기서 경로를 따라가는데, 그것이 게임을 감시하는 것과 게임을 하는 것의 차이 전부다.
+                // evidence 가 필드에서 닿는 값을 청했으면 경로를 따라간다. 게임 상태를 바꾸지 않도록 메서드는 호출하지 않는다.
                 if (member.Via != null && held != null)
                 {
                     held = Along(held, member.Via);
@@ -878,7 +759,7 @@ namespace UnityPlayMcp.Affordances.Live
 
             if (held is UnityEngine.Object reference)
             {
-                // Unity 는 동등성을 오버로드해 파괴된 객체가 없는 객체와 같지 않게 하고, null 과 비교하는 조건은 그 오버로드된 답을 뜻한다.
+                // Unity 의 == 오버로드로 파괴된 객체도 null 로 본다. 게임 코드의 null 비교와 같은 답이다.
                 if (reference == null)
                 {
                     text.Append("\"value\":null");
@@ -891,41 +772,24 @@ namespace UnityPlayMcp.Affordances.Live
 
             if (held is System.Collections.ICollection collection)
             {
-                // 개수이고 그 밖에는 없다. 컬렉션에 손을 뻗는 샘플 게임의 모든 조건이 그 안에 몇 개가 있는지를 묻고, 내용물은 게임 자신의
-                // 데이터다.
+                // 컬렉션은 개수만 싣는다. 조건은 대개 개수를 묻고, 내용물은 게임 데이터 덤프가 된다.
                 text.Append("\"count\":").Append(collection.Count.ToString(Invariant));
                 return;
             }
 
-            // 그것이 있다는 것이 아니라 그것이 무엇인지. 평범한 객체를 쥔 필드는 예전에 "있음" 으로 읽혔는데, 그것은 참조가 null 이
-            // 아니라는 말밖에 하지 않는다 — 그리고 결코 null 이 아닌 참조는 모든 pulse 에서 같은 말을 하므로, 채널은 그 필드를 나르면서
-            // 아무에게도 아무 말도 하지 않았다.
-            //
-            // 게임이 그런 필드에 무언가를 두는 목적이 그 구체 타입이다. 튜토리얼의 현재 단계, 상태 기계의 현재 상태, 전략, 핸들러:
-            // 거기 서 있는 클래스가 *곧* 상태다. 샘플 게임은 튜토리얼 위치를 그런 필드 하나에 두는데 — 인터페이스 하나 뒤에 클래스
-            // 열다섯 — 그중 무엇이 거기 있는지를 묻는 것이 근거가 부를 수 없었던 <c>IsMeetCondition()</c> 보다 많이 답한다. 이름은
-            // 술어 하나가 마침 참이었는지가 아니라 어느 단계인지를 말하기 때문이다.
-            //
-            // 실패할 수 없고 틀릴 수 없는 리플렉션 호출 하나가 든다. 선언된 타입은 이미 멤버에 있고, 이것은 거기에 들어 있던 것이다.
+            // 일반 객체는 구체 타입 이름을 싣는다. 상태 기계의 현재 상태나 튜토리얼 단계처럼 어떤 클래스가 들어 있는지가 곧
+            // 상태인 경우가 많다. "있음" 만 쓰면 null 이 아닌 참조는 늘 같은 값이라 아무것도 알려 주지 않는다.
             text.Append("\"value\":{");
             Json.Property(text, "is", held.GetType().FullName);
             text.Append('}');
         }
 
         /// <summary>
-        /// 참조가 무엇을 가리키는가: 어느 객체이고, 어디 있는지.
+        /// Unity 객체 참조가 가리키는 대상을 쓴다: 경로, 활성 여부, 월드 위치.
         /// </summary>
         /// <remarks>
-        /// 이것은 예전에 <c>"present"</c> 라고 말했는데, 그것은 채널이 존재하는 이유를 버리는 일이었다. 근거는 맵 커서가
-        /// <c>MapMove.battle2.transform.position</c> 으로 옮겨 간다고 말하고 <c>character</c> 와 <c>battle2</c> 둘 다 필드다 —
-        /// 그러니 실제로 묻고 있는 것은 이름 붙은 두 객체가 어디 있는지, 그리고 그중 하나가 다른 하나에 도착했는지다.
-        ///
-        /// 화면 녹화가 줄 수 없는 절반이 이것이다. 영상은 스프라이트가 어딘가에서 멈추는 것을 보여 준다. 그 스프라이트가
-        /// <c>wordHead</c> 라 불리는 것도, 그 자리가 <c>battle2</c> 라 불리는 것도 모르므로, 방금 본 것이 명세가 이름 댄 그것임을
-        /// 가릴 수 없다. 경로가 그 이름이고, 위치가 두 진술을 겹쳐 놓게 해 주는 것이다.
-        ///
-        /// 경로와 위치 둘 다이지 하나가 아니다. 경로만으로는 그것이 움직였다고 말할 수 없고 위치만으로는 무엇이 움직였는지 말할 수
-        /// 없다.
+        /// <c>MapMove.battle2.transform.position</c> 같은 조건은 이름 붙은 객체가 다른 객체 위치에 도착했는지를 묻는다.
+        /// 경로만으로는 움직였는지, 위치만으로는 무엇이 움직였는지 알 수 없어 둘 다 싣는다.
         /// </remarks>
         private static void Held(
             StringBuilder text, UnityEngine.Object reference, Restless restless, string key)
@@ -947,8 +811,7 @@ namespace UnityPlayMcp.Affordances.Live
 
             if (transform == null)
             {
-                // 애셋이다 — 스프라이트, 클립, ScriptableObject. 화면 어딘가가 아니라 프로젝트 어딘가에 있으므로 그 이름이 할 수 있는
-                // 말의 전부다.
+                // 스프라이트, 클립, ScriptableObject 같은 에셋은 씬 위치가 없어 이름만 싣는다.
                 text.Append("\"value\":{");
                 Json.Property(text, "name", reference.name);
                 text.Append('}');
@@ -970,24 +833,13 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 게임이 이 객체를 무엇으로 분류해 두었는가.
+        /// 객체의 tag 를 쓴다.
         /// </summary>
         /// <remarks>
-        /// <c>CompareTag</c> 로 갈라지는 규칙이 Unity 에서 가장 흔한 관용구 중 하나이고, 그 갈래가 QA 가 확인해야 하는
-        /// 규칙인 경우도 흔하다. 샘플 게임의 조합 칸이 그렇다 — <c>card.CompareTag("Spell")</c> 이 어느 카드가 어느 칸에
-        /// 들어가는지를 정하는데, pulse 에 그것을 가릴 값이 없어 에이전트가 카드를 반대로 넣었다. 사람이 채팅으로 알려줘야
-        /// 알았다.
+        /// <c>CompareTag</c> 로 갈리는 게임 규칙이 흔하다. tag 는 위치나 <c>active</c> 처럼 Unity 가 모든 객체에 주는 값이라
+        /// 조건과 무관하게 싣는다.
         ///
-        /// 조건이 물었기 때문에 싣는 것이 <b>아니다.</b> 그랬다면 감시 목록이 이미 가져왔을 것이다 — 실제로 그 조건은
-        /// <c>Cards.Word::tag</c> 를 목록에 올려놓았고, 다만 <c>Word</c> 가 컴포넌트가 아니라 읽어낼 인스턴스가 없었다.
-        /// 태그는 <see cref="Where"/> 가 싣는 자리나 <c>active</c> 와 같은 층이다: <b>Unity 가 모든 객체에 주는 것</b>이라
-        /// 싣는다. 게임별 지식이 아니므로 어느 프로젝트에서나 같은 뜻이다.
-        ///
-        /// <c>Untagged</c> 는 안 싣는다. 태그가 없는 객체가 대다수이고, 기본값을 전부에 붙이면 문서만 커지고 말하는 것이
-        /// 없다.
-        ///
-        /// 장부를 탄다. 이 게임은 런타임에 태그를 정하므로(<c>gameObject.tag = this.word.tag</c>) 그 순간이 변화로
-        /// 보고되어야 한다.
+        /// 대다수인 <c>Untagged</c> 는 문서 크기만 늘리므로 싣지 않는다. 런타임에 tag 가 바뀔 수 있어 ledger 로 변화를 판정한다.
         /// </remarks>
         private static bool Tagged(
             StringBuilder text, Transform transform, Ledger ledger, string identity)
@@ -1015,28 +867,14 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 게임 자신의 월드에서 객체가 어디 있는가.
+        /// 객체의 월드 위치와 화면 사각형을 쓴다.
         /// </summary>
         /// <remarks>
-        /// 명세는 한 객체가 다른 객체가 있는 자리에 도착했는지를 묻고 그 둘 다 watch list 가 이미 읽는 이름 붙은 필드라는 이유로
-        /// 지금까지 미뤄 왔다 — 그러니 아무의 근거도 언급하지 않는 객체의 위치는 어떤 줄에도 답하지 않았다.
+        /// 화면 캡처와 pulse 를 맞춰 보려면 공통 좌표가 필요하다. 포인터 액션은 픽셀을 받는데 월드→화면 변환은 엔진 밖에서
+        /// 할 수 없으므로 <c>rect</c> 도 싣는다. 사각형은 무엇이든 움직이면 바뀌므로 매 pulse 변화를 판정한다.
         ///
-        /// 그럼에도 pulse 를 화면 그림 위에 겹쳐 놓아야 하는 쪽은 그것을 청한다. 게임을 볼 수 있는 독자는 공통된 자리 없이는 자기가
-        /// 보는 것과 자기가 들은 것을 이을 수 없고, 이것이 그중 가장 싼 것이다.
-        ///
-        /// 다른 좌표와 마찬가지로 데드밴드를 거쳐 정착시킨다. 그대로 읽은 transform 은 있던 자리에 정확히 앉아 있는 객체에 대해서도
-        /// 마지막 소수 자리가 달라지고, 감시 대상 몇 개가 아니라 모든 객체에 위치가 붙으면 그것이 곧 pulse 전체가 매 박자마다
-        /// 게이트를 여는 일이 된다.
-        ///
-        /// 화면 위의 자리도 함께 싣는데, 이것은 예전에 그것을 거절했다. 반대 논거는 그려진 사각형을 원하는 독자가 이미 화면 캡처를
-        /// 보고 있다는 것이었다 — 독자에 대해서는 참이고, 그것을 겨눠야 하는 쪽에 대해서는 거짓이다. 월드 단위는 게임 자신의
-        /// 것이고 포인터는 픽셀로 가므로, 이것이 없으면 모든 액션이 엔진 밖의 누구도 할 수 없는 변환을 지고 간다.
-        ///
-        /// 한 번 말하고 둘 수 없다. 사각형은 무엇이든 움직이는 순간 낡고, 전량 상태는 화면이 바뀔 때만 나간다 — 그래서 두 화면
-        /// 사이에서 독자는 화면이 나타났을 때 사물들이 있던 자리를 겨누게 된다.
-        ///
-        /// 제 데드밴드를 거치고, 그것은 픽셀로 잰다. 월드 쪽은 어느 패키지도 축척을 알 수 없는 단위에 대한 추측이지만, 픽셀은
-        /// 어디서나 픽셀이고 그 하나 아래로는 아무것도 다르게 그려지지 않는다.
+        /// 모든 객체에 붙으므로 마지막 소수 자리 흔들림이 매 pulse 를 변화로 만들지 않도록 <see cref="Restless"/> 를 거친다.
+        /// 월드는 <c>Restless</c>, 화면은 픽셀 경계의 <c>Pixels</c> 를 쓴다.
         /// </remarks>
         private static bool Where(
             StringBuilder text, Transform transform, Ledger ledger, string identity)
@@ -1076,20 +914,13 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 이 요소가 지금 눈에 닿는가: 화면 안인지, 그리고 뒤에 그려진 것에 가려졌는지.
+        /// 보이는 요소의 <c>onScreen</c>, <c>covered</c> 를 쓴다.
         /// </summary>
         /// <remarks>
-        /// <c>rect</c> 가 어디인지를 말하고 이것이 그 사각형으로 답할 수 없는 둘을 말한다. 화면 밖인지는 <c>Screen</c> 의
-        /// 크기를 아는 SDK 만 답할 수 있고, 가려짐은 그 순간의 모든 요소를 함께 봐야 나온다 — 읽는 쪽은 델타만 쥐고 있어
-        /// 어느 쪽도 스스로 셈할 수 없다.
-        ///
-        /// 보이는 요소만 이것을 나른다. 목록에 없는 객체는 아무 필드도 안 쓴다: 없음은 "안 가려졌다" 가 아니라 "보이는
-        /// 요소가 아니다" 다.
-        ///
-        /// 가려짐은 추측이고 틀릴 수 있다. 무엇을 모르는지는 <see cref="Sight"/> 에 적혀 있고, 읽는 쪽에는 tool 설명이
-        /// 그렇게 말하며 확실한 답으로 화면 캡처를 가리킨다.
+        /// 화면 크기와 그 순간의 모든 요소가 필요해 차이만 받는 읽는 쪽은 계산할 수 없으므로 SDK 가 판정한다.
+        /// 가려짐은 추정이다(<see cref="Sight"/>).
         /// </remarks>
-        /// <returns>이 객체가 보이는 요소였고 그 답이 pulse 에 들어갈 때 참.</returns>
+        /// <returns>보이는 요소이고 값이 이번 pulse 에 실리면 true.</returns>
         private static bool Sighted(
             StringBuilder text, Transform transform, Ledger ledger, string identity,
             Dictionary<int, string> sight)
@@ -1109,41 +940,28 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 테스터가 지금 이 객체에 무엇을 할 수 있는가.
+        /// 객체별 offer JSON 조각 캐시의 최대 크기.
         /// </summary>
         /// <remarks>
-        /// 게임이 무엇을 쥐고 있는지만 말하는 pulse 는 에이전트에게 화면의 상태 전체를 주면서 그 위의 무엇이 무엇에 답할지는 모르게
-        /// 둔다. 명세는 계속 버튼을 누르라고 말하고, pulse 는 그 버튼이 있고 켜져 있고 무언가에 연결돼 있음이 확인되는 자리여야 한다.
+        /// persistent call 을 읽는 리플렉션을 매 pulse 반복하지 않도록 객체마다 한 번 계산해 기억한다. 인스펙터 wiring 과 컴포넌트
+        /// 타입은 실행 중 바뀌지 않는다고 가정한다. 같은 타입의 버튼도 연결이 다를 수 있어 인스턴스 단위로 기억한다.
         ///
-        /// 세 종류와 세 출처. 클릭은 인스펙터 배선이고, 한 타입의 두 객체가 서로 다르게 연결될 수 있으므로 지금 여기서 읽는다. 키와
-        /// 포인터 핸들러는 컴파일된 코드 안에 있어 구울 때 타입에 대고 모아 두었고, 그 타입이 씬 안의 무엇에 붙어 있는 자리에서만
-        /// 내놓는다 — 그것이 "<c>RightArrow</c> 가 무언가를 한다" 를 "<c>RightArrow</c> 가 *여기서* 무언가를 한다" 로 만든다.
-        ///
-        /// pulse 마다 한 번이 아니라 객체에 쓴다. 테스터에게 필요한 것은 게임이 어디선가 읽는 키의 집합이 아니라, 그들이 누를 수 있는
-        /// 것과 그것이 무엇에 붙어 있는지다.
-        ///
-        /// 버튼이 나타나거나 사라지거나 다시 연결되는 일이 소식이 되도록 장부에 말해 둔다. 모든 값이 가만히 있었지만 유일한 버튼이
-        /// 방금 연결이 끊긴 화면은 바뀐 것이고, 그것을 건너뛴 pulse 는 아무 일도 없었다고 보고하는 셈이다.
-        /// </remarks>
-        /// <summary>
-        /// 각 객체가 무엇을 내놓는 것으로 발견됐는지. 리플렉션 값을 한 번만 치르도록.
-        /// </summary>
-        /// <remarks>
-        /// persistent call 을 읽는 일은 리플렉션이고, 스캔은 그것이 객체마다 한 번 답하고 기억할 종류라고 이미 정했다. 여기 들어가는
-        /// 것 중 게임이 도는 동안 바뀌는 것은 없다: 인스펙터 배선은 직렬화된 데이터이고, 어떤 타입이 객체 위에 있는지는 그것이
-        /// 만들어질 때 정해진다. 객체가 <em>보이고 있는지</em> 는 바뀌는데, 그것은 따로 말한다.
-        ///
-        /// 타입이 아니라 인스턴스에 대고 쥐고 있는다. 한 타입의 버튼 둘이 서로 다른 메서드에 연결돼 있는 일이 흔하고 그중 하나는
-        /// 아무것에도 연결돼 있지 않을 수 있기 때문이다.
-        ///
-        /// 경계에서 통째로 버린다. <see cref="Worth"/> 가 하는 것과 같은 거래다: 한 시간 동안 만들어내는 게임은 그러지 않으면 여태
-        /// 만든 객체마다 줄 하나씩을 늘린다.
+        /// 한도에 닿으면 전부 비운다(<see cref="Worth"/> 와 같다).
         /// </remarks>
         private const int MaxRemembered = 4096;
 
         private static readonly Dictionary<int, string> Offers = new Dictionary<int, string>();
 
-        /// <returns>이 객체가 내놓는 것이 pulse 에 들어갈 때 참.</returns>
+        /// <summary>
+        /// 이 객체에 줄 수 있는 입력(클릭, 키, 포인터)을 쓴다.
+        /// </summary>
+        /// <remarks>
+        /// 클릭은 인스턴스마다 다른 인스펙터 wiring 이라 여기서 읽는다. 키와 포인터 handler 는 분석이 타입별로 구워 두었고,
+        /// 그 타입이 붙은 객체에서만 싣는다.
+        ///
+        /// 버튼이 생기거나 사라지거나 연결이 바뀌는 것도 변화이므로 ledger 로 판정한다.
+        /// </remarks>
+        /// <returns>이 객체의 입력이 이번 pulse 에 실리면 true.</returns>
         private static bool Offered(
             StringBuilder text, Transform transform, Ledger ledger, string identity)
         {
@@ -1188,7 +1006,7 @@ namespace UnityPlayMcp.Affordances.Live
                 }
                 catch (Exception)
                 {
-                    // 컴포넌트 하나의 배선이지, 나머지가 내놓는 것을 잃을 이유가 아니다.
+                    // 이 컴포넌트만 건너뛰고 나머지 입력은 읽는다.
                 }
 
                 var offer = WatchList.OfferedBy(component.GetType().FullName);
@@ -1204,8 +1022,7 @@ namespace UnityPlayMcp.Affordances.Live
 
             if (calls.Count == 0 && keys.Count == 0 && pointers.Count == 0)
             {
-                // 아무것도 내놓지 않는 것으로 기억한다. 배선도 없고 감시 대상 타입도 없는 객체가 흔한 경우이고, pulse 마다 그것을 다시 묻는
-                // 것이 이 캐시가 피하려고 존재하는 값이다.
+                // 입력이 없는 객체가 대부분이므로 빈 값도 기억해 다시 계산하지 않는다.
                 Offers[id] = string.Empty;
                 return false;
             }
@@ -1284,14 +1101,10 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 키와 그것이 하는 일을 함께 쓴다.
+        /// 키와 그 효과를 <c>clicks</c> 와 같은 객체 배열 모양으로 쓴다.
         /// </summary>
         /// <remarks>
-        /// <c>clicks</c> 와 같은 모양(객체 배열)으로 맞춘다. 이름만 나르던 시절에는 씬의 키 다섯이
-        /// 대등하게 실려 읽는 쪽이 어느 것을 눌러야 할지 알 수 없었다.
-        ///
-        /// 하는 일을 모르는 키는 <c>does</c> 를 아예 쓰지 않는다. 빈 배열은 "아무 일도 안 한다" 로 읽히는데
-        /// 실제로는 "분석이 못 읽었다" 이고, 그 둘은 다음 수가 다르다.
+        /// 효과를 모르는 키는 <c>does</c> 를 생략한다. 빈 배열은 "아무 일도 안 한다" 로 읽히지만 실제로는 "분석이 못 읽었다" 이다.
         /// </remarks>
         private static int Keys(StringBuilder text, List<WatchList.KeyOffer> offered, int written)
         {
@@ -1305,7 +1118,7 @@ namespace UnityPlayMcp.Affordances.Live
                 text.Append(',');
             }
 
-            // 순서를 고정한다. 흔들리면 pulse 마다 그 자체가 차이로 보고된다.
+            // 순서가 바뀌면 그 자체가 변화로 판정되므로 정렬한다.
             offered.Sort((left, right) => string.CompareOrdinal(left.Key, right.Key));
             text.Append("\"keys\":[");
 
@@ -1369,21 +1182,15 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 참조가 라벨이나 그림일 때, 그것이 무엇을 보여 주고 있는가.
+        /// 참조가 라벨이나 그림이면 표시 내용을 쓴다.
         /// </summary>
         /// <remarks>
-        /// <c>TMP_Text</c> 타입의 필드는 이미 감시되고 있었고 이미 답해지고 있었다 — 그 라벨이 매달린 객체의 경로와 월드 위치로,
-        /// 그것이 <see cref="Held"/> 가 주려고 만들어진 답이다. <c>MapMove.battle2</c> 에는 옳은 답이고 여기서는 틀린 답이다:
-        /// 캡션이 어디 있는지 묻는 사람은 없고, 그것이 무엇이라 말하는지를 묻는다.
+        /// 라벨은 위치가 아니라 내용을 묻는 대상이다. 경로와 활성 여부는 남기고, 월드 위치는 조건에 쓰이지 않고 흔들림만 더하므로
+        /// 뺀다.
         ///
-        /// 그래서 대신 참조에 그 내용을 청한다. 경로와 보이고 있는지는 남는다. 옳은 말을 쥐고 있으면서 꺼져 있는 캡션은 화면 위에
-        /// 있는 캡션과 같은 주장이 아니기 때문이다. 월드 위치는 뺀다: 캡션의 좌표는 어떤 명세 줄에도 답하지 않고 마지막 소수 자리에서
-        /// 떠도는 값 하나를 더할 뿐인데, 그것은 아무것도 아닌 것을 위해 열어 둔 게이트다.
-        ///
-        /// 거기 적힌 이유로, 컴파일 대상으로 삼는 대신 <see cref="SceneEvidenceScan"/> 을 거쳐 타입 이름으로 맞춘다 — uGUI 와
-        /// TextMeshPro 는 프로젝트에 없을 수 있는 패키지이고 이 어셈블리는 둘 다 참조하지 않는다.
+        /// uGUI 와 TextMeshPro 는 없을 수 있는 패키지라 <see cref="SceneEvidenceScan"/> 을 거쳐 타입 이름으로 맞춘다.
         /// </remarks>
-        /// <returns>참조가 라벨이나 그림이었고 그것이 쓰였을 때 참.</returns>
+        /// <returns>참조가 라벨이나 그림이어서 썼으면 true.</returns>
         private static bool Showing(StringBuilder text, Component component)
         {
             if (component == null)
@@ -1416,22 +1223,15 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// animator 가 무엇을 하고 있는가: 그것이 있는 상태를, 가능할 때 이름과 함께.
+        /// animator 의 현재 상태를 쓴다. 해시는 항상, 이름은 알 수 있을 때만 싣는다.
         /// </summary>
         /// <remarks>
-        /// 명세는 트리거가 발동하고 화면이 무언가 움직이는 것을 보인다고 말한다. 어느 쪽도 홀로 그 움직이는 것이 그 줄이 말하는
-        /// 상태로 들어갔다고 말하지 않는다. 그 둘을 잇는 것이 이것이다.
+        /// Unity 는 상태를 해시로만 돌려주므로 분석이 모은 animator 이름 후보를 <c>IsName</c> 으로 확인한다. 코드가 언급하지 않은
+        /// 상태도 바뀐 것은 보이도록 해시는 항상 싣는다.
         ///
-        /// Unity 는 현재 상태에 대해 해시를 돌려주고 그것을 말로 바꿔 주는 것은 없으므로, 이름은 반대쪽 끝에서 도달한다 — 분석이
-        /// 코드가 animator 에 건네는 모든 이름을 적어 두었고, <c>IsName</c> 이 그 상태가 그중 하나로 불리는지에 답한다. 해시는
-        /// 어느 쪽이든 나간다. 코드가 이름을 한 번도 언급하지 않은 상태도 여전히 바뀐 상태이고 독자는 그 숫자가 움직이는 것을 볼 수
-        /// 있기 때문이다.
+        /// 트리거 이름과 상태 이름은 같다는 보장이 없어, Unity 가 확인한 이름만 쓴다.
         ///
-        /// 트리거의 이름과 상태의 이름은 같은 것이 아니다. 게임들은 흔히 하나를 다른 것으로 쓰지만 무엇도 그것을 강제하지 않는다.
-        /// 이름은 Unity 가 확인해 준 자리에서만 쓰므로, 그것들을 다르게 이름 짓는 게임은 틀린 말 대신 해시를 받는다.
-        ///
-        /// 매개변수는 읽지 않는다. 트리거는 설정된 뒤 한 프레임 안에 상태 기계가 소비하므로 초당 열 번의 pulse 는 거의 언제나 그것을
-        /// 거짓으로 보고하게 된다 — 대개 틀린 값은 없는 값보다 나쁘다.
+        /// 매개변수 값은 읽지 않는다. 트리거는 한 frame 안에 소비되어 pulse 로 읽으면 거의 항상 false 로 보인다.
         /// </remarks>
         private static void Playing(StringBuilder text, Animator animator)
         {
@@ -1446,8 +1246,7 @@ namespace UnityPlayMcp.Affordances.Live
             }
             catch (Exception exception)
             {
-                // 컨트롤러가 없거나 레이어 0 이 없는 animator. 그것은 존재하면서 아무것도 하지 않고 있고, 그것은 그것이 없는 것과 다른
-                // 사실이다.
+                // 컨트롤러나 레이어 0 이 없는 animator 다. animator 가 없는 경우와 구분되도록 unread 로 쓴다.
                 text.Append(',');
                 Json.Property(text, "unread", exception.GetType().Name);
                 text.Append('}');
@@ -1473,22 +1272,15 @@ namespace UnityPlayMcp.Affordances.Live
         }
 
         /// <summary>
-        /// 이 animator 가 답할 이름들.
+        /// animator 의 매개변수 이름을 모두 쓴다.
         /// </summary>
         /// <remarks>
-        /// <c>Attack</c> 트리거가 발동한다고 말하는 줄은 코드의 <c>SetTrigger("Attack")</c> 에서 쓰였는데, 지금까지 그 객체 위의
-        /// animator 에 그 이름의 매개변수가 있는지는 아무것도 확인하지 않았다. 오타, 다른 것으로 바꾼 컨트롤러, 이름을 바꾼
-        /// 트리거 — 코드는 여전히 컴파일되고 애니메이션은 조용히 영영 재생되지 않는데, 그것이 정확히 명세가 잡으려고 존재하는
-        /// 종류의 결함이다.
+        /// 코드의 <c>SetTrigger("Attack")</c> 에 맞는 매개변수가 animator 에 실제로 있는지 확인할 수 있게 한다. 오타나 바뀐
+        /// 컨트롤러는 컴파일 오류 없이 애니메이션만 재생되지 않는다.
         ///
-        /// 코드가 언급한 것만이 아니라 전부를 본다. 일치하는 것만 보고하면 빈 답이 서로 다른 두 가지를 뜻하게 되고 — 이 animator 에
-        /// 그 이름들이 하나도 없거나, 컨트롤러가 아예 묶이지 않아 매개변수가 하나도 없거나 — 그 둘을 가리지 못하는 pulse 는 이
-        /// 패키지가 다른 모든 자리에서 거절하는 모양이다.
+        /// 일치하는 것만 쓰면 "이름이 없음" 과 "매개변수가 하나도 없음" 이 구분되지 않아 전부 쓴다.
         ///
-        /// 값이 아니라 이름이다. 트리거는 설정된 뒤 한 프레임 안에 상태 기계가 소비하므로 초당 열 번 읽으면 거의 언제나 거짓으로
-        /// 보고되고, 대개 틀린 값은 없는 값보다 나쁘다. 움직임이 구동하는 float 매개변수도 어떤 조건도 언급하지 않는 이유로 매
-        /// 박자마다 변화 게이트를 열 것이다. 매개변수가 무엇을 쥐고 있는지는 화면이 보여 줄 몫이고, 그것이 무엇이라 불리는지는
-        /// 여기서만 알 수 있다.
+        /// 값은 쓰지 않는다. 트리거는 거의 항상 false 로 읽히고, 움직임이 구동하는 float 는 매 pulse 변화로 판정된다.
         /// </remarks>
         private static void Parameters(StringBuilder text, Animator animator)
         {
@@ -1540,11 +1332,11 @@ namespace UnityPlayMcp.Affordances.Live
             System.Globalization.CultureInfo.InvariantCulture;
 
         /// <summary>
-        /// float 이 소수점 아래 몇 자리를 지키는지.
+        /// float 을 반올림할 소수 자리 수.
         /// </summary>
         /// <remarks>
-        /// 변화 게이트가 이 문서를 해싱하므로, 날것의 float 은 숨 쉬는 idle 애니메이션을 상태 변화로 만들고 페이로드가 매 틱 나간다.
-        /// 반올림이 게이트를 쓸 수 있게 만드는 것이고, 네 자리는 근거가 하는 어떤 비교보다도 곱다.
+        /// 반올림하지 않으면 idle 애니메이션 같은 미세한 흔들림이 매 pulse 를 변화로 만든다. 네 자리는 <c>evidence</c> 의
+        /// 비교보다 충분히 곱다.
         /// </remarks>
         private const int Decimals = 4;
 
@@ -1552,7 +1344,7 @@ namespace UnityPlayMcp.Affordances.Live
         {
             if (double.IsNaN(value) || double.IsInfinity(value))
             {
-                // 숫자가 아니고 JSON 으로 쓸 수도 없다. 0 으로 바꾸지 않고 그렇다고 말한다.
+                // NaN 과 무한대는 JSON 숫자로 쓸 수 없다. 0 으로 바꾸지 않고 unread 로 쓴다.
                 Json.Property(text, "unread", "not-a-number");
                 return;
             }

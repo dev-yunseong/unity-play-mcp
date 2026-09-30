@@ -40,11 +40,10 @@ export interface ToolResponse {
 
 let nextActionId = 1;
 
-/// 값 제약을 부르는 곳마다 새 schema 로 만든다.
+/// 호출할 때마다 새 schema 를 만든다.
 ///
-/// 하나를 만들어 여러 곳에서 나눠 쓰면 zod-to-json-schema 가 두 번째부터 `$ref` 로 적는다. 그
-/// `$ref` 는 처음 나온 자리를 가리키는 JSON pointer 라서, 다른 union 가지를 가리키게 되고 가지
-/// 순서가 바뀌면 조용히 다른 곳을 가리킨다. 매번 새로 만들면 schema 가 스스로 완결된다.
+/// 하나를 공유하면 zod-to-json-schema 가 두 번째부터 처음 위치를 가리키는 `$ref` 로 적는다.
+/// 그 `$ref` 는 다른 union 멤버를 가리키고, 순서가 바뀌면 조용히 다른 곳을 가리킨다.
 const targetIdSchema = () => z.number().int();
 
 /// 대상을 가리키는 field 셋. 대상을 받는 모든 tool 이 이 모양을 쓴다(`target-ref.ts`).
@@ -67,12 +66,10 @@ const inputNameSchema = () => z.string().min(1);
 const maxEdgeSchema = () => z.number().int().positive();
 const paddingSchema = () => z.number().int().nonnegative();
 
-/// `wait_for_condition` 의 `memberEquals[].equals` 가 받는 값. 재귀적인 `JsonValue` 전체를
-/// 받지 않는 이유는 두 가지다: 이 tool 이 실제로 겨누는 값들(`IsStreaming` 같은 boolean,
-/// 개수 같은 number, 상태 이름 같은 string)이 전부 primitive 이고, `z.lazy` 로 자기 자신을
-/// 참조하는 recursive schema 는 `zod-to-json-schema` 가 무한 재귀로 죽인다(`schema.test.ts` 가
-/// 이것을 잡는다). `MemberCondition.equals` 의 선언 type 은 여전히 `JsonValue` 다 — primitive
-/// 는 그 부분집합이라 그대로 대입된다.
+/// `wait_for_condition` 의 `memberEquals[].equals` 가 받는 값.
+///
+/// 대상 값이 모두 primitive 이고, `z.lazy` 로 만든 recursive schema 는 `zod-to-json-schema` 가
+/// 무한 재귀에 빠지므로(`schema.test.ts` 가 검사한다) `JsonValue` 전체를 받지 않는다.
 const equalsValueSchema = () => z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 const memberEqualsSchema = () => z.object({
@@ -83,17 +80,15 @@ const memberEqualsSchema = () => z.object({
   equals: equalsValueSchema(),
 }).strict();
 
-/// `timeoutMilliseconds` 를 안 주면 이 값을 쓴다. `wait_for_condition` 이 "절대 무한히 기다리지
-/// 않는다" 를 지키려면 상한도 있어야 하므로 zod schema 에 `WAIT_MAX_TIMEOUT_MS` 를 건다.
+/// `timeoutMilliseconds` 의 기본값. 무한 대기를 막기 위해 schema 에 `WAIT_MAX_TIMEOUT_MS` 상한도 둔다.
 const WAIT_DEFAULT_TIMEOUT_MS = 5_000;
 const WAIT_MAX_TIMEOUT_MS = 30_000;
 
 /// `perform_actions` 가 받는 action 하나.
 ///
-/// Unity 로 나가는 wire 형식은 `{ method, params: [...] }` 의 위치 인자지만, 입력은 이름 있는
-/// field 로 받는다. `z.tuple` 은 draft-07 의 배열형 `items` 로 변환되고, draft 2020-12 는 위치별
-/// schema 를 `prefixItems` 로만 받으므로 Anthropic API 가 tool 목록 전체를 400 으로 거절한다.
-/// `params` 배열은 `toWireAction` 이 만든다.
+/// Unity 는 `{ method, params: [...] }` 위치 인자를 받지만 입력은 이름 있는 field 로 받는다.
+/// `z.tuple` 은 draft-07 배열형 `items` 로 변환되고, draft 2020-12 는 `prefixItems` 만 받으므로
+/// Anthropic API 가 tool 목록 전체를 400 으로 거절한다. `params` 는 `toWireAction` 이 만든다.
 export const performActionSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("click"), ...targetRefShape() }).strict(),
   z.object({ method: z.literal("hover"), ...targetRefShape() }).strict(),
@@ -227,8 +222,7 @@ interface CaptureScreenArguments {
   padding?: number;
 }
 
-/// `capture_screen` 이 Unity 로 보내는 `params` 배열. 대상이 없으면 빈 배열, 옵션이 없으면
-/// `[targetId]`, 있으면 `[targetId, options]` 세 경우뿐이다.
+/// `capture_screen` 이 Unity 로 보내는 `params`. `[]`, `[targetId]`, `[targetId, options]` 중 하나다.
 function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
   if (capture.targetId === undefined) return [];
   const options = {
@@ -238,9 +232,9 @@ function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
   return Object.keys(options).length === 0 ? [capture.targetId] : [capture.targetId, options];
 }
 
-/// 이름 있는 field 를 Unity 가 받는 위치 인자 배열로 되돌린다.
+/// 이름 있는 field 를 Unity 가 받는 위치 인자 배열로 바꾼다.
 ///
-/// 배열의 순서와 값은 Unity 쪽 protocol 이라 바꿀 수 없다. 이 함수가 그 계약이 적힌 유일한 자리다.
+/// 배열의 순서와 값은 Unity 쪽 protocol 이므로 바꿀 수 없다.
 export function toWireAction(action: Exclude<PerformAction, { method: "click" | "hover" | "drag" | "enter_text" }>): { method: string; params: unknown[] } {
   switch (action.method) {
     case "move_mouse":
@@ -313,9 +307,8 @@ function errorMessage(error: unknown): string {
 
 /// 실패를 agent 가 읽을 문장으로 바꾼다.
 ///
-/// Unity 에 닿지 못한 것은 요청의 문제가 아니라 게임이 안 돌고 있다는 뜻이라, 무엇을 하려다 실패했는지
-/// 는 도움이 되지 않는다. 그래서 그 경우에만 접두사를 떼고 사용자가 할 일만 남긴다. 소켓 오류를
-/// 그대로 흘리면 agent 가 자기 인자를 의심하거나 재시도한다.
+/// Unity 에 연결하지 못한 경우는 요청이 아니라 게임 상태의 문제이므로 접두사를 떼고 사용자가 할
+/// 일만 남긴다. socket 오류를 그대로 보내면 agent 가 인자를 의심하거나 재시도한다.
 export function failureText(attempted: string, error: unknown): string {
   if (error instanceof UnityUnreachableError) {
     return error.message;
@@ -338,7 +331,7 @@ export interface UnityStatus {
 const STALE_RECOVERY =
   "Call start_readings and read again; if the state stays stale, call stop_readings and then start_readings.";
 
-/// 낡은 까닭 하나를 agent 가 읽을 문장으로 바꾼다. 무엇을 믿으면 안 되는지와 어떻게 되돌리는지를 함께 말한다.
+/// 낡은 이유를 agent 가 읽을 문장으로 바꾼다. 믿으면 안 되는 것과 복구 방법을 함께 적는다.
 function stalenessMessage(staleness: Staleness): string {
   switch (staleness.reason) {
     case "restarted":
@@ -358,11 +351,10 @@ function isoTime(at: number | undefined): string | undefined {
   return at === undefined ? undefined : new Date(at).toISOString();
 }
 
-/// 모든 읽기 tool 이 상태 앞에 싣는 머리.
+/// 모든 읽기 tool 이 상태 앞에 싣는 header.
 ///
-/// 낡았으면 `stale` 을 맨 앞에 둔다. 그래야 응답을 위에서부터 읽는 agent 가 id 를 쓰기 전에 본다.
-/// 낡은 상태를 아예 내주지 않는 쪽은 택하지 않았다 — 직전 장면을 확인하는 데는 여전히 쓸모 있고,
-/// 무엇이 낡았는지 말해 주면 쓸지 말지는 agent 가 정할 수 있다.
+/// 낡았으면 agent 가 id 를 쓰기 전에 보도록 `stale` 을 맨 앞에 둔다. 낡은 상태도 직전 장면 확인에는
+/// 쓸모 있으므로 숨기지 않는다.
 export function readingHeader(store: PulseStore, state: FoldedPulseState): Record<string, unknown> {
   const staleness = store.getStaleness();
   return {
@@ -390,8 +382,7 @@ function describeAge(now: number, at: number): string {
 
 /// status tool 이 돌려줄 문장.
 ///
-/// 순수 함수인 이유는 이 문장이 계약이기 때문이다. 연결됨과 안 됨, pulse 가 시작됨과 안 됨의 네 경우가
-/// 서로 다른 말을 해야 하고, 그것을 실제 소켓 없이 확인할 수 있어야 한다.
+/// 연결 여부와 pulse 시작 여부의 네 경우를 socket 없이 test 하도록 순수 함수로 둔다.
 export function describeStatus(status: UnityStatus): string {
   if (!status.connected) {
     return [
@@ -419,9 +410,8 @@ export function describeStatus(status: UnityStatus): string {
     );
   }
 
-  // 마지막으로 읽지 못한 frame 이 있으면(그리고 그 뒤로 정상 reading 이 하나도 안 왔으면 —
-  // `PulseStore` 가 성공할 때마다 이 값을 스스로 지운다) 두 분기 모두에 덧붙인다. reading 이
-  // 아예 안 왔을 때도, 잘 오다가 멈췄을 때도 사람이 무엇을 못 읽었는지 알아야 하기 때문이다.
+  // 읽지 못한 frame 은 reading 이 없을 때와 있을 때 모두 덧붙인다. `PulseStore` 가 fold 에
+  // 성공하면 이 값을 지운다.
   if (status.lastUnreadableFrame !== undefined) {
     lines.push(
       `A frame arrived but could not be read ${describeAge(status.now, status.lastUnreadableFrame.at)}: `
@@ -440,8 +430,7 @@ async function dispatchOne(
   return dispatchActions(connection, [{ method, params }]);
 }
 
-/// 이력 map 의 내부 키 — `component.on \0 member` 또는 `component.on \0 member \0 among` —
-/// 를 읽는 쪽이 보게 될 이름으로 바꾼다.
+/// 이력 map 의 내부 키(`component.on \0 member [\0 among]`)를 응답에 쓸 이름으로 바꾼다.
 function historyLabel(path: string): string {
   const [on, member, among] = path.split("\u0000");
   const named = `${on ?? ""}.${member ?? ""}`;
@@ -468,8 +457,7 @@ function historyOf(
   return collected;
 }
 
-/// tree 가 실제로 펼친 마디에 앉은 객체들. 접힌 마디 아래는 세지 않는다 — 응답에 나오지도
-/// 않는 객체의 이력을 실을 이유가 없다.
+/// tree 가 펼친 node 의 객체들. 접힌 node 아래는 응답에 나오지 않으므로 세지 않는다.
 function objectsShownIn(nodes: readonly TreeNode[]): PulseObject[] {
   const found: PulseObject[] = [];
   for (const node of nodes) {
@@ -483,7 +471,7 @@ function objectsShownIn(nodes: readonly TreeNode[]): PulseObject[] {
   return found;
 }
 
-/// 한 객체의 멤버들이 마지막으로 움직인 `reading`.
+/// 한 객체의 멤버가 마지막으로 바뀐 `reading`.
 function latestReadingOf(store: PulseStore, scene: string) {
   return (object: PulseObject): number | undefined => {
     let latest: number | undefined;
@@ -499,17 +487,17 @@ function latestReadingOf(store: PulseStore, scene: string) {
 
 /// `get_scene_state` 가 static 을 어떻게 실을지.
 export interface StaticsQuery {
-  /// 싣는지. 안 주면 범위를 좁히지 않은 조회에만 싣는다.
+  /// 안 주면 범위를 좁히지 않은 조회에만 싣는다.
   includeStatics?: boolean;
-  /// 선언 타입 이름에 이 문자열이 든 static 만 싣는다(대소문자 구분). 주면 `includeStatics` 를 안 줘도 싣는다.
+  /// 선언 타입 이름에 이 문자열이 든 static 만 싣는다(대소문자 구분). 주면 `includeStatics` 없이도
+  /// 싣는다.
   staticsDeclaring?: string;
 }
 
 /// 응답에 실을 static 과, 싣지 않았다면 그 사실.
 ///
-/// `root`/`selector` 로 좁힌 조회는 버튼·카드 상태를 읽으려는 것이고 static 은 어느 객체에도 매달리지 않는다. 그래서
-/// 기본으로 빼고, 뺐다는 것과 몇 개인지를 말한다 — 없는 것과 뺀 것이 같아 보이면 안 된다 (#72). 명시적으로 청하면
-/// 싣되, 값은 이미 `PulseStore` 가 가린 그대로다.
+/// `root`/`selector` 로 좁힌 조회에서는 객체에 속하지 않는 static 을 기본으로 빼고, 뺐다는 것과
+/// 개수를 적는다. 없는 것과 뺀 것이 같아 보이면 안 된다 (#72). 값은 `PulseStore` 가 이미 가렸다.
 function staticsSection(
   statics: readonly PulseStatic[],
   scoped: boolean,
@@ -535,10 +523,10 @@ function staticsSection(
 
 /// 좁힌 조회에서 `changed` 는 보여 준 객체의 것만 남긴다.
 ///
-/// 게임은 키를 `<scene>/<selector>|<무엇>` 으로 쓴다(`LiveState.cs` 의 `identity`). static 은 `Declaring::Member` 이고
-/// `scene` 은 장면 이름 하나라 어느 객체에도 속하지 않는다.
+/// 게임은 키를 `<scene>/<selector>|<member>` 로 쓴다(`LiveState.cs` 의 `identity`). static
+/// (`Declaring::Member`)과 `scene` 은 어느 객체에도 속하지 않는다.
 function changedFor(changed: readonly string[], shown: readonly PulseObject[], scene: string) {
-  // 첫 `|` 에서 자르지 않는다. GameObject 이름에 `|` 가 들어가면 selector 안에도 들어간다.
+  // GameObject 이름에 `|` 가 있으면 selector 에도 들어가므로 첫 `|` 에서 자르지 않는다.
   const prefixes = shown.map((object) => `${objectKey(object, scene)}|`);
   const kept = changed.filter((key) => prefixes.some((prefix) => key.startsWith(prefix)));
   return {
@@ -547,10 +535,10 @@ function changedFor(changed: readonly string[], shown: readonly PulseObject[], s
   };
 }
 
-/// 가린 값이 하나라도 실린 응답에 그 뜻을 적는다.
+/// 가린 값이 실린 응답에 그 뜻을 적는다.
 ///
-/// 구조를 훑지 않고 직렬화한 글에서 찾는다. `wait_for_condition` 은 멤버 값을 `unmet` 문장 안에 JSON 으로 싣기 때문에,
-/// 구조만 보면 그 안의 가린 값을 놓친다.
+/// 직렬화한 문자열에서 찾는다. `wait_for_condition` 은 멤버 값을 `unmet` 문장 안에 JSON 으로 실으므로
+/// 구조만 보면 놓친다.
 function withRedactionNote(response: Record<string, unknown>): Record<string, unknown> {
   const serialized = JSON.stringify(response);
   if (!serialized.includes("$redacted") && !serialized.includes(`"${REDACTED_TEXT}"`)) return response;
@@ -587,8 +575,7 @@ function stateResponse(
       return matches(String((item as Record<string, unknown>).selector ?? ""));
     });
   };
-  // 파괴된 것은 `{ object, goneAtReading }` 이라 객체 자체와 모양이 다르다. selector 는 그
-  // 안쪽 객체에 걸어야 한다.
+  // 파괴된 항목은 `{ object, goneAtReading }` 모양이므로 selector 는 안쪽 객체에 적용한다.
   const filterGone = (value: unknown): unknown[] => {
     if (!Array.isArray(value)) return [];
     if (selector === undefined) return value;
@@ -604,8 +591,7 @@ function stateResponse(
   const scene = String(record.scene ?? "");
   const scoped = selector !== undefined || root !== undefined;
 
-  // `root` 도 `depth` 도 없으면 지금까지와 똑같은 평평한 응답이다. 기존 호출이 갑자기 다른
-  // 모양을 받지 않게 한다.
+  // `root` 와 `depth` 가 없으면 기존 호출과 호환되도록 평평한 응답을 준다.
   if (root !== undefined || depth !== undefined) {
     const considered = includeInactive ? [...active, ...deactive] : active;
     const tree = foldIntoTree(
@@ -614,9 +600,8 @@ function stateResponse(
       root,
       depth ?? UNLIMITED_DEPTH,
     );
-    // `statics` 는 어느 객체에도 매달리지 않으므로 tree 로는 표현되지 않는다. 빼면 이 모드에서만
-    // 사라지고, 양이 적어 뺄 이유도 없다. `changed` 는 반대다 — 분주한 씬에서 길고, 마디마다
-    // 붙는 `lastChangedReading` 이 같은 물음에 tree 모양으로 답한다.
+    // `statics` 는 tree 로 표현되지 않지만 양이 적어 그대로 싣는다. `changed` 는 길어질 수 있고
+    // node 의 `lastChangedReading` 이 같은 정보를 주므로 뺀다.
     return text(JSON.stringify(withRedactionNote({
       ...header,
       ...(root === undefined ? {} : { root }),
@@ -660,9 +645,8 @@ const captureAreaSchema = z.object({
 
 /// Unity 가 `capture_screen` 에 돌려주는 값.
 ///
-/// 좌표 metadata(`screen` 이하)는 optional 이다. 0.2.x package 는 그것을 싣지 않고, 그 package 를 쓰는 사람도
-/// 새 server 에서 이미지는 계속 받아야 한다. 반대로 이 schema 이전의 server 는 `.strict()` 라 새 package 의
-/// 캡처를 거절한다 — package 가 자신과 맞는 server 버전을 고정해 두는 이유 중 하나다.
+/// 좌표 metadata(`screen` 이하)는 0.2.x package 가 싣지 않으므로 optional 이다. 이 schema 이전의
+/// server 는 `.strict()` 라 새 package 의 캡처를 거절한다.
 const capturePayloadSchema = z.object({
   mimeType: z.enum(["image/png", "image/jpeg"]),
   width: z.number().int().positive(),
@@ -680,8 +664,7 @@ const capturePayloadSchema = z.object({
 
 type CapturePayload = z.infer<typeof capturePayloadSchema>;
 
-/// 스크린샷과 함께 싣는 설명. 이미지 픽셀을 `move_mouse` 좌표로 되돌리는 데 필요한 것과, 그 이미지가 어느
-/// 순간의 것인지.
+/// 스크린샷과 함께 싣는 설명. 이미지 픽셀을 `move_mouse` 좌표로 바꾸는 값과 캡처 시점을 담는다.
 export interface CaptureDescription {
   image: { width: number; height: number; mimeType: string };
   clipped: boolean;
@@ -706,15 +689,14 @@ export interface CaptureDescription {
 
 /// reading 과 캡처 사이가 이만큼 벌어지면 reading 의 rect 가 이 이미지와 맞는다고 말하지 않는다.
 ///
-/// reading 은 초당 한 번 찍힌다(`Pulse.DefaultInterval`). 60fps 에서 두 박자쯤이다 — 그보다 멀면 그 사이 무엇이든
-/// 움직였을 수 있다. 같은 이름의 장면을 다시 불렀거나 Play Mode 를 다시 시작해 frame 이 되돌아간 경우도 여기서 걸린다.
+/// 60fps 에서 `pulse` 간격(`Pulse.DefaultInterval`, 1초) 두 번쯤이다. 장면을 다시 불렀거나 Play Mode 를
+/// 다시 시작해 frame 이 되돌아간 경우도 여기서 걸린다.
 const READING_FRAME_TOLERANCE = 120;
 
-/// 캡처 결과와, 지금 든 reading 을 함께 설명한다.
+/// 캡처 결과와 현재 reading 의 관계를 설명한다.
 ///
-/// reading 은 캡처와 같은 순간의 것이 아니다. 그래서 frame 의 선후와 scene 일치를 말하고, scene 이 다르면
-/// 그 reading 의 id 를 이 화면에 쓰지 말라고 한다 — reading 이 멈춘 동안 스크린샷만 새 장면을 보였던 것이
-/// #69/#71 에서 관찰된 장면이다.
+/// reading 은 캡처와 같은 순간의 것이 아니므로 frame 선후와 scene 일치를 적고, scene 이 다르면
+/// 그 reading 의 id 를 쓰지 말라고 한다 (#69, #71).
 export function describeCapture(
   capture: CapturePayload,
   state: { reading: number; frame: number; scene: string } | undefined,
@@ -787,8 +769,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     description: "Check whether the Unity game is running and reachable, and whether scene readings have started. Call this first, and whenever another tool reports that Unity is not running.",
     inputSchema: {},
   }, async () => {
-    // 닿지 못하는 것은 이 tool 의 실패가 아니라 이 tool 이 물어본 것에 대한 답이다. isError 를 붙이면
-    // agent 가 상태를 물어본 것마저 실패했다고 읽는다.
+    // 연결되지 않은 것은 이 tool 의 답이지 실패가 아니다. isError 를 붙이면 agent 가 조회 자체가
+    // 실패했다고 읽는다.
     try {
       await connection.ensureConnected();
     } catch (error) {
@@ -954,10 +936,11 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       if (capture === undefined) {
         return { ...text("Screenshot failed: Unity returned an invalid capture payload."), isError: true };
       }
-      // 첫 줄은 예전 모양 그대로 둔다. 그 뒤에 좌표 변환과 reading 관계를 JSON 으로 싣는다.
+      // 첫 줄은 기존 형식을 유지하고, 그 뒤에 좌표 변환과 reading 관계를 JSON 으로 싣는다.
       const state = store.getState();
       const description = describeCapture(capture, state);
-      // 낡은 reading 은 frame 이 가까워도 이 화면의 상태가 아니다. `readingHeader` 와 같은 `stale` 을 관계에 싣는다 (#69).
+      // 낡은 reading 은 frame 이 가까워도 이 화면의 상태가 아니므로 `readingHeader` 와 같은 `stale` 을
+      // 싣는다 (#69).
       const stale = state === undefined ? undefined : readingHeader(store, state).stale;
       if (description.reading !== undefined && stale !== undefined) {
         description.reading = { ...description.reading, stale };

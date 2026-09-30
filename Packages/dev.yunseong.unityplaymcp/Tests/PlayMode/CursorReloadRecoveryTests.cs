@@ -7,15 +7,11 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// play 중 assembly reload 를 건넌 <see cref="CursorController"/> 가 cursor overlay 를 다시 세우는지.
+    /// play 중 assembly reload 뒤 <see cref="CursorController"/> 가 cursor overlay 를 다시 세우는지 확인한다.
     /// </summary>
     /// <remarks>
-    /// edit mode 로 내려올 수 없다. 여기서 보는 것이 <c>OnEnable</c> 과 <c>Update</c> 가 서로에게 무엇을
-    /// 남기는가이고, 그 둘은 play mode 밖에서 돌지 않는다.
-    ///
-    /// 실패는 assert 로도 log 로도 온다. Unity Test Framework 는 test 가 도는 동안 올라온 예외를 그대로
-    /// 실패로 치므로, reload 뒤 <c>Update</c> 가 null 인 <c>cursorTexture</c> 로 던지면 — issue #65 가
-    /// 그것이다 — 프레임을 넘기는 것만으로 이 fixture 가 붉어진다.
+    /// <c>OnEnable</c> 과 <c>Update</c> 순서에 의존하므로 play mode 에서만 돈다. reload 뒤 <c>Update</c> 가
+    /// null <c>cursorTexture</c> 로 던지면 예외가 log 로 올라와 실패한다 (#65).
     /// </remarks>
     public sealed class CursorReloadRecoveryTests
     {
@@ -25,7 +21,7 @@ namespace UnityPlayMcp.Tests
 
         private GameObject controllerObject;
 
-        /// <summary>이 fixture 가 건드리는 유일한 전역. 사람의 값을 그대로 돌려주려고 적어 둔다.</summary>
+        /// <summary>fixture 가 바꾸는 전역 값이다. TearDown 에서 원래 값으로 되돌린다.</summary>
         private bool hadTheme;
         private int previousTheme;
 
@@ -56,8 +52,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// reload 전에 한 번 옮겨 두고 뒤에 다른 자리로 옮긴다. 살아남은 cursor 가 그대로 남아 있으면
-        /// 좌표가 reload 전 자리에 멈춰 있으므로, 다시 세웠는지를 좌표 하나로 가른다.
+        /// reload 전후로 다른 좌표로 옮긴다. 이전 cursor 가 남아 있으면 좌표가 reload 전 위치에 멈춰 있다.
         /// </remarks>
         [UnityTest]
         public IEnumerator MovesTheCursorAfterAnAssemblyReload()
@@ -68,7 +63,7 @@ namespace UnityPlayMcp.Tests
             yield return controller.MoveTo(new Vector2(40f, 60f), null);
 
             AssemblyReloadSimulation.Rehearse(controller);
-            // 걷어낸 canvas 는 Destroy 가 처리되는 프레임 끝에야 사라진다.
+            // 걷어낸 canvas 는 프레임 끝에 Destroy 된다.
             yield return null;
 
             yield return controller.MoveTo(new Vector2(120f, 240f), null);
@@ -82,8 +77,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// issue #65 가 인용한 <c>CursorController.cs:44</c> 다. reload 뒤 <c>cursorTexture</c> 가 null 인
-        /// 채로 theme 이 바뀌면 <c>PaintCursorTexture</c> 가 그 자리에서 던진다.
+        /// reload 뒤 <c>cursorTexture</c> 가 null 인 채로 theme 이 바뀌면 <c>PaintCursorTexture</c> 가 던진다 (#65).
         /// </remarks>
         [UnityTest]
         public IEnumerator RepaintsTheCursorWhenTheThemeFlipsAfterAReload()
@@ -104,9 +98,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// reload 는 GameObject 를 파괴하지 않는다. 살아남은 canvas 를 걷어내지 않고 다시 만들면 cursor 가
-        /// 두 벌이 되는데, 그것은 이 fix 가 스스로 들여올 수 있는 위험이지 지금 있는 결함이 아니다 — 이
-        /// test 는 fix 없이도 통과한다.
+        /// reload 는 GameObject 를 파괴하지 않는다. 남은 canvas 를 걷어내지 않고 다시 만들면 cursor 가 두 개가 된다.
         /// </remarks>
         [UnityTest]
         public IEnumerator KeepsOneCursorCanvasAfterAReload()
@@ -122,8 +114,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// reload 가 아니라 그냥 껐다 켜는 길. 생성을 <c>Awake</c> 에서 <c>OnEnable</c> 로 옮긴 변경이라
-        /// 이쪽이 예전처럼 도는지를 함께 지킨다 — 다시 만들면 cursor 가 깜빡이고 있던 자리를 잃는다.
+        /// reload 가 아닌 단순 disable/enable 경로는 기존 cursor 를 그대로 둬야 한다. 다시 만들면 cursor 위치를 잃는다.
         /// </remarks>
         [UnityTest]
         public IEnumerator KeepsTheCursorOnAPlainReEnable()

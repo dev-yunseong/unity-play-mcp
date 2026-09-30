@@ -30,7 +30,7 @@ namespace UnityPlayMcp.CodeGen
         };
 
         /// <summary>
-        /// 바꿀 call 하나. instruction 과 그 자리에 들어갈 proxy method 를 함께 든다.
+        /// 바꿀 call instruction 과 그 자리에 들어갈 proxy method.
         /// </summary>
         private readonly struct InputCallSite
         {
@@ -55,19 +55,16 @@ namespace UnityPlayMcp.CodeGen
         /// `UnityEngine.Input` 호출을 `UnityPlayMcp.VirtualInput` 호출로 바꾼다. 하나라도 바꿨으면 true.
         /// </summary>
         /// <remarks>
-        /// 순서가 이 method 의 전부다. `UnityPlayMcp.Runtime` 에 대한 IL assembly reference 는 weaving 의
-        /// 전제가 아니라 결과다 — IL 은 type 을 실제로 쓰는 자리에만 reference 를 남기고, 그 자리를 만드는
-        /// 일이 바로 weaving 이다. 그래서 바꿀 call 을 먼저 찾고, 바꿀 것이 있을 때만 reference 를 module 에
-        /// 붙인 뒤 import 한다. 반대로 하면 UnityPlayMcp type 을 손으로 참조하지 않는 보통의 game assembly 는
-        /// 조건이 영원히 성립하지 않아 한 건도 weaving 되지 않는다.
+        /// 바꿀 call 을 먼저 찾고, 있을 때만 `UnityPlayMcp.Runtime` reference 를 붙인 뒤 import 한다.
+        /// IL reference 는 weaving 의 결과이므로, reference 를 전제로 삼으면 UnityPlayMcp type 을 직접
+        /// 쓰지 않는 game assembly 는 한 건도 weaving 되지 않는다.
         /// </remarks>
         public bool Process()
         {
             var candidates = CollectUnityInputCalls();
             if (candidates.Count == 0)
             {
-                // 바꿀 것이 없는 module 에는 reference 를 붙이지 않는다. 붙이면 project 의 모든
-                // assembly 에 쓸모없는 `UnityPlayMcp.Runtime` reference 가 생긴다.
+                // 모든 assembly 에 쓸모없는 `UnityPlayMcp.Runtime` reference 가 생기지 않게 한다.
                 return false;
             }
 
@@ -136,13 +133,9 @@ namespace UnityPlayMcp.CodeGen
         /// runtime assembly 를 연다. IL 에 reference 가 없어도 열 수 있다.
         /// </summary>
         /// <remarks>
-        /// `CompiledAssemblyResolver` 는 `compiledAssembly.References` 의 파일 이름만 보고 version 을
-        /// 무시하므로 (`CompiledAssemblyResolver.cs:33`), 이름만 담은 임시 reference 로 resolve 가 된다.
-        /// 이 임시 reference 는 묻기 위한 것이라 module 에 넣지 않는다.
-        ///
-        /// resolve 실패를 잡지 않는 이유: `WillProcess` 가 `compiledAssembly.References` 에 runtime dll 이
-        /// 있을 때만 `Process` 를 부르고 (`InputCallILPostProcessor.cs:24`), 그 목록이 그대로 resolver 로
-        /// 들어간다. 닿을 수 없는 경로다.
+        /// <see cref="CompiledAssemblyResolver"/> 는 파일 이름만 보고 version 을 무시하므로 이름만 담은
+        /// 임시 reference 로 resolve 된다. 임시 reference 는 module 에 넣지 않는다.
+        /// `WillProcess` 가 runtime dll 이 references 에 있을 때만 통과시키므로 resolve 실패는 잡지 않는다.
         /// </remarks>
         private AssemblyDefinition ResolveRuntimeAssembly()
         {
@@ -157,14 +150,9 @@ namespace UnityPlayMcp.CodeGen
         /// `UnityPlayMcp.Runtime` 에 대한 assembly reference 를 module 에 붙인다. import 하기 전에 부른다.
         /// </summary>
         /// <remarks>
-        /// Cecil 0.11.4 의 importer 도 `ImportReference` 안에서 같은 reference 를 만들어 넣는다. 그래도
-        /// 여기서 명시적으로 붙이는 이유는 두 가지다. 첫째, "바꿀 것이 있을 때만 reference 가 생긴다" 는
-        /// 이 weaver 의 규칙이 code 에 보인다 — importer 의 내부 동작에 기대면 보이지 않는다. 둘째,
-        /// importer 가 그 동작을 바꾸면 weaving 이 조용히 깨지는데, 그것이 바로 이 결함의 모양이다.
-        ///
-        /// 중복은 생기지 않는다. importer 는 `FullName` 으로 기존 reference 를 찾아 재사용하고,
-        /// `FullName` 을 이루는 `Name`/`Version`/`Culture`/`PublicKeyToken` 을 resolve 된 정의에서 그대로
-        /// 베끼므로 importer 가 만들 값과 같다.
+        /// Cecil 0.11.4 importer 도 같은 reference 를 넣지만, 그 내부 동작이 바뀌면 weaving 이 조용히
+        /// 깨지므로 명시적으로 붙인다. importer 는 `FullName` 으로 기존 reference 를 재사용하고
+        /// 여기서 resolve 된 정의의 `Name`/`Version`/`Culture`/`PublicKeyToken` 을 그대로 쓰므로 중복되지 않는다.
         /// </remarks>
         private void AddRuntimeReference(AssemblyNameDefinition runtimeName)
         {

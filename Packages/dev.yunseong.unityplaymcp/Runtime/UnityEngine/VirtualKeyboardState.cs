@@ -14,8 +14,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Holds a key until <see cref="Release"/> asks for it back. A duration cannot express this:
-        /// the agent decides when to let go, often several actions later.
+        /// Holds a key until <see cref="Release"/>, often several actions later.
         /// </summary>
         public void Press(KeyCode key, int currentFrame)
         {
@@ -23,8 +22,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Releases on the frame after the request, matching where a press starts, so a consumer
-        /// polling in its own Update sees the release regardless of script execution order.
+        /// Releases on the next frame, like a press starts, so a consumer polling in Update sees it
+        /// regardless of script execution order.
         /// </summary>
         public void Release(KeyCode key, int currentFrame)
         {
@@ -135,9 +134,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// A release scheduled for a later frame leaves the key down until that frame arrives. An
-        /// expired duration schedules the release on the current frame, so the same test reports
-        /// that key as already up.
+        /// A key stays down until its release frame. An expired duration sets the release to the
+        /// current frame, so the key reads as up.
         /// </summary>
         private static bool IsHeldOn(KeyPressState state, int frame)
         {

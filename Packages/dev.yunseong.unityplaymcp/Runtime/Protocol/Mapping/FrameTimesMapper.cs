@@ -4,8 +4,7 @@ using UnityPlayMcp.Protocol.Dto;
 namespace UnityPlayMcp.Protocol.Mapping
 {
     /// <summary>
-    /// 프레임 분포를 전송용 DTO로 옮긴다. 초를 밀리초로 바꾸는 지점이 여기 한 곳뿐이도록
-    /// 매퍼로 분리했다.
+    /// 프레임 분포를 전송용 DTO 로 옮기며 초를 밀리초로 바꾼다.
     /// </summary>
     internal static class FrameTimesMapper
     {

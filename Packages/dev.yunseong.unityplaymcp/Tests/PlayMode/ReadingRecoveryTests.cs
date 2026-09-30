@@ -9,15 +9,13 @@ using UnityEngine.TestTools;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 낡은 상태를 의심하는 독자에게 host 가 전량 reading 을 보내는지 (#69).
+    /// 오래된 상태를 의심하는 읽는 쪽에 host 가 whole reading 을 보내는지 확인한다 (#69).
     /// </summary>
     /// <remarks>
-    /// 두 자리다. 새 client 가 붙었을 때 — 소켓은 client 가 없어도 보내기에 실패하지 않아 <c>Pulse</c> 가 전달 실패를 모르므로 —
-    /// 와, 이미 도는 채널에 <c>start_readings</c> 가 다시 왔을 때.
-    ///
-    /// 진짜 server 대신 문서를 받아 적는 transport 를 끼운다. 진짜 server 에 붙는 client 를 test 안에서 세우지 않고도 "client 가
-    /// 하나 더 열렸다" 를 말할 수 있어야 해서다. 끼우기 전에 진짜 server 를 먼저 닫는다 — 그러지 않으면 port 17311 이 다음
-    /// fixture 까지 잡혀 있다.
+    /// 두 경우다. 새 client 가 붙었을 때 (socket 은 client 가 없어도 전송 실패를 알리지 않는다) 와, 이미 도는
+    /// channel 에 <c>start_readings</c> 가 다시 왔을 때다.
+    /// 실제 server 대신 문서를 기록하는 transport 를 쓴다. 교체 전에 실제 server 를 닫아야 port 17311 이
+    /// 다음 fixture 까지 잡혀 있지 않는다.
     /// </remarks>
     public sealed class ReadingRecoveryTests
     {
@@ -110,7 +108,7 @@ namespace UnityPlayMcp.Tests
             return host.AddComponent<UnityPlayMcpHost>();
         }
 
-        /// <summary><c>Start</c> 가 연 진짜 server 를 닫고 그 자리에 받아 적는 transport 를 끼운다.</summary>
+        /// <summary><c>Start</c> 가 연 실제 server 를 닫고 기록용 transport 로 교체한다.</summary>
         private static RecordingTransport SwapInRecordingTransport(UnityPlayMcpHost manager)
         {
             var field = typeof(UnityPlayMcpHost).GetField("webSocketTransport", PrivateInstance);
@@ -125,7 +123,7 @@ namespace UnityPlayMcp.Tests
             return recording;
         }
 
-        /// <summary>첫 전량 reading 이 건네지고, 그 뒤로 박자가 한 번 더 지나갈 때까지.</summary>
+        /// <summary>첫 whole reading 이 전달되고 `pulse` 간격이 한 번 더 지날 때까지 기다린다.</summary>
         private static IEnumerator Settled(RecordingTransport transport)
         {
             yield return WaitUntil(() => transport.Pulses().Count > 0, 5f, "the first reading never left");

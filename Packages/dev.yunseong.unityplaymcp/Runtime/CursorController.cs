@@ -15,17 +15,11 @@ namespace UnityPlayMcp
         [SerializeField] private bool smoothMovement;
         [SerializeField] private float movementDurationSeconds = 0.35f;
 
-        /// <summary>이 controller 가 만든 overlay canvas. reload 를 건너 살아남는 유일한 손잡이다.</summary>
+        /// <summary>이 controller 가 만든 overlay canvas 다. assembly reload 뒤에도 남는다.</summary>
         /// <remarks>
-        /// play 중 assembly reload 는 GameObject 를 하나도 파괴하지 않으므로 canvas 는 그대로 남고, 그것을
-        /// 가리키던 field 만 사라진다. 그 상태에서 확인 없이 다시 만들면 cursor 가 두 벌이 된다 (issue #65).
-        /// 그래서 이 참조 하나만 serialize 한다.
-        ///
-        /// 이름으로 <c>transform.Find</c> 하는 길을 버린 이유는 이름이 바뀌면 Find 가 조용히 실패해 바로 그
-        /// 두 벌을 만들기 때문이다. 참조는 그 자체로 정확하다.
-        ///
-        /// inspector 에 내놓을 값은 아니다. 사람이 고르는 설정이 아니라 controller 가 제가 만든 것을 적어
-        /// 두는 자리다.
+        /// play 중 assembly reload 는 canvas 를 남기고 non-serialized field 만 지운다. 이 참조가 없으면
+        /// 다시 만들 때 cursor 가 두 개가 된다 (#65). 이름으로 <c>transform.Find</c> 하면 이름이 바뀔 때
+        /// 조용히 실패하므로 참조를 serialize 한다.
         /// </remarks>
         [SerializeField, HideInInspector] private GameObject overlayCanvas;
 
@@ -34,11 +28,10 @@ namespace UnityPlayMcp
         private Sprite cursorSprite;
         private bool darkTheme;
 
-        /// <summary>이 domain 에서 cursor 를 만들었는지.</summary>
+        /// <summary>이 domain 에서 cursor 를 만들었는지 여부다.</summary>
         /// <remarks>
-        /// serialize 하지 않는다. reload 를 건너면 false 로 돌아오고, 여기서는 그것이 원하는 바다: 같은
-        /// reload 에 함께 사라진 <see cref="cursorTransform"/> 이하를 다시 만들라고 <see cref="OnEnable"/>
-        /// 에게 말하는 것이 이 false 다. <c>UnityPlayMcpHost.ownsRuntime</c> 이 같은 자리에서 같은 일을 한다.
+        /// 일부러 serialize 하지 않는다. reload 뒤 false 가 되어 <see cref="OnEnable"/> 이 함께 사라진
+        /// <see cref="cursorTransform"/> 등을 다시 만든다. <c>UnityPlayMcpHost.ownsRuntime</c> 과 같은 방식이다.
         /// </remarks>
         private bool builtOverlay;
 
@@ -49,17 +42,13 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 첫 활성화와 assembly reload 가 함께 지나는 자리. 두 번 불러도 cursor 는 한 벌이다.
+        /// 첫 활성화와 assembly reload 모두에서 cursor 를 만든다. 여러 번 불러도 cursor 는 하나다.
         /// </summary>
         /// <remarks>
-        /// Unity 는 play 중 assembly reload 에서 <c>OnDisable</c> → serialize → domain 교체 → deserialize
-        /// → <c>OnEnable</c> 순으로 가고 <c>Awake</c> 는 다시 부르지 않는다. 만드는 일이 <c>Awake</c> 에만
-        /// 있던 동안 reload 를 건넌 controller 는 <see cref="cursorTexture"/> 가 null 인 채로
-        /// <see cref="Update"/> 만 돌아 theme 이 바뀌는 프레임에 던졌고, <see cref="MoveTo(Vector2, Action{Vector2}, bool)"/>
-        /// 는 null 확인에 걸려 조용히 빠져나가 cursor 를 그리지 않았다 (issue #65).
+        /// play 중 assembly reload 는 <c>Awake</c> 를 다시 부르지 않고 <c>OnEnable</c> 만 부르므로 여기서 만든다 (#65).
         ///
-        /// 그냥 껐다 켜는 길로도 여기 온다. 그때는 <see cref="builtOverlay"/> 가 true 라 아무것도 하지
-        /// 않는다 — 다시 만들면 cursor 가 깜빡이고 있던 자리를 잃는다.
+        /// 단순히 껐다 켤 때는 <see cref="builtOverlay"/> 가 true 라 아무것도 하지 않는다.
+        /// 다시 만들면 cursor 위치를 잃는다.
         /// </remarks>
         private void OnEnable()
         {
@@ -74,7 +63,7 @@ namespace UnityPlayMcp
             builtOverlay = true;
         }
 
-        /// <summary>reload 를 건너 살아남은 overlay 를 걷어낸다.</summary>
+        /// <summary>reload 뒤에 남은 overlay 를 제거한다.</summary>
         private void DiscardOverlay()
         {
             if (overlayCanvas == null)
@@ -82,10 +71,8 @@ namespace UnityPlayMcp
                 return;
             }
 
-            // texture 와 sprite 는 canvas 의 자식이 아니라 asset 이라, GameObject 를 지워도 함께 사라지지
-            // 않는다. 이 둘이 reload 를 살아남았다면 여기 말고 놓아줄 자리가 없어, reload 한 번마다 36×48
-            // texture 하나와 sprite 하나가 play 세션 끝까지 떠 있게 된다. 이미 사라졌으면 아래 확인에 걸려
-            // 그냥 지나간다.
+            // texture 와 sprite 는 GameObject 와 함께 파괴되지 않는 asset 이다. 여기서 해제하지 않으면
+            // reload 마다 하나씩 누수된다.
             var image = overlayCanvas.GetComponentInChildren<Image>(true);
             var sprite = image == null ? null : image.sprite;
             if (sprite != null)
@@ -98,8 +85,7 @@ namespace UnityPlayMcp
                 Destroy(sprite);
             }
 
-            // Destroy 는 프레임 끝에야 처리된다. 먼저 꺼 두지 않으면 새로 만든 cursor 와 살아남은 cursor 가
-            // 그 한 프레임 동안 함께 그려진다.
+            // Destroy 는 프레임 끝에 처리되므로 먼저 꺼서 두 cursor 가 한 프레임 동안 함께 그려지지 않게 한다.
             overlayCanvas.SetActive(false);
             Destroy(overlayCanvas);
             overlayCanvas = null;
@@ -144,14 +130,11 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Reports every intermediate position, not just the destination. A drag is made of the
-        /// positions along the way — a handler that only ever saw the endpoint would be watching
-        /// something teleport.
+        /// Reports every intermediate position, not just the destination, so drag handlers see the path.
         /// </summary>
         /// <param name="glide">
-        /// Forces the travel even when smooth movement is off. A pointer move is the one case where
-        /// the path is the point: a held button turns it into a drag, and a jump from start to end
-        /// gives the game a single drag event to work out what happened from.
+        /// Forces the travel even when smooth movement is off, so a held button produces a real drag
+        /// instead of a single jump.
         /// </param>
         public IEnumerator MoveTo(Vector2 screenPosition, Action<Vector2> moved, bool glide = false)
         {

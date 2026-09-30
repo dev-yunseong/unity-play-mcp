@@ -111,8 +111,7 @@ jobs:
         working-directory: mcp
         run: |
           set -euo pipefail
-          # npm은 lifecycle test output을 JSON 결과보다 먼저 보낸다. test reporter
-          # output 때문에 pack metadata JSON이 깨지지 않게 마지막 JSON array만 남긴다.
+          # npm 은 lifecycle test output 을 JSON 결과보다 먼저 출력하므로 마지막 JSON array 만 남긴다.
           npm pack --json | awk '/^\[$/{json=1} json' > pack.json
           tarball="$(node -e 'const pack = require("./pack.json"); process.stdout.write(pack[0].filename)')"
           integrity="$(node -e 'const pack = require("./pack.json"); process.stdout.write(pack[0].integrity)')"

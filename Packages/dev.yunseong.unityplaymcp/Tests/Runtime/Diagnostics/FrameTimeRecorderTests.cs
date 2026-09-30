@@ -8,15 +8,14 @@ namespace UnityPlayMcp.Tests.Diagnostics
     {
         private const float BudgetSeconds = 1f / 60f;
 
-        /// <summary>60fps 한 프레임. 예산과 같으므로 hitch가 아니다.</summary>
+        /// <summary>60fps 한 프레임이다. 예산과 같아 hitch 가 아니다.</summary>
         private const float SmoothFrameSeconds = 1f / 60f;
 
-        /// <summary>예산의 6배. hitch 기준(2배)을 확실히 넘는다.</summary>
+        /// <summary>예산의 6배로 hitch 기준 (2배) 을 넘는다.</summary>
         private const float HitchFrameSeconds = 0.1f;
 
         /// <summary>
-        /// 첫 <c>Record</c> 한 건은 씬 로드 시간이 실려 있어 버려진다. 테스트마다 그 규칙을
-        /// 반복하지 않도록 여기서 소화한다.
+        /// 첫 <c>Record</c> 는 scene 로드 시간이 실려 버려지므로 여기서 한 번 기록해 둔다.
         /// </summary>
         private static FrameTimeRecorder Started(int capacity = 600)
         {
@@ -86,7 +85,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             Assert.IsTrue(recorder.TrySummarize(0f, out var statistics));
 
-            // 예산 0을 그대로 쓰면 문턱이 0이 되어 모든 프레임이 hitch가 된다.
+            // 예산 0 을 그대로 쓰면 기준이 0 이 되어 모든 프레임이 hitch 가 된다.
             Assert.AreEqual(1f / 60f, statistics.BudgetSeconds, 1e-6f);
             Assert.AreEqual(0, statistics.HitchCount);
         }
@@ -96,7 +95,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         {
             var recorder = new FrameTimeRecorder();
 
-            // 씬 로드 시간이 실린 첫 프레임.
+            // scene 로드 시간이 실린 첫 프레임.
             recorder.Record(HitchFrameSeconds);
             RecordFrames(recorder, 10, SmoothFrameSeconds);
 
@@ -135,8 +134,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         [Test]
         public void TrySummarize_PutsOnlyTheWorstFramesAboveTheNinetyNinthPercentile()
         {
-            // 100 샘플에서 nearest-rank p99는 아래에서 99번째, 즉 최악에서 두 번째 프레임이다.
-            // 나쁜 프레임이 하나뿐이면 p99가 아니라 최대값만 움직이므로 두 개를 넣는다.
+            // 100 샘플의 nearest-rank p99 는 최악에서 두 번째 프레임이다. 나쁜 프레임이 하나면 최대값만 움직이므로 두 개를 넣는다.
             var recorder = Started();
             RecordFrames(recorder, 98, SmoothFrameSeconds);
             RecordFrames(recorder, 2, HitchFrameSeconds);
@@ -157,7 +155,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             Assert.IsTrue(recorder.TrySummarize(BudgetSeconds, out var statistics));
 
-            // 100 샘플이면 최악 1%는 1프레임. 0.1%도 올림 탓에 같은 1프레임이라 값이 같아진다.
+            // 100 샘플이면 최악 1% 와 0.1% 모두 올림으로 1프레임이라 값이 같다.
             Assert.AreEqual(1f / HitchFrameSeconds, statistics.OnePercentLowFps, 1e-3f);
             Assert.AreEqual(1f / HitchFrameSeconds, statistics.PointOnePercentLowFps, 1e-3f);
         }

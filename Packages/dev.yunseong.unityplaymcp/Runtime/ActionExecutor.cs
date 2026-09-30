@@ -19,23 +19,20 @@ namespace UnityPlayMcp
         private readonly IScreenCapturer capturer;
 
         /// <summary>
-        /// 세션이 그렇게 말할 때 라이브 reading 을 켜고 끄는 것.
+        /// 세션 요청에 따라 live reading 을 켜고 끈다.
         /// </summary>
         /// <remarks>
-        /// 매니저가 아니라 이음매로 쥔다. 이 클래스가 하는 다른 모든 일은 게임에 대고 하는 것이고 이것은 SDK 에 대고 하는 유일한
-        /// 것이기 때문이다. 이것 없이 executor 를 만드는 테스트에서는 null 이고, 아래의 모든 사용이 먼저 묻는 이유가 그것이다.
+        /// 테스트에서는 null 일 수 있으므로 사용 전에 확인한다.
         /// </remarks>
         private readonly IReadingChannel readings;
 
         private readonly Action<Vector2> cursorMoved;
         private readonly Action<Vector2> pointerMoved;
 
-        // The time scale as it was when pause_time froze the game, so resume_time gives back the
-        // speed the game was actually running at rather than assuming 1. Null means not paused.
+        // The time scale before pause_time, restored by resume_time. Null means not paused.
         private float? scaleBeforePause;
 
-        // The scene the run began in, read while it is still the one on screen. reset_game reloads
-        // it, so "initial" means where this session started rather than a build index guessed later.
+        // The scene the run began in, read at construction; reset_game reloads it.
         private readonly int startupSceneBuildIndex;
         private readonly string startupScenePath;
 
@@ -56,9 +53,8 @@ namespace UnityPlayMcp
             startupSceneBuildIndex = startupScene.buildIndex;
             startupScenePath = startupScene.path;
 
-            // Moving onto a target keeps the reported pointer under the drawn cursor, but stays a
-            // silent move: firing hover events out of enter_text would change what an existing
-            // caller does to the game. Only move_mouse claims the pointer outright.
+            // enter_text moves the pointer without hover events so existing callers see no change.
+            // Only move_mouse sends pointer events.
             cursorMoved = VirtualInput.MoveMouse;
             pointerMoved = position =>
             {
@@ -177,13 +173,10 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Walks the pointer to a screen position, reporting every step on the way. A held button
-        /// turns those steps into a drag, which is why this cannot simply jump to the destination.
+        /// Moves the pointer to a screen position, reporting every step so a held button produces a drag.
         /// </summary>
         /// <remarks>
-        /// The coordinates are the ones a scan reports: pixels from the top left. Unity's screen
-        /// space counts up from the bottom instead, and that flip lives here — once, out of sight —
-        /// rather than in every caller that read a block's rect and wants to aim at it.
+        /// Takes scan coordinates (pixels from the top left) and flips them to Unity's bottom-left space here.
         /// </remarks>
         private IEnumerator ExecuteMoveMouse(
             int actionId,
@@ -235,12 +228,11 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 가상 마우스 상태와 uGUI 이벤트를 한 번에 민다.
+        /// 가상 마우스 상태와 uGUI 이벤트를 함께 갱신한다.
         /// </summary>
         /// <remarks>
-        /// <c>mouse_down</c> 과 <c>KeyCode.Mouse0</c> 을 실은 <c>key_down</c> 이 같은 버튼을
-        /// 가리킨다. 두 경로가 각자 밀면 언젠가 한쪽만 절반을 밀어 "폴링에는 잡히는데 버튼은
-        /// 안 눌리는" 상태가 되므로, 미는 일은 여기 한 자리에만 둔다.
+        /// <c>mouse_down</c> 과 <c>KeyCode.Mouse0</c> 의 <c>key_down</c> 이 같은 버튼을 가리킨다. 한쪽만 갱신되는
+        /// 상태를 막기 위해 버튼 입력은 여기서만 처리한다.
         /// </remarks>
         private void SetButton(int button, bool press)
         {
@@ -265,9 +257,7 @@ namespace UnityPlayMcp
                 return ActionResultDto.Failure(actionId, method + " requires params [keyCode].");
             }
 
-            // KeyCode.Mouse0 은 마우스 왼쪽 버튼 그 자체다. 가상 키보드에만 넣으면 GetKey 로
-            // 폴링하는 게임에만 닿고, 포인터 아래 오브젝트의 OnMouseDown 도 uGUI 핸들러도
-            // 부르지 못한다 — 액션은 성공으로 보고되는데 게임은 아무 일도 없는 그 형태가 된다.
+            // KeyCode.Mouse0 을 가상 키보드에만 넣으면 GetKey 폴링에만 보이고 OnMouseDown 과 uGUI handler 는 부르지 않는다.
             if (MouseButtonKeyCode.TryGetButton(key, out var button))
             {
                 SetButton(button, press);
@@ -290,15 +280,11 @@ namespace UnityPlayMcp
         /// Freezes game time, leaving the SDK itself running.
         /// </summary>
         /// <remarks>
-        /// Everything this SDK waits on is already unscaled — the cursor walk, the scene settle,
-        /// the key hold — so a frozen game can still be scanned, clicked and typed into. That is
-        /// the point: it holds an animation, a countdown or a timed prompt still long enough to be
-        /// read, without the game moving on underneath the reading.
+        /// SDK waits use unscaled time, so a frozen game can still be scanned, clicked and typed into.
         /// </remarks>
         private ActionResultDto ExecutePauseTime(int actionId)
         {
-            // Only the first pause records anything. A second one would record the frozen 0 and
-            // resume_time would then "resume" to a game that never moves again.
+            // Only the first pause records the scale; a second would record 0 and resume to a frozen game.
             if (!scaleBeforePause.HasValue)
             {
                 scaleBeforePause = Time.timeScale;
@@ -312,8 +298,7 @@ namespace UnityPlayMcp
         {
             if (!scaleBeforePause.HasValue)
             {
-                // Restoring a scale nobody saved would silently overwrite whatever the game chose
-                // for itself — a slow-motion sequence, a difficulty modifier — so say so instead.
+                // Restoring an unsaved scale would overwrite the game's own time scale, so fail instead.
                 return ActionResultDto.Failure(
                     actionId, "resume_time: game time was not paused by pause_time.");
             }
@@ -324,12 +309,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Undoes a pause the SDK is about to stop being able to undo.
+        /// Undoes a pause when the manager shuts down, so the game is not left frozen.
         /// </summary>
-        /// <remarks>
-        /// A run that dies while the game is paused would otherwise leave it frozen with the one
-        /// thing that could unfreeze it gone. Called when the manager shuts down.
-        /// </remarks>
         public void RestoreTimeScale()
         {
             if (scaleBeforePause.HasValue)
@@ -340,29 +321,20 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 실행이 처음 만난 자리로 게임을 되돌린다. 시작 씬을 다시 열고, 호출이 그렇게 말하면
-        /// 게임의 <c>PlayerPrefs</c> 도 함께 비운다.
+        /// 시작 씬을 다시 열어 게임을 되돌린다. 요청하면 <c>PlayerPrefs</c> 도 비운다.
         /// </summary>
         /// <remarks>
-        /// 로드 한 번이 열려 있는 모든 씬을 허물고, 실행이 처음 썼던 것과 같은 직렬화 데이터로
-        /// 시작 씬을 다시 세운다. 게임의 <c>DontDestroyOnLoad</c> 오브젝트도 함께 사라진다 —
-        /// 점수·인벤토리·진행도를 쥐고 있는 매니저야말로 리셋이 지워야 할 것이고, 다시 열린
-        /// 씬이 예전 것을 살려 두었던 바로 그 싱글턴 가드를 통해 자기 것을 새로 만든다.
+        /// 게임의 <c>DontDestroyOnLoad</c> 오브젝트도 함께 제거해, 다시 열린 씬이 manager 를 새로 만들게 한다.
         ///
-        /// 씬 상태는 언제나 사라진다. <c>PlayerPrefs</c> 는 <c>clearPlayerPrefs</c> 가 그렇게
-        /// 말할 때만 사라지고, 그때도 SDK 자신의 <c>UnityPlayMcp.*</c> 항목은 지우기 앞뒤로 꺼냈다가
-        /// 되쓴다 — 그러지 않으면 리셋을 시킨 서버로부터 이 세션이 스스로 로그아웃한다.
-        /// 정적 필드와 디스크의 파일은 어느 쪽으로도 사라지지 않는다.
+        /// <c>PlayerPrefs</c> 는 <c>clearPlayerPrefs</c> 일 때만 비우고, SDK 의 theme 키는 보존한다.
+        /// static field 와 디스크 파일은 초기화하지 않는다.
         ///
-        /// 약속하는 것은 저장소를 비웠다는 것까지다. 게임이 첫 실행 상태라는 뜻은 아니다 —
-        /// 리로드로 죽는 매니저가 <c>OnDestroy</c> 에서 자기 키를 다시 쓸 수 있고, 이 코루틴
-        /// 안의 어떤 순서도 그것을 막지 못한다.
+        /// 저장소를 비운다는 것까지만 보장한다. reload 로 파괴되는 manager 가 <c>OnDestroy</c> 에서 키를 다시 쓸 수 있다.
         /// </remarks>
         private IEnumerator ExecuteResetGame(
             int actionId, List<object> parameters, Action<ActionResultDto> completed)
         {
-            // params 를 먼저 읽는다. Build Settings 가드보다 뒤에 두면 잘못 만든 호출이
-            // "씬이 Build Settings 에 없다" 로 잘못 진단되어 돌아간다.
+            // params 를 Build Settings 확인보다 먼저 읽어야 잘못된 호출이 Build Settings 오류로 보고되지 않는다.
             if (!ResetRequestReader.TryRead(parameters, out var request, out var error))
             {
                 completed(ActionResultDto.Failure(actionId, error));
@@ -371,8 +343,7 @@ namespace UnityPlayMcp
 
             if (startupSceneBuildIndex < 0)
             {
-                // Loading by path fails the same way, so there is nothing to try: the scene has to
-                // be in Build Settings for the player to ever reach it again.
+                // Loading by path fails the same way; the scene must be in Build Settings.
                 completed(ActionResultDto.Failure(
                     actionId,
                     "reset_game: the scene the game started in is not in Build Settings: " +
@@ -380,15 +351,13 @@ namespace UnityPlayMcp
                 yield break;
             }
 
-            // A pause and a held button belong to the run, not to the game. Carried across the
-            // reload they would hand the fresh scene a frozen clock and a press it never saw begin.
+            // Pause and held buttons belong to the run; carried across the reload they would leave the new
+            // scene frozen or with a press it never saw begin.
             RestoreTimeScale();
             pointerEvents.ReleaseAll();
             VirtualInput.ReleaseAllVirtualInput();
 
-            // 리로드보다 먼저 지운다. 게임이 세이브 데이터를 처음 읽는 자리는 시작 씬의
-            // Awake/Start 이므로, 로드한 뒤에 지우면 구조적으로 한 프레임 늦어 이미 읽힌
-            // 진행도를 남긴 채 Success 를 돌려주게 된다. 사이에 yield 를 두지 않는다.
+            // 게임은 시작 씬의 Awake/Start 에서 세이브를 읽으므로 로드 전에 지운다. 사이에 yield 를 두지 않는다.
             if (request.ClearPlayerPrefs)
             {
                 OwnedPlayerPrefs.DeleteAllExceptOwn();
@@ -402,11 +371,10 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 청한 그 실행을 위해 라이브 reading 을 켠다.
+        /// 세션 요청에 따라 live reading 을 켠다.
         /// </summary>
         /// <remarks>
-        /// 실행은 그것이 언제 시작하는지를 말하지만 연결은 그러지 않는다. 연결은 모든 씬을 도는 순회도 함께 시작시키는데, 그 순회
-        /// 동안 찍은 pulse 는 플레이어가 한 번도 걸어가지 않은 화면을 서술한다 — 그래서 둘을 갈랐고, 이쪽이 세션이 다스리는 절반이다.
+        /// 연결 시점에는 모든 씬을 도는 순회도 시작하므로, reading 시작은 연결과 분리해 세션이 정한다.
         /// </remarks>
         private ActionResultDto ExecuteStartReadings(int actionId)
         {
@@ -421,7 +389,7 @@ namespace UnityPlayMcp
                     actionId, "Live readings could not start. A release build does not take them.");
         }
 
-        /// <summary>다시 끈다. 돌고 있었든 아니든 성공한다.</summary>
+        /// <summary>reading 을 끈다. 돌고 있지 않아도 성공한다.</summary>
         private ActionResultDto ExecuteStopReadings(int actionId)
         {
             if (readings == null)
@@ -434,15 +402,12 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Hands the game's <c>DontDestroyOnLoad</c> objects to the scene that is about to be
-        /// unloaded, so the reload destroys them the way it destroys everything else.
+        /// Moves the game's <c>DontDestroyOnLoad</c> objects into the scene about to be unloaded, so the
+        /// reload destroys them.
         /// </summary>
         /// <remarks>
-        /// Moving them beats destroying them outright: <c>Destroy</c> only takes effect at the end
-        /// of the frame, which is after the new scene's <c>Awake</c> has already asked whether a
-        /// manager exists. Moved objects die with the unload, before anything in the new scene runs.
-        /// This SDK is the one root that stays — it is running the coroutine that does this, and it
-        /// owns the socket the result goes out on.
+        /// <c>Destroy</c> takes effect at frame end, after the new scene's <c>Awake</c> has already looked for
+        /// existing managers. The SDK root stays because it runs this coroutine and owns the socket.
         /// </remarks>
         private static void DoomPersistentObjects()
         {
@@ -461,8 +426,7 @@ namespace UnityPlayMcp
 
             if (dropped.Count > 0)
             {
-                // Named, because a game whose bootstrap lives outside the start scene loses these
-                // for good — the one way reset_game can leave it worse off than it found it.
+                // Logged because a game whose bootstrap lives outside the start scene loses these for good.
                 Debug.Log("[Unity Play MCP] reset_game dropped persistent object(s): " +
                           string.Join(", ", dropped));
             }
@@ -472,8 +436,7 @@ namespace UnityPlayMcp
         /// Captures the screen, or one element's area of it, and returns its encoded bytes.
         /// </summary>
         /// <remarks>
-        /// Runs inside the same batch as the actions before it, so a capture asked for after a
-        /// click sees the screen that click produced.
+        /// Runs in the same batch as the preceding actions, so it sees their result.
         /// </remarks>
         private IEnumerator ExecuteCaptureScreen(
             int actionId,
@@ -551,19 +514,16 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 키를 그 시간만큼 눌렀다 놓는다. 마우스 버튼이면 놓는 일을 여기서 기다렸다 직접 한다.
+        /// 키를 지정 시간만큼 눌렀다 놓는다. 마우스 버튼은 여기서 기다렸다 직접 놓는다.
         /// </summary>
         /// <remarks>
-        /// 가상 키보드는 만료를 스스로 안다. 가상 마우스는 그러지 않고, 만료를 그쪽 상태에 넣어도
-        /// 놓이는 순간을 아무도 몰라 <c>pointerUp</c> 과 <c>OnMouseUp</c> 이 빠진다. 그래서
-        /// 마우스만 코루틴으로 갈라, 누름과 놓음 양쪽 모두가 이벤트를 내게 한다.
+        /// 가상 키보드는 만료를 스스로 처리하지만 가상 마우스는 그렇지 않아 <c>pointerUp</c> 과 <c>OnMouseUp</c>
+        /// 이 빠진다. 그래서 마우스만 coroutine 으로 처리한다.
         ///
-        /// 기다림은 scaled time 이 아니다. <c>pause_time</c> 이 걸린 게임에서 scaled 로 재면
-        /// 영영 끝나지 않는다 — 가상 키보드도 같은 이유로 <c>unscaledTime</c> 으로 잰다.
+        /// <c>pause_time</c> 중에도 끝나도록 unscaled time 으로 기다린다.
         ///
-        /// 기다리는 사이에 연결이 끊겨도 따로 정리할 것이 없다.
-        /// <c>ReleaseAllVirtualInput</c> 과 <c>pointerEvents.ReleaseAll</c> 이 이미 버튼을
-        /// 놓았고, 뒤늦은 놓음은 양쪽 모두에서 아무 일도 하지 않는다.
+        /// 기다리는 중 연결이 끊기면 <c>ReleaseAllVirtualInput</c> 과 <c>pointerEvents.ReleaseAll</c> 이 이미
+        /// 버튼을 놓고, 뒤늦은 놓음은 아무 일도 하지 않는다.
         /// </remarks>
         private IEnumerator ExecuteKeyClick(
             int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -592,9 +552,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Drives an Input Manager axis by name. The legacy Input Manager exposes no runtime API
-        /// for its axis-to-key bindings, so a virtual key press cannot reach <c>GetAxis</c> — the
-        /// caller names the axis and states the value instead.
+        /// Drives an Input Manager axis by name. The legacy Input Manager has no runtime API for axis key
+        /// bindings, so the caller names the axis and value instead of pressing keys.
         /// </summary>
         private static ActionResultDto ExecuteSetAxis(int actionId, List<object> parameters)
         {
@@ -616,9 +575,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// A button is an axis in Unity, so this writes the same axis the caller would drive with
-        /// <c>set_axis</c>. Releasing hands the axis back to the real input rather than pinning it
-        /// at zero, which is what makes <c>GetButtonUp</c> report the edge.
+        /// Writes the button's axis. Releasing hands the axis back to real input instead of pinning it
+        /// at zero, so <c>GetButtonUp</c> reports the edge.
         /// </summary>
         private static ActionResultDto ExecuteSetButton(int actionId, List<object> parameters)
         {
@@ -648,15 +606,11 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// The engine throws for an axis nobody set up, and that exception is the only runtime
-        /// signal that an axis name is real — the bindings themselves are not readable. Without
-        /// this check a misspelled name would report success and move nothing, which is the exact
-        /// failure this action exists to avoid.
+        /// The engine throws for an undefined axis, which is the only runtime way to validate a name.
+        /// Without this a misspelled axis would report success and do nothing.
         /// </summary>
         /// <remarks>
-        /// Reads the real <see cref="UnityEngine.Input"/> rather than the proxy on purpose: the
-        /// proxy answers from a held value once one exists, so it would pass a name it never
-        /// verified.
+        /// Reads the real <see cref="UnityEngine.Input"/>, not the proxy, which answers from a held value.
         /// </remarks>
         private static bool TryConfirmAxisExists(string axisName, out string error)
         {
@@ -680,8 +634,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Out-of-range values fail instead of being clamped: a caller asking for 5 has misread the
-        /// axis, and clamping would report success for a request nobody made.
+        /// Out-of-range values fail instead of being clamped, since they indicate a misread axis.
         /// </summary>
         private static bool TryReadAxisValue(object value, out float axisValue)
         {

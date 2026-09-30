@@ -2,7 +2,7 @@ import WebSocket from "ws";
 
 import type { GamePush, PulseStore } from "./pulse.js";
 
-/// connection 이 store 에 하는 일은 frame 을 접게 하는 것과, 든 상태가 끊겼다고 적는 것 둘뿐이다.
+/// connection 은 store 에 frame 을 fold 하고 중단을 기록하는 일만 한다.
 type PulseSink = Pick<PulseStore, "fold" | "markInterrupted">;
 
 export interface ActionRequest {
@@ -70,11 +70,10 @@ interface PendingAction {
   timeout: ReturnType<typeof setTimeout>;
 }
 
-/// Unity 에 닿지 못해 실패했다는 것.
+/// Unity 에 연결하지 못한 실패.
 ///
-/// 이것과 그냥 `Error` 를 가르는 이유는 부르는 쪽이 두 실패에 다른 말을 해야 하기 때문이다. 소켓에
-/// 닿지 못한 것은 게임이 안 돌고 있다는 뜻이고 사용자가 Play Mode 를 시작해야 풀린다. action 이
-/// 실패한 것은 게임은 돌고 있는데 그 요청이 틀렸다는 뜻이다. 문자열을 비교해 가르지 않는다.
+/// 연결 실패는 사용자가 Play Mode 를 시작해야 풀리고, action 실패는 요청이 틀린 것이다. 호출하는
+/// 쪽이 문자열 비교 없이 두 경우를 구별하도록 별도 타입으로 둔다.
 export class UnityUnreachableError extends Error {
   constructor(readonly url: string, readonly cause?: unknown) {
     super(
@@ -98,8 +97,8 @@ export class UnityConnection {
   private readonly reconnectMaximumMilliseconds: number;
   private readonly report: (message: string, error?: unknown) => void;
   private readonly pending = new Map<number, PendingAction>();
-  /// `wait.ts` 가 대기 중 연결이 끊기는 것을 알기 위해 건다. 재연결 예약보다 먼저 부른다 —
-  /// 기다리는 쪽은 재연결 성공 여부와 무관하게 "지금 끊겼다" 를 즉시 알아야 한다.
+  /// `wait.ts` 가 대기 중 연결 끊김을 알기 위해 등록한다. 대기 쪽이 재연결 결과와 무관하게 바로
+  /// 알도록 재연결 예약보다 먼저 호출한다.
   private readonly disconnectListeners = new Set<() => void>();
 
   private socket?: WebSocketLike;
@@ -156,11 +155,10 @@ export class UnityConnection {
     return resultFrame.results;
   }
 
-  /// `stop_readings` 가 성공했으면 든 상태를 낡았다고 적는다.
+  /// `stop_readings` 가 성공했으면 상태를 낡았다고 기록한다.
   ///
-  /// 어느 tool 로 보냈든(`stop_readings` 든 `perform_actions` 든) 이 자리를 지나므로 여기서 한 번
-  /// 한다. Unity 는 `Pulse.Stop` 이 남은 reading 을 먼저 보낸 뒤에 결과를 돌려주므로, 결과가
-  /// 도착한 이 시점에는 마지막 reading 이 이미 접혀 있다.
+  /// `stop_readings` 와 `perform_actions` 모두 여기를 지난다. Unity 는 남은 reading 을 보낸 뒤 결과를
+  /// 돌려주므로 이 시점에는 마지막 reading 이 이미 fold 되어 있다.
   private noteStoppedReadings(actions: ActionRequest[], results: ActionResult[]): void {
     const stopped = actions.some((action) => action.method === "stop_readings"
       && results.some((result) => result.id === action.id && result.success));
@@ -169,12 +167,12 @@ export class UnityConnection {
     }
   }
 
-  /// 지금 이 순간 소켓이 열려 있는지. 새로 연결하지 않으므로 상태를 보는 쪽이 상태를 바꾸지 않는다.
+  /// socket 이 지금 열려 있는지. 새로 연결하지 않는다.
   isConnected(): boolean {
     return this.socket?.readyState === OPEN;
   }
 
-  /// 이 server 가 Unity 를 찾는 자리.
+  /// 이 server 가 연결하는 Unity 주소.
   get endpoint(): string {
     return this.url;
   }
@@ -184,7 +182,7 @@ export class UnityConnection {
     await this.connect();
   }
 
-  /// 연결이 끊길 때마다(재연결을 시도하기 전에) 부른다. 반환값은 구독을 끊는 함수다.
+  /// 연결이 끊길 때마다 재연결 시도 전에 호출한다. 구독 해제 함수를 돌려준다.
   onDisconnect(listener: () => void): () => void {
     this.disconnectListeners.add(listener);
     return () => this.disconnectListeners.delete(listener);
@@ -251,7 +249,7 @@ export class UnityConnection {
     }
     this.socket = undefined;
     this.rejectAllPending(error);
-    // 끊긴 동안의 차이는 아무도 받지 못한다. 다음 reading 이 적용될 때까지 든 상태를 낡았다고 둔다.
+    // 끊긴 동안의 변화는 받을 수 없으므로 다음 `whole` reading 까지 상태를 낡았다고 표시한다.
     this.pulseStore.markInterrupted("disconnected");
     for (const listener of this.disconnectListeners) {
       listener();

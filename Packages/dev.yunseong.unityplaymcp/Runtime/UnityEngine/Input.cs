@@ -11,10 +11,8 @@ namespace UnityPlayMcp
         private static readonly VirtualMouseMessenger MouseMessenger = new VirtualMouseMessenger();
 
         /// <summary>
-        /// 키로 물어도 마우스 버튼은 마우스 상태가 답한다. <c>KeyCode.Mouse0</c> 은 왼쪽 버튼
-        /// 그 자체이므로, 가상 키보드만 보면 <c>mouse_down</c> 으로 들어온 클릭을 폴링하는 게임이
-        /// 보지 못한다. 실제 입력과 마찬가지로 둘을 OR 로 합친다 — 물리 클릭은 엔진이 이미 양쪽으로
-        /// 답하고, bool 의 OR 은 같은 사실을 두 번 세지 않는다.
+        /// 실제 입력, 가상 키보드, 가상 마우스 버튼을 OR 로 합친다. <c>KeyCode.Mouse0</c> 같은 키는
+        /// 마우스 상태도 봐야 <c>mouse_down</c> 으로 들어온 클릭이 보인다.
         /// </summary>
         public static bool GetKeyDown(KeyCode key)
         {
@@ -84,8 +82,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// The agent's pointer once it has been moved, and the real one until then. There is no
-        /// combining the two the way the key calls do: a position is one value, not a vote.
+        /// The agent's pointer once it has been moved, otherwise the real one. Positions cannot be combined.
         /// </summary>
         public static Vector3 mousePosition
         {
@@ -121,9 +118,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// A held axis replaces the real one outright instead of combining with it. The key calls
-        /// can OR their two answers because a bool has an OR; a float does not, and letting the
-        /// larger magnitude win would put a stray real input above what the agent asked for.
+        /// A held axis replaces the real one instead of combining, so stray real input cannot
+        /// override what the agent asked for.
         /// </summary>
         public static float GetAxis(string axisName)
         {
@@ -136,13 +132,11 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// The held value as given, not snapped to -1/0/1. The agent named the value it wanted, and
-        /// rounding 0.5 up to 1 would quietly hand back something it did not ask for. A caller
-        /// driving the axis with -1/0/1 reads -1/0/1.
+        /// The held value as given, not snapped to -1/0/1.
         /// </summary>
         /// <remarks>
-        /// Identical to <see cref="GetAxis"/> apart from the real call it falls through to. Both
-        /// have to exist because the weaver matches call sites by signature.
+        /// Same as <see cref="GetAxis"/> except for the fallback; both exist because the weaver
+        /// matches call sites by signature.
         /// </remarks>
         public static float GetAxisRaw(string axisName)
         {
@@ -223,10 +217,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Lets go of everything the agent was holding. A run that ends mid-drag would otherwise
-        /// leave the game with a key or a button held down for the rest of the session — and with
-        /// a pointer position frozen where the agent left it, which is worse: the game keeps
-        /// reading it forever and the person at the machine cannot move the mouse anywhere.
+        /// Lets go of everything the agent was holding. Otherwise a run ending mid-drag leaves keys
+        /// held and the pointer frozen where the agent left it.
         /// </summary>
         internal static void ReleaseAllVirtualInput()
         {
@@ -243,8 +235,7 @@ namespace UnityPlayMcp
             VirtualMouse.Refresh(Time.frameCount);
             VirtualAxes.Refresh(Time.frameCount);
 
-            // Only while the agent holds the pointer. The engine keeps sending its own OnMouse*
-            // from the real cursor, so driving ours at the same time would deliver everything twice.
+            // Only while the agent owns the pointer; the engine already sends OnMouse* for the real cursor.
             if (VirtualMouse.OwnsPointer(global::UnityEngine.Input.mousePosition))
             {
                 MouseMessenger.Tick(VirtualMouse.Position, VirtualMouse.GetButton(0, Time.frameCount));

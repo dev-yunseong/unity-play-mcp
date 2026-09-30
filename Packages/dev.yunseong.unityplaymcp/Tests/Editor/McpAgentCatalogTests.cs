@@ -8,9 +8,8 @@ using NUnit.Framework;
 namespace UnityPlayMcp.Tests.McpConfig
 {
     /// <remarks>
-    /// 네 파일이 어느 scope 에서 어디에 있고 어떤 형식인지가 이 기능의 계약 그 자체다. 형식 변환만
-    /// 검증하면 <c>.cursor</c> 를 <c>.cursors</c> 로 잘못 적어도, 또는 <c>User</c> scope 의 자리를 잘못 계산해도
-    /// 전부 green 이다.
+    /// 각 agent 파일의 scope 별 경로와 형식이 이 기능의 계약이다. 형식 변환만 검증하면 경로 오타나
+    /// <c>User</c> scope 경로 계산 오류를 잡지 못한다.
     /// </remarks>
     public sealed class McpAgentCatalogTests
     {
@@ -36,8 +35,8 @@ namespace UnityPlayMcp.Tests.McpConfig
         }
 
         /// <remarks>
-        /// <see cref="McpConfigScope"/> 가 <c>internal</c> 이라 <c>public</c> test method 의 인자로 받을 수 없다.
-        /// NUnit 의 <c>TestCase</c> 대신 test 안에서 두 scope 를 돌린다.
+        /// <see cref="McpConfigScope"/> 가 <c>internal</c> 이라 public test method 인자로 받을 수 없어
+        /// <c>TestCase</c> 대신 test 안에서 두 scope 를 돈다.
         /// </remarks>
         private static readonly McpConfigScope[] BothScopes =
         {
@@ -68,7 +67,7 @@ namespace UnityPlayMcp.Tests.McpConfig
         [Test]
         public void PutsClaudeCodeCursorAndCodexInTheHomeDirectoryForUserScope()
         {
-            // VS Code 의 user 자리는 운영체제마다 다르므로 따로 검증한다.
+            // VS Code 의 user 경로는 운영체제마다 달라 따로 검증한다.
             Assert.AreEqual(Expected(HomeDirectory, ".claude.json"), Named(McpConfigScope.User, "Claude Code").ConfigPath);
             Assert.AreEqual(Expected(HomeDirectory, ".cursor", "mcp.json"), Named(McpConfigScope.User, "Cursor").ConfigPath);
             Assert.AreEqual(Expected(HomeDirectory, ".codex", "config.toml"), Named(McpConfigScope.User, "Codex").ConfigPath);

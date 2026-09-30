@@ -201,8 +201,7 @@ test("uses single-flight exponential reconnect and resets backoff after success"
   fixture.connection.close();
 });
 
-/// `wait.ts` 가 대기 중 연결이 끊기는 것을 알려면 이 신호가 있어야 한다. `#60` 이 요구하는
-/// "연결 해제와 조건 미충족을 구분한다" 는 여기서 시작한다.
+/// `wait.ts` 가 연결 해제와 조건 미충족을 구분하려면 이 신호가 필요하다 (#60).
 test("onDisconnect fires when the socket closes, before a reconnect is scheduled", async () => {
   const fixture = createFixture();
   const seen: number[] = [];
@@ -230,7 +229,7 @@ test("onDisconnect stops firing once unsubscribed", async () => {
   fixture.connection.close();
 });
 
-/// 끊긴 동안의 차이는 아무도 받지 못한다. 그 사이 store 가 든 상태를 최신이라고 말하면 #69 가 된다.
+/// 끊긴 동안의 변화는 받을 수 없으므로 store 는 상태를 낡았다고 표시해야 한다 (#69).
 test("a dropped socket marks the held reading as interrupted", async () => {
   const fixture = createFixture();
   const connected = fixture.connection.ensureConnected();

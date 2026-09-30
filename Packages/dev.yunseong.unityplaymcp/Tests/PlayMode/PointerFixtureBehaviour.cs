@@ -5,8 +5,7 @@ using UnityEngine.EventSystems;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// Records the uGUI pointer events it receives, in the order they arrive. The order is the
-    /// point: a drag that reports its steps out of sequence is not a drag any game would follow.
+    /// Records the uGUI pointer events it receives, in arrival order, so tests can check the order.
     /// </summary>
     public sealed class PointerFixtureBehaviour :
         MonoBehaviour,

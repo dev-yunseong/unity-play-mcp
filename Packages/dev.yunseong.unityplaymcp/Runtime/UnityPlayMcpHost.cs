@@ -17,9 +17,7 @@ namespace UnityPlayMcp
         private const int WebSocketPort = 17311;
 
         /// <summary>
-        /// The one manager that survives scene loads. Static rather than looked up
-        /// each time because the check runs in Awake, before anything else can
-        /// register it.
+        /// The one manager that survives scene loads. Static because the check runs in Awake.
         /// </summary>
         private static UnityPlayMcpHost instance;
 
@@ -34,17 +32,17 @@ namespace UnityPlayMcp
         private float nextPerformanceReportTime;
         private float lastPerformanceSampleTime;
 
-        /// <summary>Frame Timing Stats 경고를 한 번만 내기 위한 표시. 매 보고마다 찍으면 로그가 덮인다.</summary>
+        /// <summary>Frame Timing Stats 경고를 한 번만 내기 위한 flag 다.</summary>
         private bool warnedFrameTimingUnavailable;
         private bool reportedDeviceContext;
 
-        /// <summary>지난 프레임의 전송 연결 상태. 새 연결이 열린 프레임을 집어내는 데만 쓴다.</summary>
+        /// <summary>지난 프레임의 transport 연결 상태다.</summary>
         private bool transportWasConnected;
 
-        /// <summary>지난 프레임까지 본 client 연결 수. 새 client 가 붙은 프레임을 집어내는 데 쓴다.</summary>
+        /// <summary>지난 프레임까지 본 client 연결 수다. 새 client 가 붙은 프레임을 찾는 데 쓴다.</summary>
         private int clientsSeen;
 
-        /// <summary>서버가 열린 동안 되돌려 줄 host game의 원래 설정.</summary>
+        /// <summary>server 가 열린 동안 바꿔 두었다가 되돌릴 host game 의 원래 설정이다.</summary>
         private bool hostRunInBackground;
         private long nextMessageId = 1;
         private readonly Queue<AgentRequestDto> actionRequests = new Queue<AgentRequestDto>();
@@ -52,20 +50,15 @@ namespace UnityPlayMcp
 
         /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
         /// <remarks>
-        /// play 중 assembly reload 도 이 값을 false 로 되돌린다. serialize 되지 않는 field 라서 그렇고,
-        /// 여기서는 그것이 원하는 바다: 같은 reload 에 함께 사라진 <see cref="frameTimeRecorder"/> 이하를
-        /// 다시 만들라고 <see cref="OnEnable"/> 에게 말하는 것이 이 false 다.
+        /// 일부러 serialize 하지 않는다. assembly reload 뒤 false 가 되어 <see cref="OnEnable"/> 이 함께 사라진
+        /// <see cref="frameTimeRecorder"/> 등을 다시 만든다.
         /// </remarks>
         private bool ownsRuntime;
 
         /// <summary>Separates the first connection, which is Start's, from a later re-enable.</summary>
         /// <remarks>
-        /// reload 를 건너야 하는 값이 이 한 bit 뿐이라서 serialize 한다. Unity 는 play 중 assembly reload 에서
-        /// <c>Awake</c> 를 다시 부르지 않고 <c>OnEnable</c> 만 부르며, 되돌려 주는 것은 serialize 된 field
-        /// 뿐이다. 이 표시가 없으면 reload 뒤의 <c>OnEnable</c> 은 아직 <c>Start</c> 를 지나지 않은 host 와
-        /// 구별되지 않아, 되살릴 자리인 줄 모르고 그냥 돌아간다.
-        ///
-        /// inspector 에 내놓을 값은 아니다. 사람이 켜고 끄는 설정이 아니라 host 가 제 이력을 적어 두는 자리다.
+        /// play 중 assembly reload 는 <c>Awake</c> 없이 <c>OnEnable</c> 만 부르고 serialized field 만 복원한다.
+        /// 이 값이 없으면 reload 뒤의 <c>OnEnable</c> 이 아직 <c>Start</c> 전인 host 와 구분되지 않으므로 serialize 한다.
         /// </remarks>
         [SerializeField, HideInInspector] private bool hasStarted;
 
@@ -84,16 +77,12 @@ namespace UnityPlayMcp
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         /// <summary>
-        /// Editor and development builds get a manager even when no scene carries one:
-        /// a QA run has to be able to attach to a build nobody prepared for it. The
-        /// whole method is compiled out of release builds. Runs after the first scene
-        /// loads so a manager the scene does carry — with its configured server —
-        /// keeps the spot.
+        /// Editor and development builds get a manager even when no scene carries one, so a QA run can attach
+        /// to any build. Compiled out of release builds. Runs after the first scene loads so a manager the
+        /// scene carries keeps the spot.
         /// </summary>
         /// <remarks>
-        /// test 가 부를 수 있도록 <c>internal</c> 이다. hook 이 남긴 오브젝트를 나중에 관찰하는 test 는
-        /// play mode 당 한 번만 도는 hook 때문에 다른 fixture 보다 먼저 돌아야 하고, 그 순서는 fixture
-        /// 이름의 알파벳 순이라 이름을 바꾸는 것만으로 조용히 깨진다. 직접 부르면 순서와 무관해진다.
+        /// play mode 당 한 번만 도는 hook 에 test 순서가 의존하지 않도록 test 가 직접 부를 수 있게 <c>internal</c> 이다.
         /// </remarks>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         internal static void SpawnInDevelopmentBuilds()
@@ -109,10 +98,8 @@ namespace UnityPlayMcp
 
         private void Awake()
         {
-            // 여기 온 host 는 갓 만들어졌거나 갓 로드된 것이고, 어느 쪽도 아직 Start 를 지나지 않았다.
-            // reload 는 Awake 를 부르지 않으므로 이 줄이 reload 를 건너온 표시를 지우는 일은 없다. 지우는
-            // 것은 play 중에 prefab 이나 scene 으로 떠 간 true 뿐이다 — 그런 값이 실려 오면 첫 활성화의
-            // OnEnable 이 Start 보다 먼저 server 를 연다.
+            // Awake 는 새로 만들어지거나 로드된 host 에서만 불리고 reload 에서는 불리지 않는다. prefab 이나 scene 에
+            // 저장된 true 가 남아 있으면 첫 OnEnable 이 Start 보다 먼저 server 를 열므로 지운다.
             hasStarted = false;
 
             if (!ClaimHostSlot())
@@ -120,10 +107,7 @@ namespace UnityPlayMcp
                 return;
             }
 
-            // The socket has to outlive the scene it was opened in. A QA run acts
-            // on the game, and acting frequently loads another scene — which used
-            // to destroy this object mid-run, closing the connection and failing
-            // the run at exactly the moment the interesting part began.
+            // The socket must outlive scene loads, which QA actions trigger often.
             transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
 
@@ -131,20 +115,16 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 이 host 가 살아 있는 하나인지 정한다. 자리가 비어 있으면 차지하고, 다른 host 가 이미 들어 있으면
-        /// 이 host 를 파괴하고 false 를 돌려준다.
+        /// host slot 을 차지한다. 다른 host 가 이미 있으면 이 host 를 파괴하고 false 를 돌려준다.
         /// </summary>
         /// <remarks>
-        /// scene 이 들고 온 host 가 다시 로드되면 두 번째 host 가 나타난다. 먼저 있던 쪽을 남기는 것이 살아
-        /// 있는 연결을 지키는 길이다. 새로 온 쪽은 같은 port 에 두 번째 socket 을 열려다 거절당할 뿐이다.
+        /// 먼저 있던 host 를 남겨 살아 있는 연결을 지킨다.
         ///
-        /// <c>Awake</c> 만이 아니라 <see cref="BeginHosting"/> 도 부른다. assembly reload 는 static 을 전부
-        /// 초기값으로 되돌리므로 reload 를 건넌 host 는 자리를 잃은 채로 깨어나고, 그대로 두면 다음에 로드된
-        /// scene 의 host 가 빈 자리를 차지해 두 host 가 같은 port 를 두고 다툰다.
+        /// assembly reload 는 static 을 초기화하므로 <see cref="BeginHosting"/> 에서도 부른다. 그러지 않으면
+        /// 다음 scene 의 host 가 빈 slot 을 차지해 두 host 가 같은 port 를 두고 다툰다.
         ///
-        /// <c>instance != null</c> 은 Unity 의 비교라서 파괴된 host 를 쥔 자리는 비어 있는 것으로 읽힌다.
-        /// domain reload 를 끈 project 에서 지난 play 세션의 host 가 static 에 남아 있어도 새 host 가 자리를
-        /// 잡는 것은 그 덕이다.
+        /// <c>instance != null</c> 은 Unity 비교라 파괴된 host 는 빈 slot 으로 읽힌다. domain reload 를 끈
+        /// project 에서 지난 세션의 host 가 남아 있어도 새 host 가 slot 을 차지할 수 있다.
         /// </remarks>
         private bool ClaimHostSlot()
         {
@@ -155,8 +135,7 @@ namespace UnityPlayMcp
 
             if (instance != null)
             {
-                // 끄는 것이 먼저다. Destroy 는 프레임 끝에야 처리되고 그때까지 이 host 의 Update 가 도는데,
-                // 진 host 는 아무것도 만들지 않았으므로 RecordFrameTime 이 그 프레임에 바로 던진다.
+                // Destroy 는 프레임 끝에 처리되므로 먼저 끈다. 이 host 는 아무것도 만들지 않아 Update 가 돌면 RecordFrameTime 이 던진다.
                 enabled = false;
                 Destroy(gameObject);
                 return false;
@@ -199,7 +178,7 @@ namespace UnityPlayMcp
             frameTimeRecorder = new FrameTimeRecorder();
             frameTimingSampler = new FrameTimingSampler();
 
-            // 읽을 수 없는 플랫폼이면 null이 온다. 그 경우 보고에서 process 항목을 통째로 뺀다.
+            // 지원하지 않는 플랫폼에서는 null 이고, 보고에서 process 항목을 뺀다.
             processResourceSampler = ProcessResourceSampler.CreateForCurrentPlatform();
 
             GameVersion = Application.version;
@@ -207,18 +186,15 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 재활성화와 assembly reload 가 함께 지나는 자리. 둘 다 host 가 쥐던 것을 여기서 다시 세운다.
+        /// 재활성화와 assembly reload 뒤에 host 를 다시 세운다.
         /// </summary>
         /// <remarks>
-        /// play 중 assembly reload 에서 Unity 는 <c>OnDisable</c> → serialize → domain 교체 → deserialize →
-        /// <c>OnEnable</c> 순으로 가고 <c>Awake</c> 는 다시 부르지 않는다. 정리는 그래서 이미 제자리에 있었다 —
-        /// <see cref="OnDisable"/> 이 입력을 놓고 reading 을 끝내고 socket 을 닫는다. 없던 것은 그 반대편이다:
-        /// 다시 만드는 일이 <c>Awake</c> 에만 있어서, reload 를 건넌 host 는 <see cref="frameTimeRecorder"/> 가
-        /// null 인 채로 <see cref="Update"/> 만 돌았고 매 프레임 NullReferenceException 을 냈다 (issue #57).
+        /// play 중 assembly reload 는 <c>Awake</c> 없이 <c>OnEnable</c> 만 부르므로 다시 만드는 일은 여기서 한다.
+        /// 정리는 <see cref="OnDisable"/> 이 한다 (#57).
         /// </remarks>
         private void OnEnable()
         {
-            // 첫 연결은 Start 의 몫이다. Start 를 지나기 전에는 여기서 되살릴 것이 없다.
+            // 첫 연결은 Start 가 연다.
             if (!hasStarted)
             {
                 return;
@@ -229,11 +205,9 @@ namespace UnityPlayMcp
 
         /// <summary>Opens the WebSocket server after every component has enabled.</summary>
         /// <remarks>
-        /// 여기서도 <see cref="BeginHosting"/> 을 통째로 부르는 이유는 <c>Awake</c> 와 이 자리 사이에
-        /// assembly reload 가 끼는 경우가 있어서다. scene 이 host 를 <c>enabled = false</c> 로 들고 오면
-        /// <c>Awake</c> 는 그때 돌지만 <c>Start</c> 는 게임이 켤 때까지 오지 않고, 그 사이의 reload 는
-        /// <c>Awake</c> 가 만든 것을 지운다. 그때 <see cref="OnEnable"/> 은 <c>hasStarted</c> 가 아직
-        /// false 라 그냥 돌아가므로, 다시 세울 자리가 여기 말고 없다.
+        /// scene 이 host 를 <c>enabled = false</c> 로 들고 오면 <c>Awake</c> 와 <c>Start</c> 사이에 assembly reload 가
+        /// 끼어 <c>Awake</c> 가 만든 것이 사라질 수 있다. 이때 <see cref="OnEnable"/> 은 <c>hasStarted</c> 가 false 라
+        /// 아무것도 하지 않으므로 여기서 <see cref="BeginHosting"/> 을 부른다.
         /// </remarks>
         private void Start()
         {
@@ -242,17 +216,14 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 이 host 를 살아 있는 하나로 세우고, 그것이 쥐는 것을 만들고, socket 을 연다.
+        /// host slot 을 차지하고, runtime 을 만들고, socket 을 연다.
         /// </summary>
         /// <remarks>
-        /// 셋 다 멱등이라 이미 서 있는 host 가 다시 불러도 아무것도 달라지지 않는다. 그것이 이 메서드가
-        /// <c>Start</c> 와 <see cref="OnEnable"/> 양쪽에 있어도 되는 이유이고, reload 뒤에 필요한 것도
-        /// 정확히 이 셋이다 — reload 는 static slot 과 <see cref="ownsRuntime"/> 과
-        /// <see cref="webSocketTransport"/> 를 함께 지운다.
+        /// 세 단계 모두 멱등이라 <c>Start</c> 와 <see cref="OnEnable"/> 에서 모두 불러도 된다. reload 는 static slot,
+        /// <see cref="ownsRuntime"/>, <see cref="webSocketTransport"/> 를 함께 지운다.
         ///
-        /// <see cref="EnsureRuntime"/> 이 <c>GetComponent</c> 로 찾는 <see cref="CursorController"/> 와
-        /// <see cref="KeyboardStatusController"/> 는 GameObject 와 함께 살아남으므로 component 가 두 벌이
-        /// 되지 않는다.
+        /// <see cref="CursorController"/> 와 <see cref="KeyboardStatusController"/> 는 GameObject 와 함께 남으므로
+        /// <see cref="EnsureRuntime"/> 의 <c>GetComponent</c> 로 찾아 중복되지 않는다.
         /// </remarks>
         private void BeginHosting()
         {
@@ -267,8 +238,7 @@ namespace UnityPlayMcp
 
         private void OnDisable()
         {
-            // Before the transport goes: a game left frozen by pause_time can only be resumed
-            // through this SDK, so shutting down while paused would strand it.
+            // Before the transport goes: a game frozen by pause_time can only be resumed through this SDK.
             if (actionExecutor != null)
             {
                 actionExecutor.RestoreTimeScale();
@@ -279,9 +249,7 @@ namespace UnityPlayMcp
 
         private void OnDestroy()
         {
-            // Only the surviving manager clears the slot. A duplicate destroying
-            // itself in Awake must not blank the reference to the live one, or the
-            // next scene load would let a third instance through.
+            // Only the surviving manager clears the slot; a duplicate destroyed in Awake must not blank it.
             if (instance == this)
             {
                 instance = null;
@@ -296,18 +264,13 @@ namespace UnityPlayMcp
 
                 PumpTransport();
 
-                // 성능 수집은 맨 뒤다. 여기서 던지는 것이 같은 프레임의 입력 전진과 요청 처리를 통째로
-                // 막았던 것이 issue #57 이고, 그 순서에는 그럴 값이 없다 — 지표 하나를 잃는 것과 원격
-                // 제어 전체를 잃는 것은 값이 다르다. 예외를 삼키지는 않는다. 삼켰다면 그 결함이 로그에
-                // 남지 않아 아무도 찾지 못했을 것이다.
-                //
-                // 대가는 한 프레임이다. 보고는 이제 이번 프레임의 샘플을 담지 못하고 다음 창으로 민다.
-                // 버려지는 샘플은 없고 창 하나가 60 프레임쯤이라, 어느 창에 실리는지만 달라진다.
+                // 성능 수집은 마지막에 한다. 여기서 던져도 입력 처리와 요청 처리는 막히지 않는다 (#57).
+                // 예외는 삼키지 않고 로그에 남긴다. 이번 프레임 샘플은 다음 보고 창에 실린다.
                 RecordFrameTime();
             }
         }
 
-        /// <summary>연결에서 온 것을 받아 처리하고, 이번 주기의 성능 보고를 내보낸다.</summary>
+        /// <summary>수신 메시지를 처리하고 이번 주기의 성능 보고를 보낸다.</summary>
         private void PumpTransport()
         {
             if (webSocketTransport == null)
@@ -332,16 +295,15 @@ namespace UnityPlayMcp
             }
         }
 
-        /// <summary>Unity main thread에서 transport 연결 상태의 상승 edge를 기록한다.</summary>
+        /// <summary>main thread 에서 transport 연결 상태와 새 client 연결을 확인한다.</summary>
         private void NoticeNewConnection()
         {
             var connected = webSocketTransport.IsConnected;
 
             transportWasConnected = connected;
 
-            // 새로 붙은 client 는 그 전의 차이를 하나도 받지 못했다. 소켓은 client 가 없어도 보내기에 실패하지 않으므로 Pulse 는
-            // 그것을 잃은 것으로 알지 못한다 — 여기서 전량 reading 을 청하지 않으면 끊겼다 붙은 MCP server 는 다음에 움직이는
-            // 값만 받고, 그 사이 바뀐 장면은 영영 못 받는다 (#69).
+            // socket 은 client 가 없어도 보내기에 실패하지 않으므로 Pulse 는 누락을 모른다. 새 client 에게
+            // 전량 reading 을 요청하지 않으면 재연결한 MCP server 가 그 사이 변화를 받지 못한다 (#69).
             var opened = webSocketTransport.ClientsOpened;
 
             if (opened == clientsSeen)
@@ -363,22 +325,14 @@ namespace UnityPlayMcp
             {
                 webSocketTransport = new AgentWebSocketServer(BindAddress, WebSocketPort);
 
-                // This is the host game's own Player Setting, and the package ships inside the
-                // game build — so it is held for exactly as long as this server, and put back in
-                // StopTransport. A build that never opens the server keeps whatever its Player
-                // Settings say.
+                // runInBackground is the host game's own Player Setting, so it is changed only while this
+                // server exists and restored in StopTransport. Without it, losing window focus stops Update,
+                // including capture and message draining, and agents often act on an unfocused window.
                 //
-                // Without it, losing window focus stops Update, including screen capture and the
-                // drain of the incoming message queue. A coding agent often acts while the game
-                // window is not focused, so that would strand the connection.
+                // Saved only when a new transport is built: StopTransport restores the value when it nulls the
+                // transport, so reading it elsewhere could save our own true.
                 //
-                // Saved here rather than beside the Start call below because only a freshly built
-                // transport should remember the host's value. StopTransport nulls the transport
-                // and restores the setting together, so a re-enable arrives here with the host's
-                // value back in place; reading it below instead would remember the true we
-                // ourselves just wrote.
-                //
-                // It does nothing on mobile, where the OS suspends the app outright.
+                // It has no effect on mobile, where the OS suspends the app.
                 hostRunInBackground = Application.runInBackground;
                 Application.runInBackground = true;
             }
@@ -389,7 +343,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 이제 지켜볼 누군가가 연결됐으므로 게임을 읽기 시작한다.
+        /// 연결이 열렸으므로 게임 읽기를 시작한다.
         /// </summary>
         private void BeginDiscovery()
         {
@@ -398,8 +352,8 @@ namespace UnityPlayMcp
 
         /// <summary>연결이 사라지면 게임 읽기를 멈춘다.</summary>
         /// <remarks>
-        /// 여기서 시작시킨 것이 없는데도 reading 도 여기서 멈춘다. 연결이 끊겨 끝나는 세션은 <see cref="StopReadings"/> 를 부를
-        /// 기회를 얻지 못하고, 돌게 남겨진 박자는 게임이 떠 있는 내내 아무도 읽지 않을 파일에 쓴다.
+        /// 연결이 끊긴 세션은 <see cref="StopReadings"/> 를 부르지 못하므로 reading 도 여기서 멈춘다.
+        /// 그러지 않으면 읽는 쪽이 없는 파일에 계속 쓴다.
         /// </remarks>
         private void EndDiscovery()
         {
@@ -408,34 +362,24 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 라이브 reading 을 시작하고, 지금 돌고 있는지를 말한다.
+        /// live reading 을 시작하고, 돌고 있는지 돌려준다.
         /// </summary>
         /// <remarks>
-        /// 연결로 함의되는 것이 아니라 청해지는 것이고, 그 분리가 이 메서드의 전부다. 연결은 도구가 봐도 된다고 말하고, 세션은
-        /// 실행이 시작됐다고 말하며, 그것이 언제인지는 실행을 모는 쪽만 안다.
+        /// reading 은 연결 시점이 아니라 세션 요청으로 시작한다. 연결 때 시작하는 모든 씬 순회 동안의 pulse 는
+        /// 플레이어가 보지 않은 화면을 보고하고, pulse 에는 순회 중인지 표시가 없어 MCP server 가 걸러 낼 수 없다.
         ///
-        /// 그 값이 얼마인지 재기 전까지 둘은 같은 순간이었다. 모든 씬을 도는 순회도 연결에서 시작하고 그것은 아무도 걸어가지 않은
-        /// 화면을 방문한다 — 그래서 그 곁에서 찍은 pulse 는 플레이어가 본 적 없는 화면에 게임이 있다고 보고한다. 샘플 게임에서
-        /// 실측했다: 순회 동안 찍은 pulse 는 8초에 125,548 바이트였고 플레이어가 있은 적 없는 씬 셋을 서술했다. 순회 뒤에 시작한
-        /// 같은 채널은 4,369 바이트짜리 pulse 하나를 쓰고 14초 동안 아무것도 쓰지 않았다.
-        ///
-        /// 독자가 걸러 낼 수 있는 잡음도 아니다. pulse 는 자기가 순회 중이라고 말하지 않으므로 걸러 낼 근거가 그 안에 없다.
-        ///
-        /// 멱등이다: 이미 읽고 있는 동안의 두 번째 호출은 참으로 답하고 아무것도 바꾸지 않는다.
+        /// 멱등이다. 이미 돌고 있으면 true 를 돌려준다.
         /// </remarks>
         public bool StartReadings()
         {
             if (Affordances.Scan.AffordanceBootstrap.Watching)
             {
-                // 이미 도는 채널에 다시 청하는 쪽은 대개 제 상태가 낡았다고 의심하는 쪽이다. 아무것도 안 바꾸고 참만 돌려주면
-                // 그 의심을 풀 reading 이 다음에 무언가 움직일 때까지 오지 않는다 (#69).
+                // 다시 요청하는 쪽은 상태가 낡았다고 의심하는 경우가 많으므로 전량 reading 을 요청한다 (#69).
                 Affordances.Scan.AffordanceBootstrap.RequestWholeReading();
                 return true;
             }
 
-            // 연결이 있으면 pulse 는 그 소켓으로 나간다. 없으면 sink 를 건네지 않아 예전대로
-            // 파일로 떨어진다 — 아무도 듣고 있지 않을 때에도 채널을 지켜볼 수 있어야 한다는
-            // 것이 이 채널을 만들 때의 규율이고, 연결이 없다는 것이 그것을 거둘 이유는 아니다.
+            // 연결이 없으면 sink 없이 파일로 쓴다. 연결이 없어도 reading 을 관찰할 수 있어야 한다.
             var sink = webSocketTransport == null
                 ? null
                 : new WebSocketPulseSink(() => webSocketTransport, () => nextMessageId++);
@@ -443,43 +387,34 @@ namespace UnityPlayMcp
             return Affordances.Scan.AffordanceBootstrap.WatchLiveState(sink);
         }
 
-        /// <summary>라이브 reading 을 끝낸다. 한 번도 시작하지 않았을 때 불러도 안전하다.</summary>
+        /// <summary>live reading 을 끝낸다. 시작한 적이 없어도 안전하다.</summary>
         public void StopReadings()
         {
             Affordances.Scan.AffordanceBootstrap.StopWatching();
         }
 
-        /// <summary>라이브 reading 이 돌고 있는지.</summary>
+        /// <summary>live reading 이 돌고 있는지 여부다.</summary>
         internal bool Reading => Affordances.Scan.AffordanceBootstrap.Watching;
 
-        /// <summary>server 를 쥐고 있고 그것이 stop 되지 않았는지.</summary>
+        /// <summary>server 가 있고 stop 되지 않았는지 여부다.</summary>
         /// <remarks>
-        /// <see cref="Reading"/> 과 같은 이유로 여기에 있다. transport 는 이 class 의 private field 이고,
-        /// 그것이 서 있는지를 바깥에서 물어볼 다른 방법이 없다. reload 뒤 server 가 다시 섰는지를 test 가
-        /// 확인하는 자리다 — 그것을 묻지 못하면 test 는 예외가 없다는 것까지만 말할 수 있다.
-        ///
-        /// 누가 붙었는지는 말하지 않는다. <c>AgentWebSocketServer.IsConnected</c> 가 뜻하는 것은 server
-        /// 객체가 서 있다는 것뿐이고, client 하나 없는 server 도 참으로 답한다.
+        /// reload 뒤 server 가 다시 열렸는지 test 가 확인하는 데 쓴다. client 연결 여부는 알려 주지 않는다.
+        /// <c>AgentWebSocketServer.IsConnected</c> 는 client 가 없어도 true 다.
         /// </remarks>
         internal bool TransportOpen => webSocketTransport != null && webSocketTransport.IsConnected;
 
         public void StopTransport()
         {
-            // A manager that lost the duplicate race in Awake returned before building any of this,
-            // and is then destroyed — which calls OnDisable, which lands here. It owns no socket,
-            // no stream and no dispatcher, so there is nothing to stop and every field below is
-            // null.
+            // A manager that lost the duplicate race in Awake built nothing, but its OnDisable still lands here.
             if (!ownsRuntime)
             {
                 return;
             }
 
-            // Ahead of the ownership checks: whoever owns the socket, a run that ends mid-drag must
-            // not leave the game holding a button nobody will ever send the release for.
+            // Ahead of the ownership checks: a run ending mid-drag must not leave a button held.
             ReleaseAgentInput();
 
-            // 게임 읽기가 그것을 청한 연결보다 오래 사는 것이 이 짝짓기가 피하려고 존재하는 값이다 — 아무도 없는데 씬 로드마다
-            // 스캔하고 파일이 자라는 것.
+            // 연결 없이 reading 이 계속 돌면 씬 로드마다 scan 하고 파일이 커진다.
             EndDiscovery();
 
             if (webSocketTransport == null)
@@ -492,15 +427,14 @@ namespace UnityPlayMcp
             webSocketTransport = null;
             clientsSeen = 0;
 
-            // The connection this was taken for is gone, so the host game gets its setting back.
+            // The connection is gone, so the host game gets its setting back.
             Application.runInBackground = hostRunInBackground;
 
             Debug.Log("[Unity Play MCP] WebSocket transport stopped.");
         }
 
         /// <summary>
-        /// Lets go of every key and button the agent was holding, and ends any drag in progress on
-        /// the game's own terms so its handler sees the end it was waiting for.
+        /// Releases every key and button the agent held, ending any drag so the game's handler sees the end.
         /// </summary>
         private void ReleaseAgentInput()
         {
@@ -575,13 +509,9 @@ namespace UnityPlayMcp
             {
                 Type = "ACTION_RESULT",
                 Id = nextMessageId++,
-                // Echoed so the caller can tell which ACTION this answers. `Id`
-                // cannot serve: it is this message's own number and shares no
-                // sequence with the request's.
+                // Echoed so the caller can match this to its ACTION; `Id` is this message's own sequence.
                 RequestId = request.Id,
-                // 여기서 읽는다. 배치를 받은 자리가 아니라 마지막 액션이 끝난 자리다 — 커서 활강처럼
-                // 여러 프레임에 걸치는 액션이 있고, 그때 둘이 갈린다. 기다리는 쪽이 궁금한 것은 배치가
-                // 끝난 뒤의 화면이므로 끝난 프레임이라야 답이 된다.
+                // 여러 프레임에 걸친 action 이 있으므로 배치를 받은 프레임이 아니라 마지막 action 이 끝난 프레임을 보낸다.
                 Frame = Time.frameCount,
                 Results = results
             };
@@ -593,36 +523,30 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 전송 상태와 무관하게 매 프레임 돈다. 소켓이 끊긴 동안의 성능도 남아야 QA 런에서
-        /// 끊김 구간을 설명할 수 있다.
+        /// 연결 상태와 무관하게 매 프레임 기록한다. 연결이 끊긴 구간의 성능도 남아야 한다.
         /// </summary>
         private void RecordFrameTime()
         {
-            // timeScale이 아니라 실제 경과 시간이 필요하다. pause_time 계열 액션이 timeScale을
-            // 임의로 바꾸므로 deltaTime은 프레임 성능 지표가 되지 못한다.
+            // pause_time 이 timeScale 을 바꾸므로 deltaTime 대신 실제 경과 시간을 쓴다.
             //
-            // 백그라운드 throttling도 사용자가 실제로 겪는 실행 상태다. 포커스 여부는 보고의
-            // status.isFocused로 함께 보내므로 소비자가 필요에 따라 구분할 수 있다.
+            // 백그라운드 throttling 도 기록한다. 포커스 여부는 status.isFocused 로 함께 보낸다.
             frameTimeRecorder.Record(Time.unscaledDeltaTime);
 
-            // 캡처만 시키고 값은 읽지 않는다. Unity의 프레임 타이밍 이력은 매 프레임 캡처해야
-            // 채워지고, 읽기와 평균은 전송 게이트가 열릴 때 한 번만 돈다.
+            // 여기서는 캡처만 한다. Unity 의 frame timing 이력은 매 프레임 캡처해야 채워지고, 읽기와 평균은 보고할 때 한다.
             //
-            // 포커스 여부로 거르지 않는다. 프레임을 건너뛰면 이력에 구멍이 생기는 것이 아니라
-            // 그만큼 오래된 프레임이 남아, 어느 구간을 잰 값인지가 흐려진다.
+            // 포커스 여부로 거르지 않는다. 건너뛰면 오래된 프레임이 남아 측정 구간이 불분명해진다.
             frameTimingSampler.Record();
         }
 
         /// <summary>
-        /// 전송 주기가 곧 집계 창이다. 레코더에 따로 타이머를 두면 두 주기가 어긋나 같은 구간을
-        /// 두 번 보내거나 통째로 버리게 되므로, 보낼 때 그 자리에서 접는다.
+        /// 보고 주기가 집계 창이다. recorder 에 별도 타이머를 두면 주기가 어긋나 구간이 중복되거나 빠지므로
+        /// 보낼 때 집계한다.
         /// </summary>
         private void SendPerformanceReport()
         {
             if (!webSocketTransport.IsConnected)
             {
-                // 재연결한 서버 인스턴스는 이 세션의 컨텍스트를 모른다. 끊긴 것을 본 시점에
-                // 표시를 내려 두어 다음 연결에서 다시 보내게 한다.
+                // 재연결한 서버는 이 세션의 device context 를 모르므로 다음 연결에서 다시 보낸다.
                 reportedDeviceContext = false;
                 return;
             }
@@ -646,19 +570,17 @@ namespace UnityPlayMcp
 
             nextPerformanceReportTime = now + PerformanceReportIntervalSeconds;
 
-            // CPU 비율의 분모. 보고를 걸렀는지와 무관하게 샘플러를 부를 때마다 갱신해야
-            // 누적 CPU 시간과 구간 길이가 같은 창을 가리킨다.
+            // CPU 비율의 분모다. 샘플러를 부를 때마다 갱신해야 누적 CPU 시간과 같은 구간을 가리킨다.
             var elapsedSeconds = now - lastPerformanceSampleTime;
             lastPerformanceSampleTime = now;
 
-            // 프레임이 없어 보고를 건너뛰더라도 여기서 먼저 소비한다. 뒤로 미루면 다음 구간의
-            // 분모만 짧아지고 CPU 시간은 두 구간 치가 실려 사용률이 부풀려진다.
+            // 보고를 건너뛰더라도 먼저 샘플링한다. 미루면 CPU 시간이 두 구간 치가 실려 사용률이 부풀려진다.
             var processUsage = default(ProcessResourceUsage);
             var hasProcessUsage =
                 processResourceSampler != null &&
                 processResourceSampler.TrySample(elapsedSeconds, SystemInfo.processorCount, out processUsage);
 
-            // 예산 해석은 Screen과 QualitySettings를 읽는다. 보내는 순간에만 부른다.
+            // 예산 계산은 Screen 과 QualitySettings 를 읽으므로 보낼 때만 부른다.
             if (!frameTimeRecorder.TrySummarize(ResolveFrameBudgetSeconds(), out var frameTimes))
             {
                 return;
@@ -686,8 +608,7 @@ namespace UnityPlayMcp
                 WarnFrameTimingUnavailableOnce();
             }
 
-            // 게이트가 열린 뒤에만 읽는다. 순간값이라 누적 상태가 없어 건너뛴 프레임이 다음 값을
-            // 왜곡하지 않으므로, 매 프레임 읽을 이유가 없다. 에디터 밖에서는 항상 false다.
+            // 순간값이라 보고할 때만 읽는다. 에디터 밖에서는 항상 false 다.
             if (EditorRenderStatsReader.TryRead(out var editorRenderStats))
             {
                 report.EditorRender = EditorRenderStatsMapper.ToDto(editorRenderStats);
@@ -697,8 +618,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Frame Timing Stats는 프로젝트 설정이라 SDK가 켤 수 없다. 꺼진 프로젝트에서는 매 초
-        /// 미수집이 되므로, 고칠 방법을 한 번만 알리고 이후로는 조용히 보고에서 뺀다.
+        /// Frame Timing Stats 는 SDK 가 켤 수 없는 project 설정이다. 꺼져 있으면 해결 방법을 한 번만 알리고 보고에서 뺀다.
         /// </summary>
         private void WarnFrameTimingUnavailableOnce()
         {
@@ -714,17 +634,16 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 프레임 예산. 같은 33ms라도 30fps 캡이 걸린 빌드에서는 정상이고 144Hz에서는 hitch다.
+        /// 프레임 예산이다. 같은 33ms 라도 30fps 캡에서는 정상이고 144Hz 에서는 hitch 다.
         ///
-        /// vsync를 먼저 본다. Unity는 vSyncCount가 0보다 크면 targetFrameRate를 무시하므로,
-        /// 반대 순서로 보면 실제로 적용되지 않는 캡을 예산으로 삼게 된다.
+        /// Unity 는 vSyncCount 가 0 보다 크면 targetFrameRate 를 무시하므로 vsync 를 먼저 본다.
         /// </summary>
         private static float ResolveFrameBudgetSeconds()
         {
             var vSyncCount = QualitySettings.vSyncCount;
             if (vSyncCount > 0)
             {
-                // refreshRate(int)는 2022.2에서 폐기됐다. 비율 형태가 60/1.001 같은 실제 주사율을 잃지 않는다.
+                // refreshRate(int)는 2022.2 에서 폐기됐다. 비율 형태는 60/1.001 같은 실제 주사율을 유지한다.
                 var refreshRate = Screen.currentResolution.refreshRateRatio.value;
                 if (refreshRate > 0d)
                 {

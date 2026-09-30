@@ -4,14 +4,13 @@ using UnityEngine;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 엔진이 커서 아래 오브젝트에 보내는 <c>OnMouse</c> 계열 메시지를 도착한 순서대로 적는다.
+    /// 엔진이 커서 아래 오브젝트에 보내는 <c>OnMouse</c> 메시지를 도착 순서대로 기록한다.
     /// </summary>
     /// <remarks>
-    /// 핸들러는 관례상 private 이고, 엔진도 <c>SendMessage</c> 로 이름을 보고 부른다. 여기서도
-    /// 그대로 private 으로 두어야 SDK 가 엔진과 같은 자리를 두드리는지가 실제로 검증된다.
+    /// 엔진은 <c>SendMessage</c> 로 이름을 보고 부르므로 handler 를 private 으로 두어 SDK 가 같은 방식으로
+    /// 부르는지 검증한다.
     /// <para>
-    /// <c>OnMouseOver</c> 는 커서가 머무는 매 프레임 오므로 세지 않는다. 프레임 수에 따라 개수가
-    /// 달라지는 것을 단언하면 테스트가 러너 속도에 흔들린다.
+    /// <c>OnMouseOver</c> 는 매 프레임 오므로 기록하지 않는다. 개수가 runner 속도에 따라 달라진다.
     /// </para>
     /// </remarks>
     public sealed class MouseMessageFixtureBehaviour : MonoBehaviour

@@ -5,7 +5,7 @@ using Mono.Cecil.Cil;
 
 namespace UnityPlayMcp.Affordances.CodeGen
 {
-    /// <summary>명령어에서 값과 이름을 되읽어 내는 일.</summary>
+    /// <summary>IL 명령어에서 값과 이름을 읽는다.</summary>
     internal static class IlReading
     {
         internal static bool TryConstant(Instruction instruction, out int value)
@@ -36,15 +36,13 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 명령어가 스택에 올려놓는 무엇이든, 그것의 짧은 이름.
+        /// 명령어가 스택에 올리는 값의 짧은 이름. 이름 붙일 수 없으면 null.
         /// </summary>
         /// <remarks>
-        /// 이것이 이름 붙일 수 없는 값일 때 null 이다 — 계산된 식, 내력이 추적되지 않는 지역 변수. 호출자는 null 을
-        /// 읽지 못한 조건으로 다루고 그럴듯한 것을 지어내는 대신 그렇다고 말한다.
+        /// 호출자는 null 을 읽지 못한 조건으로 다룬다.
         ///
-        /// 경계는 읽고 있는 블록의 첫 명령어이고, 그것을 지나서는 아무것도 읽지 않는다. 경계가 없으면 인자는 아예 읽히지
-        /// 않는다: 호출의 인자는 그 앞의 명령어들인데, 제어가 여러 자리에서 도착할 수 있는 곳에서는 그 앞의 명령어들이
-        /// 마침 위에 쓰인 경로의 것이기 때문이다.
+        /// 경계는 읽는 블록의 첫 명령어이고 그 앞은 읽지 않는다. 경계가 없으면 인자를 읽지 않는다. 합류 지점 앞의
+        /// 명령어는 다른 경로의 것일 수 있다.
         /// </remarks>
         internal static string Describe(Instruction instruction)
         {
@@ -52,21 +50,14 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 호출이 이루어진 객체를, 그것을 쥔 필드까지 따라 내려간 것.
+        /// 호출의 receiver 를 그것을 가진 필드까지 따라간 명령어.
         /// </summary>
         /// <remarks>
-        /// <c>MapMove.character.transform.position = MapMove.battle2.transform.position</c> 은 샘플 게임이 맵 커서를
-        /// 옮기는 것이고, 그 양쪽 절반 다 끝에 <c>.transform</c> 이 붙은 필드다. 수신자로 읽으면 답이 호출이지만, 한 걸음
-        /// 더 읽으면 <c>character</c> 이고 그것은 게임이 도는 동안 값을 되읽을 수 있는 자리다.
+        /// <c>MapMove.character.transform.position</c> 의 receiver 는 호출이지만, 따라가면 런타임에 되읽을 수 있는
+        /// 필드 <c>character</c> 가 나온다.
         ///
-        /// 화면 녹화를 pulse 옆에서 함께 보게 된 지금 이것이 더 중요해졌다. 영상은 스프라이트가 어딘가에 도착하는 것을
-        /// 보여 주지만 그 스프라이트가 <c>wordHead</c> 라거나 그 어딘가가 <c>battle2</c> 라고는 말할 수 없다. 그것들은
-        /// 이름이고, 이름을 대는 일이 서로 무관한 관측 둘을 하나의 사실로 만든다.
-        ///
-        /// <c>transform</c> 과 <c>gameObject</c> 만 밟고 지나가며, 그 둘만이다. 그 둘은 같은 객체를 다른 모습으로
-        /// 답해 주는 접근자라, 그 뒤의 필드가 실제로 움직인 그것이다. 다른 getter 는 전혀 다른 것을 돌려줄 수 있으므로 —
-        /// <c>list.First().position</c> 은 <c>list</c> 로 뿌리내릴 텐데 목록에는 위치가 없다 — 걷기를 멈추고 그 값을
-        /// 감시하지 않은 채 둔다. 그것이 그럴듯한 답이 아니라 정직한 답이다.
+        /// <c>transform</c> 과 <c>gameObject</c> 만 지나간다. 둘은 같은 객체를 가리킨다. 다른 getter 는 다른 객체를
+        /// 돌려줄 수 있으므로(<c>list.First().position</c>) 거기서 멈춘다.
         /// </remarks>
         internal static Instruction Rooted(
             MethodReference method, Instruction call, Instruction boundary, MethodDefinition within)
@@ -79,10 +70,9 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return RootedAt(Receiving(method, call, boundary), boundary, within);
         }
 
-        /// <summary>같은 걷기를, 호출의 수신자가 아니라 어떤 명령어에서 시작한 것.</summary>
+        /// <summary><see cref="Rooted"/> 와 같은 걷기를 receiver 대신 주어진 명령어에서 시작한다.</summary>
         /// <remarks>
-        /// 트윈 라이브러리는 대고 불린 것이 아니라 넘겨받은 transform 을 옮기므로, 뿌리내려야 할 것이 인자다. 같은 걷기,
-        /// 다른 출발점 — 그리고 그 둘을 한 걷기로 두는 것이 두 모양이 어느 필드가 움직였는지에 대해 어긋나지 않게 한다.
+        /// 트윈 확장 메서드는 transform 을 인자로 받으므로 인자에서 시작한다. 두 경우가 같은 걷기를 써야 결과가 일치한다.
         /// </remarks>
         internal static Instruction RootedAt(
             Instruction from, Instruction boundary, MethodDefinition within)
@@ -110,17 +100,11 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// <see cref="Describe"/> 가 도착하는 자리: 실제로 값을 쥔 명령어.
+        /// 한 번만 저장되는 지역 변수를 거슬러 실제로 값을 올린 명령어.
         /// </summary>
         /// <remarks>
-        /// 한 번만 쓰인 지역 변수를 거쳐 가는 같은 따라가기이고, 그것뿐이다. 값에 이름을 대는 일과 그것을 되읽을 자리를
-        /// 찾는 일은 같은 걷기이므로, 런타임에 감시되는 멤버는 그 문장이 말하는 바로 그것이어야 한다 — 디버깅 빌드에서
-        /// 복사본 둘을 거쳐 이름 붙은 <c>MapMove.position</c> 은 여전히 그 필드이고, 지역 변수를 겨눈 감시자는 메서드가
-        /// 돌아오는 순간 존재하기를 그만두는 무언가를 감시하게 된다.
-        ///
-        /// <see cref="Describe"/> 에 접어 넣지 않고 그 옆에 두는 것은, 둘이 서로 다른 물음에 답하고 그중 하나만 정중하게
-        /// 실패할 수 있기 때문이다. 읽을 수 없는 이름은 읽지 못한 조건이지만, 필드가 아닌 명령어는 그냥 찾아볼 자리가
-        /// 아닌 것이고 그것은 평범하고 잦은 답이다.
+        /// <see cref="Describe"/> 와 같은 따라가기라 감시 대상이 조건 문장의 이름과 일치한다. 지역 변수는 메서드가
+        /// 끝나면 사라지므로 감시 대상이 될 수 없다.
         /// </remarks>
         internal static Instruction Holding(Instruction instruction, MethodDefinition within)
         {
@@ -145,13 +129,11 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 같은 이름 붙이기인데, 한 가지만 담을 수 있는 지역 변수를 꿰뚫어 볼 수 있는 것.
+        /// <see cref="Describe(Instruction, Instruction)"/> 에 더해 한 번만 저장되는 지역 변수를 거슬러 읽는다.
         /// </summary>
         /// <remarks>
-        /// 최적화하는 컴파일러는 값을 지역 변수에 넣고 되읽는 자리에서 디버깅용 컴파일러는 그것을 다시 가져오므로, 같은
-        /// 소스가 에디터 스캔에서는 조건 스물을 이름 없이 남기고 개발 빌드에서는 읽히게 했다. 지역 변수를 따라가는 일은
-        /// 일반적으로는 거절한다 — 보이지 않는 데서 대입됐을 수 있다 — 그리고 메서드가 그것을 정확히 한 자리에서 저장할
-        /// 때만 허용한다. 그러면 다른 어디서도 올 수 없기 때문이다.
+        /// 디버그 빌드는 값을 지역 변수에 복사해 두고 읽는다. 지역 변수는 다른 곳에서 대입될 수 있으므로 메서드 안에서
+        /// 정확히 한 번 저장될 때만 따라간다.
         /// </remarks>
         internal static string Describe(
             Instruction instruction, Instruction boundary, MethodDefinition within)
@@ -166,11 +148,8 @@ namespace UnityPlayMcp.Affordances.CodeGen
 
             if (stored != null)
             {
-                // 하나에서 멈추지 않고 계속 따라간다. 디버깅용 컴파일러는 switch 의 주어를 검사하기 전에 지역 변수 둘을 거쳐
-                // 복사하는데 — `ldarg.1; stloc.1; ldloc.1; stloc.0` — 첫 번째에서 멈추는 바람에 샘플 게임의 맵 화면 다섯과 단어
-                // 위치 다섯이 아무도 이름 댈 수 없는 것에 대한 switch 로 남았다. 각 걸음은 여전히 제 메서드가 정확히 한 번 쓰는
-                // 지역 변수이고 그것이 안전의 전부이며 두 번 적용한다고 약해지지 않는다. 깊이는 제 자신에서 대입된 필드가 원을
-                // 도는 것을 막는 몫이다.
+                // 디버그 빌드는 `ldarg.1; stloc.1; ldloc.1; stloc.0` 처럼 여러 번 복사하므로 계속 따라간다.
+                // 깊이 제한은 순환을 막는다.
                 return Describe(stored, boundary, depth + 1 < MaxReceiverDepth ? within : null, depth + 1);
             }
 
@@ -235,19 +214,13 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 메서드가 대고 불린 객체, 또는 매개변수가 선언될 때 받은 이름.
+        /// 인자 적재가 가리키는 <c>this</c> 또는 매개변수 이름.
         /// </summary>
         /// <remarks>
-        /// 지금까지 읽지 않았고, 그 값은 서로 다른 둘이었다. 매개변수를 비교하는 조건은 좌변이 아예 없어 읽지 못한 것으로
-        /// 보고됐는데, 그것은 아무도 적을 수 없는 규칙이다. 그리고 <c>Destroy(this)</c> 는 아무도 이름 댈 수 없는 대상으로
-        /// 나왔다 — 정작 그것을 알아보려는 싱글턴 배관 인식은 내내 <c>this</c> 라는 말을 찾고 있었으므로, 제 두 번째
-        /// 복사본을 파괴하는 <c>Awake</c> 가 기능으로 도착하고 있었다.
+        /// <see cref="SingletonPlumbing"/> 은 <c>Destroy(this)</c> 를 <c>this</c> 로 알아본다.
         ///
-        /// 이름은 어셈블리 자신의 메타데이터에 있는 것이므로, 난독화된 빌드는 그것이 지킨 것을 돌려주고 — 아무것도 지키지
-        /// 않았다면 추측이 아니라 아무것도 돌려주지 않는다.
-        ///
-        /// 매개변수의 이름을 대는 일은 그 비교가 무엇에 대한 것인지를 말하지, 누가 그것을 마련할 수 있는지를 말하지
-        /// 않는다. 그것은 주어의 몫이고, <see cref="Where"/> 가 늘 그랬듯 <c>arg:N</c> 으로 답한다.
+        /// 이름은 metadata 에서 읽으므로 난독화로 지워졌으면 null 이다. 조건의 기준 객체는 <see cref="Where"/> 가
+        /// <c>arg:N</c> 으로 따로 적는다.
         /// </remarks>
         private static string ArgumentName(Instruction instruction, MethodDefinition within)
         {
@@ -293,24 +266,13 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 어셈블리가 아직 그것을 나를 때, 소스가 지역 변수에 준 이름.
+        /// 디버그 심볼에 있는 지역 변수 이름. 없으면 null.
         /// </summary>
         /// <remarks>
-        /// 이름을 대는 것이지 따라가는 것이 아니다. 지역 변수를 따라가는 일은 이것이 일반적으로 거절하고 메서드가 한 번
-        /// 쓸 때만 허용하는 것이다. 이름을 대는 일은 다른 물음이고, 그 답은 알아내는 것이 아니라 심볼에 적혀 있다.
+        /// 값을 따라가지 않고 이름만 댄다. <c>for</c> 루프 카운터 <c>i</c> 는 두 번 저장되어 따라갈 수 없지만
+        /// <c>i &lt; cards.Count</c> 로는 읽을 수 있다. 기준 객체는 여전히 unknown 이다.
         ///
-        /// 이것을 가질 값이 있게 만든 것은 <c>for</c> 루프의 카운터다. 루프 자신의 검사는 <c>i &lt; cards.Count</c> 이고
-        /// <c>i</c> 는 두 번 쓰인다 — 한 번은 0 으로, 한 번은 제 자신 더하기 1 로 — 그래서 정확히 한 번 저장 규칙이
-        /// 거절하는 모양이다. 그 검사는 읽지 못한 조건으로 나왔고 기록 전체를 함께 끌고 갔다: 샘플 게임의 기록 열셋이
-        /// 루프가 관련됐다는 것 말고는 아무 말도 하지 않았다.
-        ///
-        /// 지역 변수는 그것이 누구의 것인지 아무 말도 하지 않으므로 주어는 여전히 잃고 리포트도 여전히 그렇다고 말한다.
-        /// 얻는 것은 문장이다: "지나온 개수가 카드 개수보다 작다" 는 누군가 읽을 수 있는 규칙이지만 "읽지 못한 조건" 은
-        /// 아니다.
-        ///
-        /// 심볼이 없으면 아무것도 주장하지 않는다. 릴리스 빌드는 아예 굽지 않고 난독화된 것은 그것이 지킨 것을 돌려주는데
-        /// 그것은 아무것도 아닐 수 있다 — 그러면 이것도 아무것도 아니라고 말한다. 컴파일러가 스스로 지어낸 이름은
-        /// 건드리지 않는다.
+        /// 릴리스 빌드에는 심볼이 없다. 컴파일러가 만든 <c>&lt;</c> 로 시작하는 이름은 쓰지 않는다.
         /// </remarks>
         private static string LocalName(Instruction instruction, MethodDefinition within)
         {
@@ -336,18 +298,12 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 코드가 계산해 낸 값을, 소스가 쓴 방식으로 적은 것.
+        /// 산술 식을 소스 형태로 적는다.
         /// </summary>
         /// <remarks>
-        /// 게임 루프 안의 조건은 저장된 것이 아니라 계산된 것을 비교한다: 슬라이드는 시작한 뒤 이동한 거리를 그 길이로 나눈
-        /// 값이 1 에 닿을 때 끝난다. 그 합에 이름 대기를 거절한 탓에 그것들 하나하나가 읽지 못한 조건으로 남았고 —
-        /// Trash Dash 에서 367 건 — 읽지 못한 조건은 아무도 적을 수 없는 규칙이다.
+        /// 게임 루프의 조건은 <c>distance / length</c> 처럼 계산된 값을 자주 비교한다.
         ///
-        /// 그 순간 스택 위에 있는 것만 본다. 코드가 지역 변수에 넣고 되읽은 값은 따라가지 않는다. 지역 변수는 이것이 볼 수
-        /// 없는 데서 대입됐을 수 있고, 엉뚱한 대입에 묶인 조건은 값비싼 종류의 틀림이기 때문이다. 그것은 별개의 일이고
-        /// 여기서 하지 않는다.
-        ///
-        /// 블록뿐 아니라 깊이로도 가둔다. 긴 식은 긴 문장을 만들고, 몇 단계를 지나면 그 문장은 누구도 읽는 것이 아니게 된다.
+        /// 스택 위의 피연산자만 본다. 긴 식은 읽기 어려우므로 깊이도 제한한다.
         /// </remarks>
         private static string Arithmetic(
             Instruction instruction, Instruction boundary, int depth, MethodDefinition within)
@@ -373,7 +329,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return left == null || right == null ? null : "(" + left + " " + symbol + " " + right + ")";
         }
 
-        /// <summary>단항 연산. 피연산자가 둘이 아니라 하나다.</summary>
+        /// <summary>단항 부정(<c>neg</c>) 식을 적는다.</summary>
         private static string Negation(
             Instruction instruction, Instruction boundary, int depth, MethodDefinition within)
         {
@@ -386,7 +342,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return value == null ? null : "-" + value;
         }
 
-        /// <summary>피연산자에 이름을 대고, 그것이 합이면 한 단계 더 들어간다.</summary>
+        /// <summary>피연산자에 이름을 대고, 산술 식이면 한 단계 더 들어간다.</summary>
         private static string Read(
             Instruction instruction, Instruction boundary, int depth, MethodDefinition within)
         {
@@ -413,30 +369,17 @@ namespace UnityPlayMcp.Affordances.CodeGen
             }
         }
 
-        /// <summary>계산된 값을 몇 단계까지 써 나가는지.</summary>
+        /// <summary>산술 식을 적는 최대 깊이.</summary>
         private const int MaxArithmeticDepth = 4;
 
         /// <summary>
-        /// 호출이 준 답에, 읽을 수 있는 인자를 곁들여 이름을 댄다.
+        /// 호출의 반환값을 receiver 와 인자를 붙여 이름 짓는다.
         /// </summary>
         /// <remarks>
-        /// 실제 코드의 조건은 필드를 검사하는 만큼이나 자주 메서드가 무엇을 돌려줬는지를 검사한다 — 세이브가 있는지,
-        /// 목록이 비었는지. 그것들에 이름 대기를 거절한 탓에 그것들이 지키는 분기가 읽지 못한 조건으로 보고됐고, 샘플
-        /// 게임에서 그것은 어느 씬이 로드되는지를 결정하는 사실이 빠진 바로 그 하나였다는 뜻이다.
+        /// <c>CompareTag("Spell")</c> 처럼 인자가 있어야 조건끼리 구분된다. 읽을 수 없는 인자는 <c>_</c> 로 쓴다.
         ///
-        /// 인자는 조건마다 시그니처를 다는 값이 그것이 말하는 것보다 크다는 이유로 빼 왔다. 그것은 실측으로 답해졌다:
-        /// <c>Component.CompareTag()</c> 는 샘플 게임에서 조건 105 건이고 그 하나하나가 똑같이 읽혀서, 태그에 기반한
-        /// 전투 규칙의 절반이 반복되는 한 문장으로 도착했다. 원하는 것은 시그니처가 아니라 인자이고 — 읽을 수 없는 인자는
-        /// <c>_</c> 로 쓰므로 조건이 모르는 것을 안다고 주장하는 일은 없다.
-        ///
-        /// 호출이 대고 이루어진 것에 대해 쓰고, 그것을 읽을 수 없을 때만 선언 타입에 대해 쓴다. 타입은 그 타입의 모든
-        /// 객체에 대해 같으므로 한 객체 위의 목록 둘이 모두 <c>List`1.Count</c> 였고 독자는 어느 쪽인지 알 방법이 없었다 —
-        /// 샘플 게임의 합치기 버튼은 주문 카드 하나와 원소 카드 하나를 필요로 하는데 그 두 조건이 한 문장으로 도착했다.
-        /// 수신자는 없던 적이 없다. 그저 아무도 청하지 않았을 뿐이고, <see cref="Receiver"/> 는 호출 엣지에서 내내 그것을
-        /// 청해 왔다.
-        ///
-        /// 수신자 자체도 수신자를 가진 값이므로 이것은 걷는다. 가둔다. 이름은 읽으라고 있는 것이고 몇 고리를 지나면 그것은
-        /// 이름이기를 그만두기 때문이다.
+        /// receiver 를 먼저 쓰고, 읽을 수 없을 때만 선언 타입을 쓴다. 타입만 쓰면 두 목록의 <c>List`1.Count</c> 가
+        /// 구분되지 않는다. receiver 도 receiver 를 가지므로 깊이를 제한한다.
         /// </remarks>
         private static string CallName(
             MethodReference method, Instruction call, Instruction boundary, MethodDefinition within,
@@ -460,8 +403,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             {
                 var property = owner + "." + method.Name.Substring(4);
 
-                // 인덱서는 매개변수가 있는 getter 이고, 소스에서도 그렇게 읽힌다. 컴파일러가 지어낸 이름이 명세에 들어가지
-                // 않도록 get_Item 이 아니라 대괄호로 쓴다.
+                // 인덱서는 get_Item 이 아니라 소스처럼 대괄호로 쓴다.
                 return method.Parameters.Count == 0
                     ? property
                     : property + "[" + (arguments ?? Unread(method.Parameters.Count)) + "]";
@@ -471,13 +413,11 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 호출이 대고 이루어진 것의 이름, 또는 이름을 붙일 값이 없을 때 null.
+        /// 호출 receiver 의 이름. static 호출이거나 읽을 수 없으면 null.
         /// </summary>
         /// <remarks>
-        /// static 호출은 수신자가 없고, <c>this</c> 에 대고 이루어진 것은 일부러 선언 타입에 맡긴다: <c>this</c> 의 필드는
-        /// 이미 그렇게 쓰이고 (<c>this.spellCards</c> 가 아니라 <c>CombineZone.spellCards</c>) 주어는 조건 자신의
-        /// <c>context</c> 가 나른다. 그래서 평범한 경우에는 아무것도 움직이지 않고, 움직이는 것은 정확히 두 객체가 한
-        /// 이름을 나눠 쓰고 있던 경우다.
+        /// <c>this</c> 에 대한 호출은 선언 타입에 맡긴다. <c>this</c> 의 필드도 <c>CombineZone.spellCards</c> 처럼
+        /// 선언 타입으로 쓰고, 기준 객체는 조건의 <c>context</c> 가 나른다.
         /// </remarks>
         private static string Owner(
             MethodReference method, Instruction call, Instruction boundary, MethodDefinition within,
@@ -491,18 +431,14 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return Describe(Receiving(method, call, boundary), boundary, within, depth + 1);
         }
 
-        /// <summary>이름이 읽을 수 있기를 그만두기 전까지 수신자를 몇 겹까지 써 나가는지.</summary>
+        /// <summary>receiver 를 거슬러 적는 최대 깊이.</summary>
         private const int MaxReceiverDepth = 3;
 
         /// <summary>
-        /// 호출이 받은 인자들. 스택을 따라갈 수 있는 데까지.
+        /// 호출의 인자 목록. 읽지 못한 인자는 <c>_</c>, 하나도 읽지 못하면 null.
         /// </summary>
         /// <remarks>
-        /// 마지막 인자에서 거슬러 읽는다. 아무 분석 없이도 확실한 위치가 마지막 하나뿐이기 때문이다: 호출 앞 명령어가
-        /// 스택에 남긴 것이 무엇이든 그것이 마지막 인자다. 한 걸음 더 거슬러 갈 때마다 방금 읽은 인자가 소비한 것을 건너뛰어야
-        /// 하고, 그 일을 <see cref="Under"/> 가 하며, 스택에 대한 효과가 알려지지 않은 명령어를 만나는 순간 멈춘다.
-        ///
-        /// 아무것도 읽지 못했을 때는 null 이다. 인자를 읽을 수 없는 호출이 빈 인자 목록이 아니라 늘 그랬던 대로 읽히도록.
+        /// 호출 바로 앞 명령어가 마지막 인자이므로 뒤에서부터 읽고, 인자 사이는 <see cref="Under"/> 로 건너뛴다.
         /// </remarks>
         internal static string Arguments(MethodReference method, Instruction call, Instruction boundary)
         {
@@ -524,11 +460,9 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return string.Join(", ", names);
         }
 
-        /// <summary>위치로 지목한 인자 하나, 또는 그것을 읽을 수 없으면 null.</summary>
+        /// <summary>위치로 지정한 인자 하나의 이름. 읽을 수 없으면 null.</summary>
         /// <remarks>
-        /// 확장 메서드에서는 작용 대상 객체가 수신자가 아니라 인자 0 이므로, 호출이 무엇을 바꿨는지 이름 대려면 위치 하나를
-        /// 청해야 한다. 그 위치로 곧장 걷는 대신 목록 전체를 읽고 그중 하나를 취한다: 걷기는 어차피 그 뒤의 모든 인자를
-        /// 지나가야 하고, 그 일을 두 번 하면 둘이 어긋날 여지를 부른다.
+        /// <see cref="Arguments"/> 와 결과가 어긋나지 않도록 같은 목록 읽기에서 하나를 꺼낸다.
         /// </remarks>
         internal static string ArgumentAt(
             MethodReference method, Instruction call, Instruction boundary, int index)
@@ -567,22 +501,14 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 지역 변수가 여러 번 쓰일 때, 그것에 쓰인 모든 값.
+        /// 여러 번 저장되는 지역 변수에 들어갈 수 있는 값들.
         /// </summary>
         /// <remarks>
-        /// 한 번 쓰인 지역 변수는 그 값이고 그것으로 읽힌다 (<see cref="StoredOnce"/> 참고). 다섯 번 쓰이면 그중 어느
-        /// 것도 아니고, 지금까지 리포트는 아무 말도 하지 않는 방식으로 그렇다고 말했다 — 샘플 게임은 switch 팔 다섯에서
-        /// 주문 프리팹을 고르고 그것들이 합쳐진 뒤에 인스턴스화하므로, 만들어진 것이 `(not a simple target)` 으로 나왔고
-        /// 나중에 지역 변수에 이름이 생긴 뒤에는 `prefabToInstantiate` 로 나왔다. 둘 다 정직하고 둘 다 답이 아니다.
+        /// 한 번 저장되는 지역 변수는 <see cref="StoredOnce"/> 로 따라간다. switch 의 각 경우에서 프리팹을 골라
+        /// 합류 뒤에 만드는 코드에서 후보 목록을 준다.
         ///
-        /// 이름 다섯은 다른 종류의 답이다: 어느 것인가가 아니라 어느 다섯인가. 독자는 시전된 주문이 이것들 중 하나라고 말하고
-        /// 찾으러 갈 수 있는데, 전에는 게임이 변수에 붙인 말 한 마디를 쥐고 있었다.
-        ///
-        /// 전부 아니면 전무다. 저장 중 하나라도 이름 댈 수 없으면 집합을 아예 돌려주지 않는다 — 멤버가 빠진 목록은 완전한
-        /// 것처럼 읽히고, 독자는 실제로 거기 있는 값을 배제해 버린다. 그것이 이것이 일으키는 것이 아니라 막으려는 실패다.
-        ///
-        /// 가둔다. 스무 자리에서 대입되는 지역 변수는 그중에서 고르는 것이 아니라 거기에 누적되는 것이고, 이름 스물을
-        /// 나열해 봐야 무엇이 만들어졌는지에 대해 아무 말도 하지 않기 때문이다.
+        /// 저장 중 하나라도 읽지 못하면 null 이다. 빠진 목록은 완전한 목록으로 오해된다.
+        /// <paramref name="most"/> 를 넘으면 선택이 아니라 누적으로 보고 null 이다.
         /// </remarks>
         internal static List<string> Candidates(
             Instruction instruction, Instruction boundary, MethodDefinition within, int most)
@@ -652,12 +578,11 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 호출이 대고 이루어진 것.
+        /// 호출 receiver 의 이름.
         /// </summary>
         /// <remarks>
-        /// 수신자는 모든 인자 아래에 앉아 있으므로 거기 닿으려면 그것들을 차례로 건너뛰어야 한다. 그것은 호출 엣지에서 그
-        /// 호출이 어느 객체에 대한 것이었는지를 말하는 절반이다 — 서로 다른 두 채널 필드에 대고 <c>Raise</c> 를 부르는
-        /// 버튼 둘은 서로 다른 두 배선인데, 이것 없이는 같은 줄이었다.
+        /// receiver 는 모든 인자 아래에 있으므로 인자를 차례로 건너뛴다. 서로 다른 채널 필드에 <c>Raise</c> 를 부르는
+        /// 두 버튼은 receiver 로 구분된다.
         /// </remarks>
         internal static string Receiver(MethodReference method, Instruction call, Instruction boundary)
         {
@@ -675,7 +600,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return Describe(Receiving(method, call, boundary), boundary, within);
         }
 
-        /// <summary>호출의 수신자가 어디서 왔는가. 호출자 자신의 용어로.</summary>
+        /// <summary>호출자 기준의 receiver 위치(<c>this</c>, <c>arg:N</c>, <c>static</c>).</summary>
         internal static string ReceiverWhere(
             MethodReference method, Instruction call, Instruction boundary, bool hasThis)
         {
@@ -688,16 +613,12 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 이 값이 누구의 것인가 — 이름이 대고 쓰인 객체.
+        /// 값의 기준 객체: <c>this</c>, <c>arg:N</c>, <c>static</c>. 알 수 없으면 null.
         /// </summary>
         /// <remarks>
-        /// <c>count &gt; 0</c> 은 누구의 <c>count</c> 인지 말하기 전까지 사실이 아니다. 피호출자의 조건을 호출자의 것 옆에
-        /// 놓을 수 없는 이유가 그것이다: 호출자의 용어 옆에서 읽히면 그것은 호출자의 객체에 대한 주장이 되고, 틀린 선행
-        /// 조건은 없는 것보다 나쁘다.
+        /// 기준 객체 없이 피호출자의 조건을 호출자 옆에 놓으면 호출자의 객체에 대한 잘못된 조건이 된다.
         ///
-        /// 식이 궁극적으로 무엇에서 읽혔는지까지 걸어 내려가 찾는다. <c>this</c> 의 필드의 필드는 여전히 <c>this</c> 에 대한
-        /// 것이고, 인자의 필드는 거기 넘어간 무엇에 대한 것이다. 걷기가 따라갈 수 없는 것은 그렇다고 말하고, 아무것도
-        /// 어쩌면 위에서 합성되지 않는다.
+        /// 값이 처음 읽힌 곳까지 거슬러 간다. <c>this</c> 의 필드의 필드는 <c>this</c> 기준이다.
         /// </remarks>
         internal static string Where(Instruction instruction, Instruction boundary, bool hasThis)
         {
@@ -711,11 +632,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 같은 걷기인데, 어디서 포기했는지를 말하는 것.
+        /// 같은 걷기에 더해 멈춘 명령어를 <paramref name="stoppedAt"/> 로 돌려준다.
         /// </summary>
         /// <remarks>
-        /// 조건이 출발한 피연산자는 주어를 잃은 자리가 아니다 — 호출은 제 이름을 대고, 걷기를 좌절시킨 것은 그 수신자
-        /// 어딘가 아래에 있다. 출발점을 세는 것은 호출이 관련됐다는 것만 알려 주고 그 이상은 알려 주지 않았다.
+        /// 실패 원인은 출발 피연산자가 아니라 receiver 아래 어딘가에 있으므로 멈춘 자리를 진단에 쓴다.
         /// </remarks>
         internal static string Where(
             Instruction instruction,
@@ -730,12 +650,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
             {
                 stoppedAt = instruction;
 
-                // 한 자리에서 쓰인 지역 변수는 거기 쓰인 값이고, 그 값이 누구의 것인지는 한 걸음 더 거슬러 간 같은 물음이다.
-                // 이름 대기는 이미 그런 지역 변수를 꿰뚫어 보았지만 주어는 그러지 못했고, 그래서 디버그 빌드가
-                // `MapMove.StagePosition` 이라고 말하면서 같은 숨에 그것이 누구의 것인지는 말하기를 거절할 수 있었다.
+                // 한 번만 저장되는 지역 변수는 저장된 값으로 거슬러 간다. 이름 붙이기(Describe)와 결과를 맞춘다.
                 //
-                // 한 번만 따라간다. 나머지를 `within` 없이 물으면 다른 지역 변수를 거쳐 이름 붙은 지역 변수가 사슬을 이루지 못하게
-                // 되는데, 거기가 한 번 저장이 안전의 전부이기를 그만두는 지점이다.
+                // 한 번만 따라가고 이후에는 `within` 을 비운다. 지역 변수 사슬까지 따라가면 한 번 저장 규칙만으로는
+                // 안전하지 않다.
                 var stored = StoredOnce(instruction, within);
 
                 if (stored != null)
@@ -765,9 +683,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     case Code.Ldstr:
                     case Code.Ldnull:
 
-                    // 작은 정수 opcode 로 담기에 너무 넓은 수도 여전히 수이고, 필드를 -10 과 비교하는 조건은 그 필드에 대한 것이다.
-                    // 이것을 빼놓으면 그 리터럴이 아무 객체의 이름도 대지 않고, 아무것도 그것과 일치하지 않으며, 비교 전체가 주어를
-                    // 잃었다 — `Vector3.x < -10` 이 -10 을 읽지 못한 탓에 쓸모없었다.
+                    // 큰 정수와 실수 리터럴도 상수다. 빠지면 `Vector3.x < -10` 같은 비교의 기준 객체를 잃는다.
                     case Code.Ldc_I8:
                     case Code.Ldc_R4:
                     case Code.Ldc_R8:
@@ -779,9 +695,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                             return "static";
                         }
 
-                        // 합은 그 양쪽이 대한 그것에 대한 것이다. 이것이 없으면, 전에는 읽을 수 없던 식을 읽어낸 결과가 조건을 아무도 읽지
-                        // 못하던 때보다 *덜* 합성 가능하게 만들었다 — atom 이 "아무 객체의 이름도 대지 않는다" 에서 "아무도 알아내지 못한
-                        // 객체의 이름을 댄다" 로 옮겨 갔다.
+                        // 산술 식의 기준 객체는 양쪽 피연산자가 일치하는 기준 객체다.
                         if (Operator(instruction.OpCode.Code) != null)
                         {
                             var rightSide = Preceding(instruction, boundary);
@@ -797,8 +711,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                             continue;
                         }
 
-                        // 이것이 무엇에서 읽혔는지까지 내려간다. 입력이 하나면 그것이 읽혀 온 그것이고, 하나보다 많거나 따라갈 수 있는
-                        // 것이 없으면 걷기가 끝난다.
+                        // 입력이 하나면 그 입력으로 내려간다. 호출은 receiver 로 내려가고, 그 밖에는 멈춘다.
                         if (Consumes(instruction) != 1)
                         {
                             var call = instruction.Operand as MethodReference;
@@ -827,10 +740,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 양쪽이 함께 대한 하나의 객체, 또는 그런 것이 없을 때 null.
+        /// 양쪽이 공유하는 기준 객체. 없으면 null.
         /// </summary>
         /// <remarks>
-        /// 상수만으로 된 쪽은 무엇과도 일치하는데, 그것이 평범한 모양이다 — <c>this</c> 의 필드를 숫자로 나눈 것.
+        /// <c>static</c>(상수) 쪽은 어느 것과도 일치한다. 예: <c>this</c> 의 필드를 숫자로 나눈 식.
         /// </remarks>
         internal static string Agreeing(string left, string right)
         {
@@ -845,7 +758,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return left == right ? left : null;
         }
 
-        /// <summary>호출의 수신자를 만들어낸 명령어.</summary>
+        /// <summary>호출의 receiver 를 올린 명령어.</summary>
         private static Instruction Receiving(MethodReference method, Instruction call, Instruction boundary)
         {
             var at = Preceding(call, boundary);
@@ -858,7 +771,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return at;
         }
 
-        /// <summary>읽을 수 없었던 인자마다 놓는 자리.</summary>
+        /// <summary>읽지 못한 인자 수만큼의 <c>_</c> 목록.</summary>
         private static string Unread(int count)
         {
             var places = new string[count];
@@ -872,11 +785,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 인자 하나. 알 수 있는 자리에서는 소스가 썼을 방식으로 이름 붙인 것.
+        /// 인자 하나의 이름. 가능하면 소스 형태로 적는다.
         /// </summary>
         /// <remarks>
-        /// 플래그와 열거형은 둘 다 숫자로 도착하고, 숫자만으로는 읽을 수 없다 — <c>SetActive(0)</c> 과 <c>Play(4)</c> 는
-        /// 아무 말도 하지 않는다. 그것들을 <c>false</c> 와 멤버의 이름으로 되돌리는 것이 매개변수 자신의 타입이다.
+        /// bool 과 enum 은 IL 에서 정수이므로 매개변수 타입으로 <c>false</c> 나 enum 멤버 이름으로 되돌린다.
         /// </remarks>
         private static string Argument(
             Instruction instruction, TypeReference parameter, Instruction boundary,
@@ -894,7 +806,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     return number == 0 ? "false" : "true";
                 }
 
-                // 값 타입일 때만 해석한다. int 인자가 조건마다 타입 로드 값을 치르지 않도록. 시그니처에서 열거형은 값 타입이다.
+                // int 인자마다 타입을 resolve 하지 않도록 값 타입(시그니처의 enum)일 때만 해석한다.
                 return parameter?.MetadataType == MetadataType.ValueType
                     ? EnumName(parameter, number)
                     : number.ToString();
@@ -908,8 +820,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     return Convert.ToString(instruction.Operand, System.Globalization.CultureInfo.InvariantCulture);
 
                 case Code.Box:
-                    // Equals 를 거쳐 비교되거나 object 로 넘어간 열거형은 박싱돼 도착하고, 그 아래의 숫자는 박스가 이름 대는 타입
-                    // 없이는 아무 뜻도 없다.
+                    // object 로 넘어간 enum 은 박싱되므로 box 의 타입으로 해석한다.
                     return Argument(
                         Preceding(instruction, boundary), instruction.Operand as TypeReference, boundary,
                         within);
@@ -920,13 +831,11 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 앞 명령어. 디버그 빌드의 채움을 밟고 지나가되, 읽고 있는 블록의 시작을 결코 넘지 않는다.
+        /// 앞 명령어. <c>nop</c> 과 접두 명령은 건너뛰고 블록 시작을 넘지 않는다.
         /// </summary>
         /// <remarks>
-        /// 거슬러 읽기를 건전하게 만드는 것이 그 경계다. 블록은 제어가 여러 자리에서 도착할 수 있는 데서 시작하므로, 블록의
-        /// 첫 명령어 앞의 명령어는 그 값이 만들어졌을 수 있는 갈래 중 하나일 뿐이다. 그 경계를 넘어가면 마침 위에 쓰인
-        /// 경로의 꼬리를 읽게 되고, 단락된 <c>&amp;&amp;</c> 는 거기에 리터럴 <c>0</c> 을 놓는다 — 이것의 첫 시도는 맵의
-        /// 해금 규칙을 <c>0 != 0</c> 으로 보고했는데, 그것은 아무것도 보고하지 않는 것보다 나쁘다.
+        /// 블록 첫 명령어 앞은 여러 경로 중 하나일 뿐이다. 경계를 넘으면 단락된 <c>&amp;&amp;</c> 가 놓은 리터럴
+        /// <c>0</c> 을 읽어 <c>0 != 0</c> 같은 조건을 만든다.
         /// </remarks>
         internal static Instruction Preceding(Instruction instruction, Instruction boundary)
         {
@@ -937,8 +846,8 @@ namespace UnityPlayMcp.Affordances.CodeGen
 
             var previous = instruction.Previous;
 
-            // 접두 명령 — constrained., volatile., readonly. — 은 제 명령어로 쓰이면서 스택은 건드리지 않는데, 거기서 멈춘
-            // 탓에 값 타입에 대고 불린 메서드의 모든 인자가 가려졌다. Enum.Equals 가 흔한 경우이고 그것은 비교다.
+            // constrained., volatile., readonly. 같은 접두 명령은 스택을 건드리지 않는다. 여기서 멈추면 값 타입
+            // receiver 호출(Enum.Equals 등)의 인자를 읽지 못한다.
             while (previous != null &&
                    (previous.OpCode.Code == Code.Nop || previous.OpCode.OpCodeType == OpCodeType.Prefix))
             {
@@ -954,15 +863,11 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 어떤 명령어가 만든 값 아래에 앉은 값을 만들어낸 것.
+        /// 주어진 명령어가 만든 값 바로 아래 스택 슬롯의 값을 올린 명령어.
         /// </summary>
         /// <remarks>
-        /// 명령어 하나를 되짚는 일이 스택 슬롯 하나를 되짚는 것과 같은 것은 아무것도 소비하지 않는 명령어에 대해서뿐이다.
-        /// <c>ldfld</c> 는 객체 참조를 먹고 <c>op_Equality</c> 는 인자 둘을 먹으며, 그것을 무시하는 독자는 아무 이름도 대지
-        /// 않는 것이 아니라 엉뚱한 피연산자의 이름을 댄다 — <c>a == b.Count</c> 가 <c>b == b.Count</c> 로 읽힌다.
-        ///
-        /// 그래서 각 입력을 같은 규칙으로 재귀적으로 건너뛰고, 스택에 대한 효과가 아래 표에 없는 것은 걷기를 멈춘다. 거기서
-        /// 거절하는 것이 요점이다: 호출자는 그 조건을 읽지 못한 것으로 보고하고, 그것이 정직한 답이다.
+        /// 명령어가 소비한 입력을 재귀적으로 건너뛴다. 이것을 무시하면 <c>a == b.Count</c> 가 <c>b == b.Count</c> 로
+        /// 읽힌다. 스택 효과를 모르는 명령어에서는 null 을 돌려주고 호출자는 읽지 못한 조건으로 다룬다.
         /// </remarks>
         internal static Instruction Under(Instruction instruction, Instruction boundary)
         {
@@ -983,7 +888,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return cursor;
         }
 
-        /// <summary>명령어가 스택 슬롯을 몇 개 먹는지, 또는 여기서 알 수 없을 때 -1.</summary>
+        /// <summary>명령어가 소비하는 스택 슬롯 수. 알 수 없으면 -1.</summary>
         private static int Consumes(Instruction instruction)
         {
             if (instruction == null)
@@ -1076,11 +981,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 하나하나 나열하기에는 너무 긴 계열들.
+        /// 이름 접두어로 판단하는 opcode 계열의 소비 슬롯 수.
         /// </summary>
         /// <remarks>
-        /// <c>conv.*</c> 는 받은 값을 갈아치우고, <c>ldind.*</c> 는 주소를 그 자리에 있는 것으로 갈아치우며,
-        /// <c>ldelem.*</c> 는 배열과 인덱스를 먹는다. 그 밖의 것은 unknown 이고, unknown 은 걷기를 멈춘다.
+        /// <c>conv.*</c> 와 <c>ldind.*</c> 는 하나, <c>ldelem.*</c> 는 배열과 인덱스 둘을 소비한다. 그 밖에는 -1 이다.
         /// </remarks>
         private static int ByName(string opcode)
         {
@@ -1101,16 +1005,12 @@ namespace UnityPlayMcp.Affordances.CodeGen
         private const string BackingSuffix = ">k__BackingField";
 
         /// <summary>
-        /// 필드에 이름을 대거나, 그것이 컴파일러 자신의 장부일 때 거절한다.
+        /// 필드 이름. 컴파일러가 만든 상태 필드면 null.
         /// </summary>
         /// <remarks>
-        /// 코루틴이나 람다는 제 타입으로 컴파일되고, 그 위의 필드들은 — <c>&lt;&gt;1__state</c>, <c>&lt;&gt;4__this</c>,
-        /// display class 가 붙든 지역 변수들 — 배관이다. 효과로 보고되면 게임이 무언가를 바꾸는 것으로 읽히는데, 샘플
-        /// 게임에서 그것들이 분석이 찾았다고 주장한 것 전체의 7분의 1이었다.
+        /// coroutine 이나 람다의 생성 타입 필드(<c>&lt;&gt;1__state</c>, <c>&lt;&gt;4__this</c> 등)는 게임 상태가 아니다.
         ///
-        /// 제 이름이 아니라 그것들을 선언하는 타입으로 거절한다. 꺾쇠 이름 패턴 하나는 배관이 아니기 때문이다: 자동 프로퍼티
-        /// 뒤의 필드는 게임 자신의 타입에 선언되고 게임 자신의 상태를 쥔다. 그것들을 이름으로 떨어뜨리면 코드베이스의 모든
-        /// <c>public int Score { get; set; }</c> 을 잃는다.
+        /// 이름이 아니라 선언 타입으로 거른다. 자동 프로퍼티의 backing field 도 꺾쇠로 시작하지만 게임 상태다.
         /// </remarks>
         internal static string FieldName(FieldReference field)
         {
@@ -1138,26 +1038,18 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 return null;
             }
 
-            // 프로퍼티로 이름 붙인다. 그것이 소스가 말하는 바이고 명세가 적어야 할 바다.
+            // backing field 는 소스에 쓰인 프로퍼티 이름으로 적는다.
             return declaring.Name + "." + name.Substring(1, name.Length - BackingSuffix.Length - 1);
         }
 
         /// <summary>
-        /// 컴파일러가 코루틴 위로 옮겨 놓은 지역 변수. 소스가 부르던 이름으로.
+        /// coroutine 생성 타입의 필드로 옮겨진 지역 변수의 소스 이름. 컴파일러 상태 필드면 null.
         /// </summary>
         /// <remarks>
-        /// 코루틴 안의 <c>for</c> 카운터는 읽힐 무렵이면 지역 변수가 아니다: yield 를 건너 살아 있으므로 생성된 타입 위의
-        /// 필드다. 타입 전체를 거절하면 그것을 배관과 함께 거절하게 되고, 샘플 게임의 이야기 화면은 루프가 언제 끝나는지를
-        /// 말하는 유일한 항을 잃었다 — 그것이 없으면 "아무 키나 누르면 맵이 열린다" 가 마지막 누름이 아니라 모든 누름에
-        /// 대해 약속된다.
+        /// yield 를 건너 사는 <c>for</c> 카운터 같은 지역 변수는 필드가 된다. 옮겨진 지역 변수는 꺾쇠 안에 이름이
+        /// 있고(<c>&lt;i&gt;5__1</c>), 컴파일러 상태 필드는 비어 있다(<c>&lt;&gt;1__state</c>).
         ///
-        /// 둘은 꺾쇠 안에 무엇이 있는지로 가려진다. 배관은 거기 아무것도 없고 (<c>&lt;&gt;1__state</c>,
-        /// <c>&lt;&gt;4__this</c>, <c>&lt;&gt;t__builder</c>) 지킬 소스 이름이 없었기 때문이다. 옮겨진 지역 변수는 제
-        /// 이름을 가진다 (<c>&lt;i&gt;5__1</c>). 그러니 이것은 필드가 무엇을 뜻하는지에 대한 추측이 아니다 — 소스가 쓴
-        /// 이름을, 컴파일러가 넣어 둔 자리에서 되읽은 것이다.
-        ///
-        /// 그 앞에 타입 이름을 붙이지 않는다. 선언 타입은 아무도 쓰지 않았고 아무도 찾아볼 수 없는 이름이며,
-        /// <c>&lt;StoryTelling&gt;d__8.i</c> 는 <c>i</c> 보다 적게 말한다.
+        /// 생성 타입 이름(<c>&lt;StoryTelling&gt;d__8</c>)은 소스에 없으므로 앞에 붙이지 않는다.
         /// </remarks>
         private static string Hoisted(string name)
         {
@@ -1172,17 +1064,13 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 메서드가 정확히 한 자리에서 쓸 때 지역 변수가 쥐고 있는 것.
+        /// 메서드 안에서 정확히 한 번 저장되는 지역 변수의 값을 올린 명령어. 아니면 null.
         /// </summary>
         /// <remarks>
-        /// 저장된 값을 만들어낸 명령어를 돌려주므로, 그것에 이름 대는 일은 다른 무엇에 이름 대는 일과 같은 일이다. 한 번
-        /// 저장이 안전의 전부다: 그것이 몇 번을 돌든 이 읽기가 보았을 수 있는 다른 대입은 없으므로, 그중 어느 것이었는지에
-        /// 대해 추측하는 것이 없다. 하나보다 많으면 물음이 되돌아오고, 답은 여전히 아니오다.
+        /// 저장이 한 번뿐이면 다른 대입이 있을 수 없으므로 안전하다.
         ///
-        /// 값이 무엇이라 불리는지와 그것이 누구의 것인지가 둘 다 여기를 지나고, 둘은 함께 지나야 한다. 최적화하는 컴파일러는
-        /// 값을 지역 변수에 넣고 되읽는 자리에서 디버깅용은 그것을 다시 가져오므로, 같은 소스가 에디터 스캔에서 한 방식으로
-        /// 개발 빌드에서 다른 방식으로 읽혔다. 이름만 지역 변수를 꿰뚫어 보게 두면 <c>MapMove.StagePosition == 0</c> 이라고
-        /// 말하면서 그것이 누구의 것인지는 말하기를 거절하는 조건이 남았다.
+        /// 이름(<see cref="Describe(Instruction, Instruction, MethodDefinition)"/>)과 기준 객체(<see cref="Where"/>)가
+        /// 모두 이것을 써야 디버그 빌드와 릴리스 빌드의 결과가 같다.
         /// </remarks>
         private static Instruction StoredOnce(Instruction instruction, MethodDefinition within)
         {
@@ -1208,33 +1096,21 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 only = candidate;
             }
 
-            // 값은 저장 앞에 온 것이다. 그것을 읽는 일은 여기서 아무것에도 가두지 않는데, 저장은 이 읽기가 있는 자리가 아니라
-            // 메서드가 그것을 놓은 자리에 있기 때문이다.
+            // 저장은 현재 블록 밖에 있을 수 있으므로 boundary 없이 바로 앞 명령어를 돌려준다.
             return only?.Previous;
         }
 
         /// <summary>
-        /// 필드가 어느 씬이 도는지의 복사본에 지나지 않을 때, 그 필드가 불리는 이름.
+        /// 필드가 활성 씬 이름의 복사본일 때 <see cref="ActiveScene"/>. 아니면 null.
         /// </summary>
         /// <remarks>
-        /// <c>sceneName = SceneManager.GetActiveScene().name</c> 을 쥐고 제 본문 전체를
-        /// <c>sceneName == "GameClearScene"</c> 으로 지키는 컨트롤러는, 이것이 없으면 아무도 평가할 수 없는 문자열에 대한
-        /// 조건으로 읽힌다. 샘플 게임은 그 컨트롤러 하나를 화면 둘에 올리므로 그것이 말하는 것의 절반은 그것이 있지 않은
-        /// 화면에 대한 것이고 — 그 파수꾼을 보지 못하는 명세는 클리어 화면이 하는 모든 것을 게임오버 화면에도 약속한다.
-        /// 객체가 어느 씬에서 발견됐는지를 아는 쪽이면 그것을 결판낼 수 있지만, 아무도
-        /// <c>GameClearController.sceneName</c> 은 결판낼 수 없었다.
+        /// <c>sceneName = SceneManager.GetActiveScene().name</c> 을 저장해 두고 <c>sceneName == "GameClearScene"</c> 으로
+        /// 분기하는 컨트롤러는 이것이 있어야 씬 조건으로 읽힌다.
         ///
-        /// 이 한 가지 모양만 본다. 일반 규칙 — 한 번 쓰인 필드를 거기 쓰인 무엇으로 이름 붙인다 — 은 시도하고 실측했으며,
-        /// 틀렸다: 지역 변수의 한 번 저장은 읽기와 같은 메서드 안에 앉아 있지만 필드의 저장은 먼저 돌 필요가 없다.
-        /// <c>flag = true</c> 는 <c>flag</c> 에 대한 유일한 쓰기이고, 그 필드를 <c>1</c> 로 읽으면 그것에 대한 모든 검사가
-        /// <c>1 == 0</c> 이 되는데, 게임은 매번 그 분기를 타는데도 그것은 결코 탈 수 없는 분기로 읽힌다. 게다가 좋은 이름
-        /// 여든넷을 함께 잃었다 — <c>onPushArea1</c> 은 그것을 채운 <c>Array.Exists()</c> 보다 많은 말을 한다.
+        /// 이 식만 인정한다. 한 번 쓰인 필드를 그 값으로 일반화하면 틀린다. 필드 저장은 읽기보다 먼저 돈다는 보장이
+        /// 없어 <c>flag = true</c> 가 <c>1 == 0</c> 같은 조건을 만든다. 활성 씬 이름은 언제 읽어도 같은 식이다.
         ///
-        /// 활성 씬은 그 반론을 견딘다. 그것은 값이 아니기 때문이다: 어디서 읽히든 같은 식이고, 쓰기 전에도 쓴 뒤에도 같다.
-        /// 그래서 이것은 그 식에 이름을 대고 멈추며, 그것이 무엇이 되는지는 독자의 몫이다.
-        ///
-        /// private 이므로 C# 이 허용하는 유일한 쓰기 주체가 그 타입 자신이고, 직렬화되지 않으므로 그 한 번의 저장 아래에
-        /// 작성자가 넣어 둔 값이 없다.
+        /// private 이고 직렬화되지 않는 필드만 본다. 그래야 그 타입의 저장 하나가 유일한 값의 출처다.
         /// </remarks>
         private static string WhichScene(
             FieldReference field, MethodDefinition within, Instruction boundary, int depth)
@@ -1256,10 +1132,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return named == ActiveScene ? named : null;
         }
 
-        /// <summary>필드가 그것으로 읽혀도 되는 유일한 식. 다른 무엇도 되는 일이 없기 때문이다.</summary>
+        /// <summary><see cref="WhichScene"/> 이 필드 대신 쓰는 유일한 식.</summary>
         private const string ActiveScene = "SceneManager.GetActiveScene().name";
 
-        /// <summary>타입이 정확히 한 자리에서 쓸 때, 그 타입의 필드가 무엇에서 쓰이는가.</summary>
+        /// <summary>타입 안에서 필드가 정확히 한 번 저장될 때 저장 값을 올린 명령어.</summary>
         private static Instruction WrittenOnce(
             FieldReference field, MethodDefinition within, out MethodDefinition wroteIt)
         {
@@ -1267,8 +1143,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
 
             var owner = within?.DeclaringType;
 
-            // 읽고 있는 타입만 본다. 필드에 이름 대는 일이 참조를, 들여다보라고 청받은 적 없는 어셈블리로 해석하는 일이 결코
-            // 없도록.
+            // 다른 어셈블리를 resolve 하지 않도록 읽고 있는 타입의 필드만 본다.
             if (field?.DeclaringType == null || owner == null ||
                 field.DeclaringType.FullName != owner.FullName)
             {
@@ -1333,7 +1208,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return only.Previous;
         }
 
-        /// <summary>어떤 코드가 돌기 전에 인스펙터가 여기에 값을 넣어 두었을 수 있는지.</summary>
+        /// <summary>인스펙터가 코드 실행 전에 값을 넣었을 수 있는지.</summary>
         private static bool IsSerialized(FieldDefinition field)
         {
             if (!field.HasCustomAttributes)
@@ -1425,11 +1300,10 @@ namespace UnityPlayMcp.Affordances.CodeGen
         }
 
         /// <summary>
-        /// 열거형이 제 값 하나에 붙이는 이름.
+        /// enum 값의 멤버 이름.
         /// </summary>
         /// <remarks>
-        /// 숫자는 명령어가 나르는 것이고, 이름은 그것을 정의하는 어셈블리 안, 열거형 자신의 메타데이터에 산다. 숫자로
-        /// 물러서는데, 그것은 여전히 쓸 만하고 눈에 띄게 이름이 아니다.
+        /// 이름은 enum 을 정의한 어셈블리의 metadata 에 있다. 찾지 못하면 숫자를 돌려준다.
         /// </remarks>
         internal static string EnumName(TypeReference enumType, int value)
         {

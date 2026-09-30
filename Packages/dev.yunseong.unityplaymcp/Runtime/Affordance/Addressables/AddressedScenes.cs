@@ -8,19 +8,16 @@ using UnityEngine.SceneManagement;
 namespace UnityPlayMcp.Affordances.Scan
 {
     /// <summary>
-    /// 주소에 사는 씬들에 대해 순회에 일러 준다.
+    /// Addressables 주소로 로드하는 씬을 순회에 알려 준다.
     /// </summary>
     /// <remarks>
-    /// 이 어셈블리는 프로젝트에 Addressables 가 있을 때만 컴파일된다. asmdef 이 패키지 자신의 존재로부터
-    /// <c>UNITY_PLAY_MCP_ADDRESSABLES</c> 를 켜고 그것을 요구하므로, 그 패키지가 없는 프로젝트는 전에 빌드하던 것을 그대로 빌드하고
-    /// 이 파일은 컴파일러가 보기에 존재하지 않는다. 어딘가의 <c>#if</c> 가 아니라 제 어셈블리인 이유 전체가 그것이다.
-    ///
-    /// 디스크가 아니라 카탈로그에 묻는다. 빌드된 플레이어에는 애셋 데이터베이스도 씬 폴더도 없다. 그것이 가진 것은 게임 자신이
-    /// 씬을 찾는 데 쓰는 locator 이고, 그것은 구성상 같은 목록이다.
+    /// asmdef 이 Addressables 패키지가 있을 때만 <c>UNITY_PLAY_MCP_ADDRESSABLES</c> 를 켜고 요구하므로,
+    /// 패키지가 없는 프로젝트에서는 이 어셈블리가 컴파일되지 않는다.
+    /// 빌드된 플레이어에는 애셋 데이터베이스가 없으므로 디스크 대신 locator 에 묻는다.
     /// </remarks>
     internal static class AddressedScenes
     {
-        /// <summary>순회가 포기하기까지 주소로 된 씬 하나가 걸릴 수 있는 시간.</summary>
+        /// <summary>씬 하나의 로드를 기다리는 최대 시간(초).</summary>
         private const float Patience = 30f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -36,9 +33,8 @@ namespace UnityPlayMcp.Affordances.Scan
         /// 씬으로 해석되는 모든 주소.
         /// </summary>
         /// <remarks>
-        /// locator 는 같은 애셋에 대해 여러 키에 답한다 — 그 주소, 그 guid, 그 라벨 하나하나. guid 는 아무도 쓴 것이 아니므로
-        /// 버리고, 라벨은 resolver 가 고른 멤버가 무엇이든 그것을 띄우게 된다. 남는 것은 주소이고, 그것이 게임 자신이 쓰는
-        /// 이름이다.
+        /// locator 는 주소, guid, 라벨 모두에 답한다. guid 는 게임이 쓰는 이름이 아니고,
+        /// 라벨은 여러 씬 중 아무것이나 로드하므로 주소만 남긴다.
         /// </remarks>
         private static List<string> List()
         {
@@ -62,7 +58,7 @@ namespace UnityPlayMcp.Affordances.Scan
                     if (locator.Locate(key, typeof(SceneInstance), out var locations) &&
                         locations != null && locations.Count == 1)
                     {
-                        // 정확히 하나여야 한다. 여럿으로 답하는 키는 주소가 아니라 라벨이고, 그것을 로드하면 먼저 온 무엇이 올라오기 때문이다.
+                        // 여럿으로 답하는 키는 라벨이며, 로드하면 먼저 온 씬이 올라온다.
                         found.Add(address);
                     }
                 }
