@@ -7,10 +7,12 @@ import {
   objectKey,
   type FoldedPulseState,
   type PulseObject,
+  type PulseStatic,
   type PulseStore,
   type Staleness,
   type UnreadableFrame,
 } from "./pulse.js";
+import { REDACTED_TEXT } from "./secrets.js";
 import { searchTargets } from "./search.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
@@ -391,6 +393,70 @@ function latestReadingOf(store: PulseStore, scene: string) {
   };
 }
 
+/// `get_scene_state` 가 static 을 어떻게 실을지.
+export interface StaticsQuery {
+  /// 싣는지. 안 주면 범위를 좁히지 않은 조회에만 싣는다.
+  includeStatics?: boolean;
+  /// 선언 타입 이름에 이 문자열이 든 static 만 싣는다(대소문자 구분). 주면 `includeStatics` 를 안 줘도 싣는다.
+  staticsDeclaring?: string;
+}
+
+/// 응답에 실을 static 과, 싣지 않았다면 그 사실.
+///
+/// `root`/`selector` 로 좁힌 조회는 버튼·카드 상태를 읽으려는 것이고 static 은 어느 객체에도 매달리지 않는다. 그래서
+/// 기본으로 빼고, 뺐다는 것과 몇 개인지를 말한다 — 없는 것과 뺀 것이 같아 보이면 안 된다 (#72). 명시적으로 청하면
+/// 싣되, 값은 이미 `PulseStore` 가 가린 그대로다.
+function staticsSection(
+  statics: readonly PulseStatic[],
+  scoped: boolean,
+  query: StaticsQuery,
+): Record<string, unknown> {
+  const wanted = query.includeStatics ?? (!scoped || query.staticsDeclaring !== undefined);
+  if (!wanted) {
+    return {
+      staticsOmitted: {
+        count: statics.length,
+        reason: "A scoped query leaves out the statics this reading carries. "
+          + "Set includeStatics, or staticsDeclaring to pick them by declaring type.",
+      },
+    };
+  }
+  const declaring = query.staticsDeclaring;
+  return {
+    statics: declaring === undefined
+      ? statics
+      : statics.filter((declared) => declared.declaring.includes(declaring)),
+  };
+}
+
+/// 좁힌 조회에서 `changed` 는 보여 준 객체의 것만 남긴다.
+///
+/// 게임은 키를 `<scene>/<selector>|<무엇>` 으로 쓴다(`LiveState.cs` 의 `identity`). static 은 `Declaring::Member` 이고
+/// `scene` 은 장면 이름 하나라 어느 객체에도 속하지 않는다.
+function changedFor(changed: readonly string[], shown: readonly PulseObject[], scene: string) {
+  // 첫 `|` 에서 자르지 않는다. GameObject 이름에 `|` 가 들어가면 selector 안에도 들어간다.
+  const prefixes = shown.map((object) => `${objectKey(object, scene)}|`);
+  const kept = changed.filter((key) => prefixes.some((prefix) => key.startsWith(prefix)));
+  return {
+    changed: kept,
+    ...(kept.length === changed.length ? {} : { changedOmitted: changed.length - kept.length }),
+  };
+}
+
+/// 가린 값이 하나라도 실린 응답에 그 뜻을 적는다.
+///
+/// 구조를 훑지 않고 직렬화한 글에서 찾는다. `wait_for_condition` 은 멤버 값을 `unmet` 문장 안에 JSON 으로 싣기 때문에,
+/// 구조만 보면 그 안의 가린 값을 놓친다.
+function withRedactionNote(response: Record<string, unknown>): Record<string, unknown> {
+  const serialized = JSON.stringify(response);
+  if (!serialized.includes("$redacted") && !serialized.includes(`"${REDACTED_TEXT}"`)) return response;
+  return {
+    redaction: "Values shown as {\"$redacted\":true,...} (or displayed text \"[redacted]\") looked like credentials, "
+      + "by name or shape, and are hidden. length is the original string length; null and empty strings are never hidden.",
+    ...response,
+  };
+}
+
 function stateResponse(
   store: PulseStore,
   selector?: string,
@@ -398,6 +464,7 @@ function stateResponse(
   includeHistory = false,
   root?: string,
   depth?: number,
+  staticsQuery: StaticsQuery = {},
 ): ToolResponse {
   const state = store.getState();
   if (state === undefined || state === null) {
@@ -431,6 +498,7 @@ function stateResponse(
   const active = filterObjects(record.active);
   const deactive = filterObjects(record.deactive);
   const scene = String(record.scene ?? "");
+  const scoped = selector !== undefined || root !== undefined;
 
   // `root` 도 `depth` 도 없으면 지금까지와 똑같은 평평한 응답이다. 기존 호출이 갑자기 다른
   // 모양을 받지 않게 한다.
@@ -445,22 +513,24 @@ function stateResponse(
     // `statics` 는 어느 객체에도 매달리지 않으므로 tree 로는 표현되지 않는다. 빼면 이 모드에서만
     // 사라지고, 양이 적어 뺄 이유도 없다. `changed` 는 반대다 — 분주한 씬에서 길고, 마디마다
     // 붙는 `lastChangedReading` 이 같은 물음에 tree 모양으로 답한다.
-    return text(JSON.stringify({
+    return text(JSON.stringify(withRedactionNote({
       ...header,
       ...(root === undefined ? {} : { root }),
-      statics: record.statics ?? [],
+      ...staticsSection(state.statics, scoped, staticsQuery),
       gone: filterGone(record.gone),
       tree,
       ...(includeHistory
         ? { history: historyOf(store, objectsShownIn(tree), scene) }
         : {}),
-    }, null, 2));
+    }), null, 2));
   }
 
-  const response = {
+  const response = withRedactionNote({
     ...header,
-    changed: record.changed ?? [],
-    statics: record.statics ?? [],
+    ...(scoped
+      ? changedFor(state.changed, (includeInactive ? [...active, ...deactive] : active) as PulseObject[], scene)
+      : { changed: state.changed }),
+    ...staticsSection(state.statics, scoped, staticsQuery),
     active,
     ...(includeInactive ? { deactive } : {}),
     gone: filterGone(record.gone),
@@ -473,7 +543,7 @@ function stateResponse(
           ),
         }
       : {}),
-  };
+  });
   return text(JSON.stringify(response, null, 2));
 }
 
@@ -638,18 +708,21 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
       includeHistory: z.boolean().optional(),
       root: z.string().min(1).optional(),
       depth: z.number().int().positive().optional(),
+      includeStatics: z.boolean().optional(),
+      staticsDeclaring: z.string().min(1).optional(),
     },
-  }, async ({ selector, includeInactive, includeHistory, root, depth }) => {
+  }, async ({ selector, includeInactive, includeHistory, root, depth, includeStatics, staticsDeclaring }) => {
     try {
       await connection.ensureConnected();
-      return stateResponse(store, selector, includeInactive, includeHistory, root, depth);
+      return stateResponse(
+        store, selector, includeInactive, includeHistory, root, depth, { includeStatics, staticsDeclaring });
     } catch (error) {
       return {
         ...text(failureText("Scene state is unavailable", error)),
@@ -685,10 +758,10 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       if (state === undefined || state === null) {
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
       }
-      return text(JSON.stringify({
+      return text(JSON.stringify(withRedactionNote({
         ...readingHeader(store, state),
         elements: visibleElements(state, { selector, includeHidden }),
-      }, null, 2));
+      }), null, 2));
     } catch (error) {
       return {
         ...text(failureText("Visible elements are unavailable", error)),
@@ -734,12 +807,12 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       if (state === undefined || state === null) {
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
       }
-      return text(JSON.stringify({
+      return text(JSON.stringify(withRedactionNote({
         ...readingHeader(store, state),
         ...searchTargets(state, {
           name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit,
         }),
-      }, null, 2));
+      }), null, 2));
     } catch (error) {
       return {
         ...text(failureText("Target search is unavailable", error)),
@@ -910,6 +983,9 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       timeoutMilliseconds: timeoutMilliseconds ?? WAIT_DEFAULT_TIMEOUT_MS,
     }, extra.signal);
     const { payload, isError } = describeWaitOutcome(outcome, store.getLastUnreadableFrame());
-    return { ...text(JSON.stringify(payload, null, 2)), ...(isError ? { isError: true } : {}) };
+    return {
+      ...text(JSON.stringify(withRedactionNote(payload as unknown as Record<string, unknown>), null, 2)),
+      ...(isError ? { isError: true } : {}),
+    };
   });
 }

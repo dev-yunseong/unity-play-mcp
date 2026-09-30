@@ -1,3 +1,4 @@
+import { holdsRedaction, REDACTED_TEXT } from "./secrets.js";
 import type {
   FoldedPulseState,
   JsonValue,
@@ -73,6 +74,8 @@ export function displayedTextOf(object: PulseObject): string | undefined {
     if (!shows(component)) continue;
     for (const member of component.members) {
       if (typeof member.value === "string") return member.value;
+      // 가린 글자는 "글자가 없다" 가 아니다. 검색 후보가 둘을 가르도록 가렸다는 말을 대신 낸다 (#72).
+      if (holdsRedaction(member.value)) return REDACTED_TEXT;
     }
   }
   return undefined;
