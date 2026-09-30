@@ -14,6 +14,7 @@ export const serverInstructions = [
   "- Call stop_readings when done.",
   "",
   "Acting on the scene:",
+  "- Ids die on scene reload or when their object is recreated; re-read for new ones.",
   "- Every tool that aims at something takes the same target: targetId (an instance id from get_scene_state), the exact selector, or x and y. Read state first; never guess an id.",
   "- click, hover, and drag aim at a point and go through the game's own input path (Buttons, pointer handlers, colliders); drag takes from and to. enter_text and capture_screen need an object, so they take targetId or selector, not x and y.",
   "- Otherwise use move_mouse, mouse_button, press_key, set_axis, and set_button.",

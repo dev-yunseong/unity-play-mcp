@@ -98,7 +98,7 @@ function find(
   if (ref.targetId !== undefined) {
     const found = pool.find((entry) => entry.object.id === ref.targetId);
     return found === undefined
-      ? { ok: false, error: `${tool}: no object with id ${ref.targetId} in the last reading. Read the state again; it may have been destroyed.` }
+      ? { ok: false, error: `${tool}: no object with id ${ref.targetId} in the last reading. Ids stop being valid when the scene reloads or the object is destroyed or recreated; read again with get_visible_elements or get_scene_state to get a new id.` }
       : { ok: true, value: found };
   }
 

@@ -1014,7 +1014,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   const TARGET_HELP = "Aim with exactly one of targetId (instance id from get_scene_state), selector (the exact selector from get_scene_state or search_targets, e.g. \"Canvas[0]/Panel[1]/Button[0]\"), or x and y (game screen pixels from the top left, the same space as move_mouse). "
-    + "id and selector aim at the center of the last reading's rect and fail without moving when the target is inactive, off screen, covered, or the reading is stale.";
+    + "id and selector aim at the center of the last reading's rect and fail without moving when the target is inactive, off screen, covered, or the reading is stale. "
+    + "An id is valid only until the scene reloads or the object is destroyed or recreated; on \"Unknown target id\" or \"no object with id\", read again with get_visible_elements or get_scene_state for a new id.";
 
   // click, hover, drag 는 같은 일을 한다: 대상을 점으로 풀어 가상 마우스로 보낸다. 각 handler 는 action 하나를 만들어
   // `perform_actions` 와 같은 `expandActions` 로 보낸다.
@@ -1103,6 +1104,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   server.registerTool("perform_actions", {
     description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}. "
       + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect. "
+      + "An action that fails (for example an id that is no longer valid) does not stop the actions after it; every action reports its own success. "
+      + "Ids from get_scene_state or get_visible_elements stop being valid when the scene reloads or the object is destroyed or recreated, including inside one batch (a card that is used and replaced gets a new id); read again for new ids. "
       + "A capture_screen action returns its screenshot as an image content block, like the capture_screen tool, and its result entry carries the same description with imageBlock (the 1-based image position) instead of the base64 data.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
   }, async ({ actions }) => {
