@@ -9,8 +9,8 @@ namespace UnityPlayMcp.McpConfig.Editor
     /// server 목록을 object 하나에 담는 JSON 설정 파일. Claude Code, Cursor, VS Code 가 여기 해당한다.
     /// </summary>
     /// <remarks>
-    /// 세 agent 의 차이는 두 가지뿐이라 클래스를 셋으로 나누지 않고 생성자로 받는다: 목록이 놓이는 root key
-    /// (<c>mcpServers</c> 또는 <c>servers</c>) 와, entry 에 <c>type: stdio</c> 를 적는지 여부.
+    /// agent 간 차이는 root key (<c>mcpServers</c> 또는 <c>servers</c>) 와 <c>type: stdio</c> 기록 여부뿐이라
+    /// 생성자로 받는다.
     /// </remarks>
     internal sealed class JsonMcpConfigFormat : IMcpConfigFormat
     {
@@ -25,8 +25,7 @@ namespace UnityPlayMcp.McpConfig.Editor
 
         public bool Contains(string text, string serverName)
         {
-            // 쓰기와 같은 눈으로 읽는다. 여기서만 너그러우면 우리가 고칠 수 없는 파일이 "Not configured" 로
-            // 보이고, 버튼을 눌러야 비로소 못 고친다는 것을 알게 된다.
+            // 쓰기와 같은 기준으로 검사한다. 고칠 수 없는 파일이 "Not configured" 로 보이지 않게 한다.
             var servers = ServerList(Parse(text));
             return servers != null && servers[serverName] != null;
         }
@@ -65,7 +64,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         {
             var described = new JObject();
 
-            // VS Code 는 이 field 로 transport 를 고르고, 나머지 둘은 이 key 를 모른다.
+            // VS Code 만 이 field 로 transport 를 고른다.
             if (_writesTransportType)
             {
                 described["type"] = "stdio";
@@ -87,8 +86,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         /// server 목록. 아직 없으면 <c>null</c>.
         /// </summary>
         /// <remarks>
-        /// 이 자리에 object 가 아닌 값이 앉아 있으면 우리가 아는 형식의 파일이 아니다. 조용히 갈아 끼우면
-        /// 사용자가 적어 둔 값이 사라지므로, 주석을 만났을 때와 같이 멈춘다.
+        /// object 가 아닌 값이 있으면 덮어써서 사용자 값을 잃지 않도록 예외를 던진다.
         /// </remarks>
         private JObject ServerList(JObject root)
         {
@@ -123,10 +121,8 @@ namespace UnityPlayMcp.McpConfig.Editor
         /// 주석이 있는 파일은 건드리지 않는다.
         /// </summary>
         /// <remarks>
-        /// VS Code 의 .vscode/mcp.json 은 주석을 허용하고 사람들이 실제로 쓴다. 그런데 Newtonsoft 의
-        /// <c>JObject</c> 는 property 만 자식으로 받으므로, <c>CommentHandling.Load</c> 로 읽어도 object 안의
-        /// 주석은 담기지 못하고 사라진다. 읽어서 다시 쓰면 사용자가 적어 둔 주석이 조용히 지워진다는 뜻이다.
-        /// 그래서 여기서 멈추고, 손으로 고치라고 화면에 말한다.
+        /// VS Code 의 .vscode/mcp.json 은 주석을 허용한다. Newtonsoft <c>JObject</c> 는 <c>CommentHandling.Load</c>
+        /// 로 읽어도 object 안의 주석을 보존하지 못하므로, 다시 쓰면 주석이 지워진다.
         /// </remarks>
         private static void RefuseComments(string text)
         {
@@ -150,8 +146,7 @@ namespace UnityPlayMcp.McpConfig.Editor
         }
 
         /// <remarks>
-        /// <c>JObject.ToString</c> 은 <c>Environment.NewLine</c> 으로 줄을 바꾼다. Windows 의 Unity 에서 쓰면
-        /// 본문은 CRLF 인데 끝에 붙인 개행만 LF 인 파일이 나온다. 파일이 쓰던 개행으로 통일한다.
+        /// <c>JObject.ToString</c> 은 <c>Environment.NewLine</c> 을 쓰므로 개행이 섞일 수 있다. 파일의 기존 개행으로 통일한다.
         /// </remarks>
         private static string Serialize(JObject root, string newline)
         {

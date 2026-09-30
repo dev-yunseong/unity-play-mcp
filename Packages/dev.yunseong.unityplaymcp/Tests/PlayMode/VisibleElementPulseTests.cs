@@ -10,14 +10,11 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// 점수를 띄우는 <c>Text</c> 하나가 실제 pulse 문서에 실리는지, 그리고 그 문서가 그것에 대해 무엇을 말하는지.
+    /// 점수를 표시하는 <c>Text</c> 가 실제 pulse 문서에 실리는지와 그 내용을 확인한다.
     /// </summary>
     /// <remarks>
-    /// edit mode 에서는 못 한다. <c>Canvas</c> 아래 <c>Graphic</c> 은 <c>OnEnable</c> 에서 제 canvas 에 등록되고,
-    /// <c>RectTransform</c> 이 화면 좌표를 얻는 것도 그 뒤다.
-    ///
-    /// 이것이 이 변경의 요점이다: 이 객체는 감시 대상 멤버를 하나도 소유하지 않고, 구운 근거도 없으며, 인스펙터로 연결된
-    /// 호출도 없다. 예전에는 그래서 모든 pulse 에서 빠졌다.
+    /// <c>Graphic</c> 은 <c>OnEnable</c> 에서 canvas 에 등록되고 그 뒤에 화면 좌표를 얻으므로 play mode 에서만 돈다.
+    /// 이 객체는 감시 멤버, evidence, inspector 연결 호출이 모두 없어도 pulse 에 실려야 한다.
     /// </remarks>
     public sealed class VisibleElementPulseTests
     {
@@ -36,8 +33,7 @@ namespace UnityPlayMcp.Tests
 
         private static string Compose()
         {
-            // persistent 씬은 넘기지 않는다. 로드된 씬을 한 번 걷는 것으로 충분하고, 활성 씬을 그 자리에 넘기면 같은 객체를
-            // 두 번 걷는다.
+            // persistent scene 은 넘기지 않는다. 활성 scene 을 함께 넘기면 같은 객체를 두 번 walk 한다.
             return LiveState.Compose(
                 1L,
                 default(Scene),
@@ -57,7 +53,7 @@ namespace UnityPlayMcp.Tests
             label.transform.SetParent(canvas.transform, false);
             label.GetComponent<Text>().text = "Score: 12";
 
-            // OnEnable 이 돌고 레이아웃이 한 번 지나갈 짬.
+            // OnEnable 과 layout 이 한 번 돌 때까지 기다린다.
             yield return null;
 
             var document = Compose();
@@ -67,7 +63,7 @@ namespace UnityPlayMcp.Tests
             Assert.That(document, Does.Contain("\"member\":\"text\""));
             Assert.That(document, Does.Contain("\"value\":\"Score: 12\""));
 
-            // 어디인지와, 지금 눈에 닿는지.
+            // 위치와 현재 보이는지.
             Assert.That(document, Does.Contain("\"rect\":"));
             Assert.That(document, Does.Contain("\"onScreen\":"));
             Assert.That(document, Does.Contain("\"covered\":"));
@@ -117,7 +113,7 @@ namespace UnityPlayMcp.Tests
             var split = document.IndexOf("\"deactive\":", System.StringComparison.Ordinal);
             Assert.That(split, Is.GreaterThan(0), "pulse 가 deactive 목록을 쓰지 않았다.");
 
-            // 꺼진 객체는 값을 안 싣고 자리만 잡는다. 그것이 어느 통에 도착했는가가 곧 꺼져 있다는 진술이다.
+            // 꺼진 객체는 값 없이 자리만 싣는다. deactive 목록에 있다는 것이 꺼져 있다는 뜻이다.
             Assert.That(
                 document.IndexOf("\"path\":\"Canvas/Paused\"", System.StringComparison.Ordinal),
                 Is.GreaterThan(split));

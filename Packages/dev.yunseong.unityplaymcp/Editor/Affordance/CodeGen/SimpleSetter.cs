@@ -6,28 +6,21 @@ using Mono.Cecil.Cil;
 namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
-    /// 접근자가 필드 하나를 건드리는 것 말고는 아무것도 하지 않는 프로퍼티.
+    /// 접근자가 필드 하나를 읽거나 쓰기만 하는 프로퍼티.
     /// </summary>
     /// <remarks>
-    /// 프로퍼티를 거쳐 바뀐 상태는 보이지 않았다. 효과로 세는 것은 필드 저장과 엔진 setter 목록뿐이라,
-    /// <c>controller.currentLife -= 1</c> 이라고 쓰는 게임은 목숨을 잃는 조건은 완벽하게 읽히면서 효과는
-    /// 소리 하나뿐이었다. Trash Dash 에서 실측하니 그것이 목숨과 코인과 프리미엄 — 그 게임을 이루는 세
-    /// 가지였다.
+    /// 이것이 없으면 <c>controller.currentLife -= 1</c> 같은 프로퍼티 경유 쓰기가 효과로 잡히지 않는다.
     ///
-    /// 사소한 접근자만 본다. 그 제한이 설계의 전부다. 제 본문을 가진 setter 는 분석이 이미 읽는 메서드다:
-    /// 같은 모듈 안의 호출이므로 제 기록이 제 효과를 나른다. 호출 지점을 쓰기로 *한 번 더* 세면 한 번의
-    /// 변화가 두 번 보고되고, 그 둘을 합칠 것이 없으며, 독자는 그 둘이 같은 사건임을 알 방법이 없다.
+    /// 사소한 접근자만 본다. 본문이 있는 setter 는 분석이 따로 읽으므로, 호출 지점까지 쓰기로 세면 한 번의
+    /// 변화가 두 번 보고된다.
     ///
-    /// 프로퍼티가 아니라 필드의 이름을 붙인다. 그래야 쓰는 두 방식이 서로 일치한다. 클래스 안에서는
-    /// 컴파일러가 필드 저장을 뱉고, 밖에서는 이 호출을 뱉는다. 그 둘은 하나의 사실이고 하나의 이름으로
-    /// 도착해야 한다.
+    /// 프로퍼티가 아니라 필드 이름을 쓴다. 클래스 안의 필드 저장과 밖의 접근자 호출이 같은 이름이어야 한다.
     /// </remarks>
     internal static class SimpleSetter
     {
-        /// <summary>접근자가 사소한 것으로 세어지면서 담을 수 있는 명령어 수.</summary>
+        /// <summary>사소한 접근자로 인정하는 최대 명령어 수.</summary>
         /// <remarks>
-        /// 저장은 셋에 return, 적재는 둘에 return 이다. 디버그 빌드가 채워 넣는 <c>nop</c> 을 받아들일 만큼
-        /// 넉넉하고, 분기가 들어간 것은 아무것도 통과하지 못할 만큼 빡빡하다.
+        /// 디버그 빌드의 <c>nop</c> 은 허용하고 분기가 들어간 본문은 걸러지는 크기다.
         /// </remarks>
         private const int MaxInstructions = 8;
 
@@ -35,12 +28,8 @@ namespace UnityPlayMcp.Affordances.CodeGen
             new Dictionary<string, FieldReference>(StringComparer.Ordinal);
 
         /// <summary>
-        /// 사소한 접근자가 닿는 필드. 그 밖의 것이면 null.
+        /// 사소한 접근자가 닿는 필드. 사소한 접근자가 아니면 null.
         /// </summary>
-        /// <remarks>
-        /// 참조 자신의 이름으로 캐시한다. 프로퍼티는 여러 자리에서 불리고 그 사이에 답이 달라질 수 없기
-        /// 때문이다.
-        /// </remarks>
         internal static FieldReference FieldBehind(MethodReference method)
         {
             if (method == null || !IsAccessor(method.Name))
@@ -85,7 +74,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                 return null;
             }
 
-            // 엔진 자신의 프로퍼티는 게임의 상태가 아니고, 그중 몇은 이미 이름으로 그것이 무엇인지 인식된다.
+            // 엔진 프로퍼티는 게임 상태가 아니고, 일부는 이미 이름으로 인식된다.
             var space = definition.DeclaringType?.Namespace;
 
             if (space != null &&
@@ -123,7 +112,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     case Code.Ldsfld:
                         if (touched != null)
                         {
-                            // 필드가 둘이다. 그러니 이것은 프로퍼티의 이름을 쓴 필드 하나가 아니다.
+                            // 필드가 둘이면 필드 하나를 감싼 프로퍼티가 아니다.
                             return null;
                         }
 
@@ -131,8 +120,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                         continue;
 
                     default:
-                        // 그 밖의 무엇이든 — 분기, 호출, 산술 — 접근자가 제 일을 한다는 뜻이고, 그 일은 그것이 쓰인
-                        // 자리에서 읽힌다.
+                        // 분기, 호출, 산술이 있으면 접근자 본문을 분석이 따로 읽는다.
                         return null;
                 }
             }
@@ -140,7 +128,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
             return touched;
         }
 
-        /// <summary>어셈블리 사이에서 비운다: 한 이름이 각각에서 다른 것을 뜻한다.</summary>
+        /// <summary>어셈블리마다 비운다. 같은 이름이 어셈블리마다 다른 것을 가리킬 수 있다.</summary>
         internal static void Forget()
         {
             Known.Clear();

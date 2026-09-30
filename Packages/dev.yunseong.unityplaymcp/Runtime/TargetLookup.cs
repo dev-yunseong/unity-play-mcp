@@ -19,15 +19,13 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// scan 이 보고한 instance id 뒤의 GameObject. 없으면 false.
+        /// scan 이 보고한 instance id 의 GameObject 를 찾는다.
         /// </summary>
         /// <remarks>
-        /// <c>ScannedTarget</c> 은 <c>Button</c> 과 <c>InputField</c> 만 꺼내 준다. 포인터로
-        /// 겨누는 쪽은 collider 와 renderer 도 읽어야 하므로 GameObject 자체가 필요하다.
+        /// pointer targeting 은 collider 와 renderer 도 읽어야 하므로 <c>ScannedTarget</c> 대신 GameObject 를 준다.
         /// <para>
-        /// 파괴된 오브젝트와 한 번도 없던 id 는 여기서 갈라지지 않는다.
-        /// <c>Resources.InstanceIDToObject</c> 가 둘 다 null 로 답하고, 그 둘을 가르는 런타임
-        /// API 는 없다. 부르는 쪽의 에러 문장이 두 경우를 함께 말해야 한다.
+        /// <c>Resources.InstanceIDToObject</c> 는 파괴된 오브젝트와 없는 id 를 구분하지 못한다.
+        /// 호출하는 쪽의 에러 메시지가 두 경우를 함께 말해야 한다.
         /// </para>
         /// </remarks>
         public bool TryGetGameObject(int id, out GameObject gameObject)

@@ -100,7 +100,7 @@ namespace UnityPlayMcp
                         sendByConnectionId[connectionId] = send;
                     }
 
-                    // websocket-sharp 의 thread 에서 불린다. 읽는 쪽은 main thread 의 host 다.
+                    // websocket-sharp thread 에서 호출되고 main thread 의 host 가 읽는다.
                     System.Threading.Interlocked.Increment(ref clientsOpened);
                 },
                 connectionId =>

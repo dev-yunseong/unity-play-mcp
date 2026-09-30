@@ -10,11 +10,11 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// ID 로 겨누는 <c>pointer_hover</c> (#70).
+    /// id 로 대상을 지정하는 <c>pointer_hover</c> 를 확인한다 (#70).
     /// </summary>
     /// <remarks>
-    /// <see cref="PointerTargetActionTests"/> 와 같은 이유로 play mode 여야 하고 같은 방식으로 돈다: host 는 프레임과
-    /// <c>OnMouse*</c> 배달만 맡고, 액션은 여기서 만든 executor 가 돌려 결과 DTO 를 직접 읽는다.
+    /// <see cref="PointerTargetActionTests"/> 와 같은 방식이다. host 는 프레임과 <c>OnMouse*</c> 배달만 맡고,
+    /// action 은 여기서 만든 executor 로 실행해 결과 DTO 를 읽는다.
     /// </remarks>
     public sealed class PointerHoverActionTests
     {
@@ -51,7 +51,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 카드 hover 그 자체. 버튼을 누르지 않고 uGUI 의 pointer enter 만 게임에 닿는다.
+        /// 버튼을 누르지 않고 uGUI pointer enter 만 게임에 전달한다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_EntersAuGuiCardWithoutPressingIt()
@@ -74,14 +74,14 @@ namespace UnityPlayMcp.Tests
             Assert.That(hit.HitId, Is.EqualTo(card.gameObject.GetInstanceID()));
             Assert.That(hit.Hit, Is.EqualTo("hovered card"));
 
-            // 좌상단 기준 게임 화면 좌표이고, 그 자리는 카드 안이다.
+            // 좌상단 기준 화면 좌표이고 카드 안쪽이다.
             var cardCenterFromTop = Screen.height * 0.5f;
             Assert.That(hit.X, Is.EqualTo(Screen.width * 0.5f).Within(30f));
             Assert.That(hit.Y, Is.EqualTo(cardCenterFromTop).Within(30f));
         }
 
         /// <summary>
-        /// 다른 카드로 옮기면 먼저 것이 exit 를 받는다. 툴팁을 닫는 게임 코드가 기대하는 순서다.
+        /// 다른 카드로 옮기면 이전 카드가 exit 를 받는다. 툴팁을 닫는 게임 코드가 이 순서에 의존한다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_MovingToAnotherCardExitsTheFirst()
@@ -102,7 +102,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// collider 대상의 hover 는 엔진과 같은 <c>OnMouseEnter</c>/<c>OnMouseOver</c> 로 닿는다.
+        /// collider 대상 hover 는 엔진과 같이 <c>OnMouseEnter</c>/<c>OnMouseOver</c> 로 전달된다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_ReachesTheOnMouseEnterOfAColliderTarget()
@@ -126,14 +126,14 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 가려진 카드는 거절하고 무엇이 가렸는지 말한다. 포인터는 옮기지 않으므로 가려진 카드도 가린 것도 hover 를 받지 않는다.
+        /// 가려진 카드는 거절하고 가린 것의 이름을 알린다. 포인터를 옮기지 않으므로 둘 다 hover 를 받지 않는다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_RefusesACoveredCardAndNamesWhatCoveredIt()
         {
             CreateRuntime();
             var covered = CreateCard("covered card", 0.5f);
-            // 나중에 만든 형제가 위에 그려지고 raycast 에 먼저 답한다.
+            // 나중에 만든 형제가 위에 그려져 raycast 에 먼저 맞는다.
             var coverer = CreateCard("covering card", 0.5f);
             yield return null;
             IsolateFixtureRaycaster();
@@ -149,7 +149,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 비활성, 파괴, 그리고 장면이 바뀐 뒤의 id. 셋 다 다른 대상으로 조용히 풀리지 않고 서로 다른 말로 실패한다.
+        /// 비활성, 파괴, scene 변경 뒤의 id 는 다른 대상으로 풀리지 않고 각각 다른 오류로 실패한다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_TellsInactiveAndDestroyedTargetsApart()
@@ -164,7 +164,7 @@ namespace UnityPlayMcp.Tests
             inactive.gameObject.SetActive(false);
             Object.DestroyImmediate(doomed.gameObject);
 
-            // 파괴된 자리에 같은 이름의 새 카드가 선다. 장면이 바뀐 뒤 같은 모양의 UI 가 다시 만들어지는 경우다.
+            // 같은 이름의 새 카드를 만든다. scene 이 바뀐 뒤 같은 UI 가 다시 생기는 경우다.
             var replacement = CreateCard("doomed card", 0.7f);
             yield return null;
             IsolateFixtureRaycaster();
@@ -183,7 +183,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 겨눌 때는 맞았는데 도착하는 사이 게임이 대상을 끈 경우. 겨눈 때의 답을 그대로 성공으로 보고하지 않는다.
+        /// 포인터가 이동하는 사이 게임이 대상을 끄면 성공으로 보고하지 않는다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_FailsWhenTheTargetIsDeactivatedAsThePointerArrives()
@@ -202,8 +202,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 도착하는 사이 다른 것이 위에 덮인 경우 — 움직이는 카드 더미에서 hover 한 카드 위로 다른 카드가 올라오는 장면이다.
-        /// 포인터가 실제로 올라앉은 것을 이름으로 말한다.
+        /// 포인터가 이동하는 사이 다른 것이 위에 덮이면 실제로 포인터 아래 있는 것의 이름을 알린다.
         /// </summary>
         [UnityTest]
         public IEnumerator PointerHover_FailsWhenSomethingCoversTheTargetAsThePointerArrives()
@@ -253,7 +252,7 @@ namespace UnityPlayMcp.Tests
             string method, List<object> parameters, System.Action<ActionResultDto> completed)
         {
             yield return executor.Execute(NextActionId(), method, parameters, completed);
-            // 결과를 받은 프레임과 마지막 OnMouse* 가 배달되는 프레임이 같아, 한 프레임을 더 준다.
+            // 결과가 온 프레임에 마지막 OnMouse* 가 배달되므로 한 프레임을 더 기다린다.
             yield return null;
         }
 
@@ -286,7 +285,7 @@ namespace UnityPlayMcp.Tests
             return targetObject.AddComponent<MouseMessageFixtureBehaviour>();
         }
 
-        /// <param name="acrossTheScreen">화면 가로에서 차지할 자리, 0 에서 1 사이.</param>
+        /// <param name="acrossTheScreen">화면 가로 위치 비율 (0–1).</param>
         private HoverFixtureBehaviour CreateCard(string name, float acrossTheScreen)
         {
             if (canvasObject == null)

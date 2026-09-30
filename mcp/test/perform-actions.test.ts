@@ -3,10 +3,9 @@ import test from "node:test";
 
 import { performActionSchema, toWireAction } from "../src/tools.js";
 
-/// agent 가 보내는 이름 있는 action 과, Unity 가 받아야 하는 `params` 배열의 짝.
+/// agent 가 보내는 이름 있는 action 과 Unity 가 받아야 하는 `params` 배열의 대응.
 ///
-/// Unity 쪽 protocol 은 이 issue 에서 건드리지 않았다. 입력 모양이 tuple 에서 이름 있는 field 로
-/// 바뀌어도 배열의 순서와 값은 그대로여야 하므로, 16 개 method 를 전부 여기에 못 박는다.
+/// 배열의 순서와 값은 Unity 쪽 protocol 이므로 16 개 method 를 모두 고정한다.
 const wireCases: ReadonlyArray<{
   name: string;
   action: unknown;

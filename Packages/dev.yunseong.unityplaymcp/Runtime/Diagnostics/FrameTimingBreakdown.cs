@@ -1,11 +1,9 @@
 namespace UnityPlayMcp.Diagnostics
 {
     /// <summary>
-    /// 한 집계 구간의 CPU·GPU 프레임타임 분해와 병목 분류.
+    /// 한 집계 구간의 CPU·GPU 프레임타임 분해와 병목 분류. 단위는 밀리초다.
     ///
-    /// 시간 값의 단위는 밀리초이고, 항목마다 따로 없을 수 있다. 드라이버가 GPU 타이머를 주지
-    /// 않거나 렌더 스레드가 없는 구성에서는 해당 값이 0으로 오는데, 0을 그대로 실으면 "공짜로
-    /// 그렸다"로 읽힌다. 그래서 없는 항목은 <c>null</c>로 남겨 보고에서 통째로 뺀다.
+    /// 수집되지 않은 항목은 0 대신 <c>null</c> 로 두어 보고에서 뺀다. 0 은 비용이 없다고 읽힌다.
     /// </summary>
     internal readonly struct FrameTimingBreakdown
     {
@@ -26,8 +24,7 @@ namespace UnityPlayMcp.Diagnostics
         }
 
         /// <summary>
-        /// 평균을 낸 프레임 수. 프레임 타이밍 이력은 Unity가 들고 있고 그 길이를 SDK가 정할 수
-        /// 없어서, 같은 구간의 <c>FrameTimeStatistics.FrameCount</c>보다 대체로 적다.
+        /// 평균을 낸 프레임 수. 이력 길이를 Unity 가 정하므로 <c>FrameTimeStatistics.FrameCount</c> 보다 대체로 적다.
         /// </summary>
         public int FrameCount { get; }
 

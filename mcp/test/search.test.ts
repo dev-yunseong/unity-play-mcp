@@ -4,9 +4,7 @@ import test from "node:test";
 import type { FoldedPulseState, JsonValue, PulseComponent, PulseObject, PulseOffers } from "../src/pulse.js";
 import { searchTargets } from "../src/search.js";
 
-/// `visible.test.ts`와 같은 이유로 `PulseStore.fold`를 태우지 않고 `FoldedPulseState` literal
-/// 에 대고 돈다 — 여기서 검증하려는 것은 접힌 상태에서 무엇을 고르느냐이지 무엇이 접히느냐가
-/// 아니다.
+/// 선택 로직만 검증하므로 `PulseStore.fold` 를 거치지 않고 `FoldedPulseState` literal 을 쓴다.
 function component(on: string, values: Record<string, JsonValue>): PulseComponent {
   return {
     on,

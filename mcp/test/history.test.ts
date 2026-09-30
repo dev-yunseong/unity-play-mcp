@@ -9,8 +9,8 @@ const at = (on: string, member: string, among?: number): string =>
     ? `${on}\u0000${member}`
     : `${on}\u0000${member}\u0000${among}`;
 
-/// 게임이 실제로 내는 모양. component 는 `{"on":<타입>,"m":[...]}` 이고(`LiveState.cs:669`),
-/// `among` 은 같은 타입의 둘째 component 부터 실린다 — 첫째 것에는 아예 없다.
+/// 게임이 보내는 형식. component 는 `{"on":<타입>,"m":[...]}` 이고 `among` 은 같은 타입의 둘째
+/// component 부터 붙는다.
 function object(id: number, selector: string, value: number, scene?: string): PulseObject {
   return {
     id,
@@ -73,7 +73,7 @@ test("a whole reading keeps the history of the keys that survive it", () => {
   const store = new PulseStore();
   store.fold(pulse({ whole: true, active: [object(1, "Card", 1)] }));
   store.fold(pulse({ reading: 2, active: [object(1, "Card", 2)] }));
-  // 전달이 유실된 뒤의 복구. 씬은 그대로다.
+  // 유실 뒤 복구로 온 `whole` reading. 씬은 그대로다.
   store.fold(pulse({ reading: 3, whole: true, active: [object(1, "Card", 2)] }));
   assert.deepEqual(valuesAt(store, "Main/Card", at("Widget", "value")), [1, 2]);
 });
@@ -112,7 +112,7 @@ test("a gone key becomes a tombstone instead of vanishing", () => {
   assert.equal(state?.gone.length, 1);
   assert.equal(state?.gone[0]?.goneAtReading, 4);
   assert.equal(state?.gone[0]?.object.selector, "Card");
-  // tombstone 은 마지막 모습을 들되 이력은 함께 버린다.
+  // tombstone 은 마지막 모습을 남기고 이력은 버린다.
   assert.equal(store.getObjectHistory("Main/Card").size, 0);
 });
 

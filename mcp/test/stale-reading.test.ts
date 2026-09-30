@@ -11,10 +11,9 @@ import { waitForCondition } from "../src/wait.js";
 
 /// #69 의 회귀 test.
 ///
-/// Unity 쪽 `Pulse` 는 `Begin` 마다 `reading` 을 1부터 다시 센다 (`Pulse._reading` 은 인스턴스
-/// 필드다). `stop_readings`→`start_readings`, Play Mode 재진입, reload 뒤 재시작이 모두 그렇다.
-/// 그 run 의 첫 reading 과 장면이 바뀐 reading 은 `whole` 이다. 이 파일의 가짜 게임은 그 규칙을
-/// 그대로 따르고, 실제 `UnityConnection`·`PulseStore`·tool handler 를 거쳐 agent 가 보는 답을 본다.
+/// Unity `Pulse` 는 `Begin` 마다(`stop_readings`→`start_readings`, Play Mode 재진입, reload) `reading` 을
+/// 1부터 다시 센다. run 의 첫 reading 과 장면이 바뀐 reading 은 `whole` 이다. 가짜 게임이 이 규칙을
+/// 따르고, 실제 `UnityConnection`, `PulseStore`, tool handler 를 거친 응답을 확인한다.
 
 class FakeSocket extends EventEmitter {
   readyState = 0;
@@ -45,7 +44,7 @@ interface GameRun {
   scene?: string;
 }
 
-/// package 의 번호 규칙을 흉내 내는 게임. `runIds` 가 참이면 0.3.0 package 처럼 run 을 싣는다.
+/// package 의 번호 규칙을 따르는 가짜 게임. `runIds` 가 참이면 0.3.0 package 처럼 run 을 싣는다.
 class FakeGame {
   readonly sockets: FakeSocket[] = [];
   private run?: GameRun;
@@ -195,7 +194,7 @@ for (const runIds of [false, true]) {
     assert.equal(state.scene, "GameScene");
     assert.equal(state.active[0]?.by[0]?.members[0]?.value, "GameScene label");
     assert.equal(state.stale, undefined);
-    // 이전 run 의 이력은 새 run 의 번호와 섞이지 않는다.
+    // 이전 run 의 이력이 새 run 의 번호와 섞이지 않아야 한다.
     assert.deepEqual(
       [...store.getObjectHistory("LobbyScene/Canvas[0]/Label[0]").keys()],
       [],
@@ -208,7 +207,7 @@ for (const runIds of [false, true]) {
     await call("start_readings");
     for (let reading = 0; reading < 203; reading++) game.take("LobbyScene");
 
-    // Play Mode 재진입: 소켓이 끊기고, Unity 는 reading 을 멈춘 채 다시 뜬다.
+    // Play Mode 재진입: socket 이 끊기고 Unity 는 reading 을 멈춘 채 다시 뜬다.
     game.socket.close();
     game.endRun();
     const dropped = await sceneState();
@@ -236,7 +235,7 @@ test("a new run's delta cannot be folded onto the previous run and marks the sta
   await call("stop_readings");
   await call("start_readings");
   advance(1_000);
-  // 전량 reading 이 오지 않고 차이만 온 경우. 그 위에 얹으면 이전 장면의 객체가 새 run 의 것처럼 남는다.
+  // `whole` reading 없이 차이만 온 경우. 그대로 얹으면 이전 장면의 객체가 새 run 의 것처럼 남는다.
   game.take("GameScene", { whole: false });
 
   const state = await sceneState();
@@ -263,7 +262,7 @@ test("a reading the store does not apply leaves the arrival time alone", () => {
   now = 9_000;
   // 같은 run 에서 이미 지나간 번호.
   assert.equal(store.fold({ ...frame(2, "Game"), run: "a" }), false);
-  // 다른 run 의 차이.
+  // 다른 run 의 차이 frame.
   assert.equal(store.fold({ ...frame(7, "Game"), whole: false, run: "b" }), false);
 
   assert.equal(store.getState()?.reading, 2);
@@ -306,8 +305,8 @@ test("wait_for_condition does not accept a stale state and treats a new run as n
   ]);
 });
 
-/// 재연결 뒤에도 Unity 가 끊긴 동안 쌓아 둔 차이가 전량 reading 보다 먼저 온다. 그 차이는 놓친 차이를 채우지
-/// 못하므로 상태를 새것으로 되돌리지 않는다.
+/// 재연결 뒤에는 끊긴 동안 밀린 차이 frame 이 `whole` reading 보다 먼저 온다. 놓친 변화를 채우지 못하므로
+/// 상태를 최신으로 되돌리지 않는다.
 test("only a whole reading clears an interruption; a leftover delta keeps the state stale", () => {
   const store = new PulseStore();
   const frame = (reading: number, whole: boolean): PulseFrame => ({
@@ -336,13 +335,13 @@ test("a reconnect into a run that kept going stays stale until the requested who
   reconnect();
   await new Promise((resolve) => setImmediate(resolve));
 
-  // 끊긴 동안 쌓인 차이가 먼저 온다.
+  // 끊긴 동안 밀린 차이 frame 이 먼저 온다.
   game.take("LobbyScene");
   const leftover = await sceneState();
   assert.equal(leftover.reading, 3);
   assert.equal(leftover.stale?.reason, "disconnected");
 
-  // 새 client 를 본 package 가 청한 전량 reading.
+  // 새 client 연결 뒤 package 가 보내는 `whole` reading.
   game.take("LobbyScene", { whole: true });
   const recovered = await sceneState();
   assert.equal(recovered.reading, 4);

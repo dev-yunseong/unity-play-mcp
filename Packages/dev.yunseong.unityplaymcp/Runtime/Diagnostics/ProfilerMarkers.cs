@@ -6,18 +6,13 @@ namespace UnityPlayMcp.Diagnostics
     /// The SDK's Profiler markers, in one place.
     /// </summary>
     /// <remarks>
-    /// Without these, SDK cost is indistinguishable from game cost in the Profiler hierarchy, and
-    /// the only way to separate them is Deep Profile — whose overhead distorts the very numbers the
-    /// measurement is after. A marker costs nothing in a non-development build, where
-    /// <see cref="ProfilerMarker"/> compiles away.
+    /// Separates SDK cost from game cost without Deep Profile. Markers compile away in
+    /// non-development builds.
     ///
-    /// Names read <c>UnityPlayMcp.&lt;Subsystem&gt;.&lt;Operation&gt;</c> and are keyed to the subsystem
-    /// rather than to the class implementing it, so a replaced producer inherits the name and its
-    /// numbers stay comparable across the change.
+    /// Names follow <c>UnityPlayMcp.&lt;Subsystem&gt;.&lt;Operation&gt;</c>, keyed to the subsystem
+    /// rather than the class, so numbers stay comparable when an implementation is replaced.
     ///
-    /// Granularity is deliberate: a marker per component, not per field. Per-field sampling would
-    /// emit tens of thousands of samples per scan, and the Profiler's own bookkeeping would then be
-    /// a large part of what the capture shows.
+    /// One marker per component, not per field; per-field markers would flood the Profiler.
     /// </remarks>
     internal static class ProfilerMarkers
     {
@@ -57,8 +52,7 @@ namespace UnityPlayMcp.Diagnostics
         public static readonly ProfilerMarker CaptureEncode = new ProfilerMarker("UnityPlayMcp.Capture.Encode");
 
         /// <summary>
-        /// Building the upload requests. The web request waits themselves are not wrapped — a
-        /// marker spanning a yield reports idle time as cost.
+        /// Building the upload requests. Web request waits are excluded; spanning a yield counts idle time.
         /// </summary>
         public static readonly ProfilerMarker CaptureUpload = new ProfilerMarker("UnityPlayMcp.Capture.Upload");
 

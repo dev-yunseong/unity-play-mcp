@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace UnityPlayMcp.Affordances.Scan
 {
-    /// <summary>컴포넌트의 인스펙터 필드가 무엇을 가리키는가.</summary>
+    /// <summary>컴포넌트의 인스펙터 필드가 가리키는 객체 하나.</summary>
     internal struct Reference
     {
         internal string Field;
@@ -14,27 +14,21 @@ namespace UnityPlayMcp.Affordances.Scan
         internal string Name;
 
         /// <summary>
-        /// 두 컴포넌트 위의 두 필드를 같은 객체로 만드는 것.
+        /// 두 필드가 같은 객체를 가리키는지 비교하는 조인 키.
         /// </summary>
         /// <remarks>
-        /// 그 숫자 자체는 그것을 만들어낸 실행 밖에서 아무 뜻도 없는데, 그것이 바로 원하는 바다: 그것은 이음쇠 키이지 간직할
-        /// 정체가 아니다. 같은 이벤트 채널 애셋을 쥔 두 behaviour 는 여기서 같은 것을 나르고, 리포트 전체에서 그 사실이 존재하는
-        /// 자리는 거기뿐이다 — 코드는 어떤 타입의 채널이라고 말하고 씬은 어느 애셋이라고 말하며, 어느 쪽도 홀로 그것을 말하지
-        /// 않는다.
+        /// 인스턴스 id 라 그 실행 안에서만 뜻이 있다. 같은 이벤트 채널 애셋을 쓰는 behaviour 들을 이 값으로 잇는다.
         /// </remarks>
         internal int Id;
 
-        /// <summary>씬 안의 무엇일 때, 씬의 어디인지.</summary>
+        /// <summary>씬 객체일 때 그 경로.</summary>
         internal string Path;
 
         /// <summary>
-        /// 어느 씬에도 없을 때 참 — 프리팹이거나 애셋이다.
+        /// 어느 씬에도 없으면 true. 프리팹이거나 애셋이다.
         /// </summary>
         /// <remarks>
-        /// 말해야만 한다. 예전에는 그 둘이 똑같아 보였기 때문이다. 프리팹의 루트 transform 은 부모가 없으므로 그것에 대해
-        /// 만들어진 경로는 제 이름이었는데, 그것이 정확히 씬 루트 객체의 경로가 생긴 모습이다:
-        /// <c>CardManager.cardPrefab -&gt; "Card"</c> 와 <c>MapMove.character -&gt; "wordHead"</c> 가 같은 모양이었고 그중
-        /// 하나만이 테스트가 갈 수 있는 자리였다.
+        /// 프리팹 루트의 경로는 씬 루트 객체의 경로와 구분되지 않으므로 명시한다. 테스트가 찾아갈 수 있는 것은 씬 객체뿐이다.
         /// </remarks>
         internal bool Asset;
 
@@ -42,45 +36,32 @@ namespace UnityPlayMcp.Affordances.Scan
         /// 참조된 프리팹이 나르는 컴포넌트 타입들.
         /// </summary>
         /// <remarks>
-        /// "누가 이것을 만드는가" 에 대한 답이 이것이다. 프리팹 위에만 존재하는 타입은 무언가 그것을 인스턴스화하기 전까지
-        /// 리포트에서 빠져 있고, 리포트는 그것이 아무도 그러지 않기 때문인지 — 죽은 코드 — 아니면 그 실행이 아직 거기 이르지
-        /// 못했기 때문인지 말할 수 없었다. 씬 *안에 있는* 컴포넌트가 인스펙터 필드로 쥔 프리팹은 두 번째 경우이고, 그것이
-        /// 드러나는 자리가 여기다.
+        /// 프리팹에만 있는 타입이 죽은 코드인지, 아직 인스턴스화되지 않았을 뿐인지 가리는 데 쓴다.
         /// </remarks>
         internal List<string> Carries;
 
         /// <summary>
-        /// 더 따라가기 위한 객체 그 자체. 리포트에는 결코 쓰지 않는다.
+        /// <see cref="SerializedReferences.Trace"/> 가 따라갈 객체. 리포트에는 쓰지 않는다.
         /// </summary>
-        /// <remarks>
-        /// 리포트가 받는 것은 이름과 이음쇠 키다. 이것은 살아 있는 참조이고, 두 걸음 떨어져 쥐고 있는 프리팹을 찾을 수 있도록
-        /// 하기 위해서만 존재한다. 일부러 쓰인 형태에서 뺀다 — 이 실행 밖의 무엇도 그것을 쓸 수 없다.
-        /// </remarks>
         internal UnityEngine.Object Held;
     }
 
     /// <summary>
-    /// Unity 가 컴포넌트 위에 직렬화해 둔 객체 참조를 읽는다.
+    /// 컴포넌트에 직렬화된 객체 참조를 읽는다.
     /// </summary>
     /// <remarks>
-    /// 분석은 코드를 읽고 스캔은 계층을 읽는데, 인스펙터 참조는 그 어느 쪽에도 속하지 않는 유일한 사실이다.
-    /// <c>_teleportChannel.RaiseEvent()</c> 는 어느 채널인지 말하지 않은 채 코드 안에 있고, 애셋은 그것이 올라갔을 때 무슨
-    /// 일이 일어나는지 말하지 않은 채 씬 안에 있다. Chop Chop 에서 실측하니 채널 타입 23 개가 근거 안에 발행자와 구독자를
-    /// 둘 다 가지고 있었고 그중 하나도 실제 애셋과 짝지어질 수 없었다.
-    ///
-    /// 참조만 읽고 값은 읽지 않는다. 필드의 숫자나 문자열은 게임 자신의 데이터이고 아무 배선도 나르지 않는다. 그것을 읽으면
-    /// 리포트가 게임 콘텐츠의 덤프가 되고, 덤프만 한 크기를 치르며, 플레이어가 무엇을 할 수 있는지에 대해서는 아무 말도
-    /// 하지 않는다.
+    /// 코드는 어느 채널 타입을 쓰는지만, 씬은 어느 애셋인지만 알므로 인스펙터 참조로 둘을 잇는다.
+    /// 숫자나 문자열 값은 `wiring` 이 아니라 게임 데이터이고 리포트를 키우므로 읽지 않는다.
     /// </remarks>
     internal static class SerializedReferences
     {
         private const int MaxReferencesPerComponent = 32;
         private const int MaxElementsPerCollection = 16;
 
-        /// <summary>프리팹 하나에서 서로 다른 컴포넌트 타입을 몇 개까지 읽는지.</summary>
+        /// <summary>프리팹 하나에서 읽는 서로 다른 컴포넌트 타입의 최대 수.</summary>
         private const int MaxCarriedTypes = 16;
 
-        /// <summary>각 프리팹이 무엇을 나르는지. 몇 개의 필드가 그것을 가리키든 한 번 알아낸다.</summary>
+        /// <summary>프리팹별 컴포넌트 타입 캐시.</summary>
         private static readonly Dictionary<int, List<string>> CarriedByPrefab =
             new Dictionary<int, List<string>>();
 
@@ -117,7 +98,7 @@ namespace UnityPlayMcp.Affordances.Scan
                 }
                 catch (Exception)
                 {
-                    // 타입 로드에 실패한 필드. 읽을 수 없는 필드 하나가 그 컴포넌트 읽기를 멈출 이유는 아니다.
+                    // 타입 로드에 실패한 필드는 건너뛴다.
                     continue;
                 }
 
@@ -150,8 +131,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
         private static void Add(List<Reference> found, string field, UnityEngine.Object value)
         {
-            // Unity 의 파괴된 객체는 여전히 살아 있는 참조이면서 null 과 같다고 비교된다. 인스펙터의 빈 슬롯도 여기에 같은 방식으로
-            // 도착하고, 둘 다 테스트가 작용할 수 있는 무엇도 가리키지 않는다.
+            // 파괴된 객체와 인스펙터의 빈 슬롯은 Unity 의 == null 로 걸러진다.
             if (value == null)
             {
                 return;
@@ -170,7 +150,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
             if (subject == null)
             {
-                // 스프라이트, 클립, ScriptableObject. 씬에 있는 일이 없고 걸어갈 수 있는 것을 나르지 않는다.
+                // 스프라이트, 클립, ScriptableObject 같은 애셋.
                 reference.Asset = true;
                 found.Add(reference);
                 return;
@@ -182,8 +162,7 @@ namespace UnityPlayMcp.Affordances.Scan
             }
             else
             {
-                // 씬이 없다는 것은 프리팹이라는 뜻이다. 그 경로는 아예 쓰지 않는다: 그것에 대해 만들 수 있는 문자열은 씬 루트의 것과
-                // 구분되지 않고, 그것은 없느니만 못하다.
+                // 씬이 없으면 프리팹이다. 경로는 씬 루트와 구분되지 않으므로 쓰지 않는다.
                 reference.Asset = true;
                 reference.Carries = CarriedBy(subject);
             }
@@ -192,18 +171,12 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 애셋을 한두 걸음 따라가 그것이 결국 씬에 무엇을 놓을지를 찾는다.
+        /// 애셋 참조를 몇 단계 따라가 결국 인스턴스화될 프리팹을 찾는다.
         /// </summary>
         /// <remarks>
-        /// 프리팹은 곧바로 쥐고 있지 않은 일이 많다. 샘플 게임의 적들은 풀 컴포넌트가 가리키는 <c>ScriptableObject</c> 안에
-        /// 살아서 사슬이 <c>EnemyPoolController.enemyDataContainer → EnemyData.prefab → Enemy</c> 이고, 컴포넌트 자신의
-        /// 필드만 읽으면 그중 아무것도 찾지 못한다 — 그 때문에 리포트가 그 적들을 죽은 코드와 가리지 못했다.
-        ///
-        /// 중간의 연결 고리가 아니라 씬 안의 필드에 귀속시킨다. 사람이든 에이전트든 실제로 따라갈 수 있는 것이 그 필드이고,
-        /// 중간 애셋의 이름을 대는 것은 그들이 밟을 수 없는 걸음에 대해 말해 주는 일이다.
-        ///
-        /// 두 걸음과 객체 예순넷 중 먼저 오는 쪽까지. ScriptableObject 는 그래프를 쥘 수 있고, 여기의 요점은 게임 콘텐츠를 걷는
-        /// 것이 아니라 프리팹을 찾는 것이다.
+        /// 프리팹은 <c>ScriptableObject</c> 를 거쳐 참조되는 일이 많다.
+        /// 찾은 프리팹은 중간 애셋이 아니라 씬 안의 출발 필드에 귀속한다. 따라갈 수 있는 것이 그 필드이기 때문이다.
+        /// <see cref="MaxTraceDepth"/> 와 <see cref="MaxTraced"/> 로 그래프 탐색을 제한한다.
         /// </remarks>
         internal static void Trace(UnityEngine.Object from, string ownerType, string field)
         {
@@ -224,13 +197,8 @@ namespace UnityPlayMcp.Affordances.Scan
 
             if (depth > MaxTraceDepth)
             {
-                // 반환하는 이 순간에도 프리팹은 손에 있다. 여기서 놓으면 createdBy 가 비고, 소비자는
-                // 그것을 죽은 코드로 읽는다 — 읽을 수 없어서 없는 것이 아니라 이미 본 것을 안 적는
-                // 것이 된다.
-                //
-                // 이 프리팹이 무엇을 나르는지는 읽는다. 한계가 막으려는 것은 **그래프를 더 걷는
-                // 비용**이고 컴포넌트 한 번 읽기는 거기 해당하지 않는다. 읽지 않으면 어느 타입의
-                // createdBy 에 넣을지 알 수 없어, 프리팹 이름만 남기고 정작 살릴 타입을 못 살린다.
+                // 기록하지 않으면 createdBy 가 비어 죽은 코드로 읽힌다.
+                // 깊이 제한은 그래프를 더 걷는 비용을 막는 것이므로 이 프리팹의 컴포넌트는 읽어 `cut` 항목으로 남긴다.
                 var unread = value as GameObject ?? (value as Component)?.gameObject;
 
                 if (unread != null && !unread.scene.IsValid())
@@ -251,7 +219,7 @@ namespace UnityPlayMcp.Affordances.Scan
             {
                 if (subject.scene.IsValid())
                 {
-                    // 이미 씬 안에 있으므로 만들어져야 하는 무엇이 아니다.
+                    // 이미 씬에 있는 객체는 생성 대상이 아니다.
                     return;
                 }
 
@@ -260,7 +228,7 @@ namespace UnityPlayMcp.Affordances.Scan
                     AffordanceReport.Creates(carried, ownerType, field, subject.name, subject.GetInstanceID());
                 }
 
-                // 프리팹 자신의 컴포넌트가 또 다른 프리팹을 쥘 수 있다 — 자기가 만들어낼 것을 쥔 풀.
+                // 프리팹의 컴포넌트가 다른 프리팹을 참조할 수 있다(예: 풀).
                 foreach (var component in Components(subject))
                 {
                     Onward(component, ownerType, field, depth, seen);
@@ -269,8 +237,7 @@ namespace UnityPlayMcp.Affordances.Scan
                 return;
             }
 
-            // ScriptableObject 이거나 그 밖의 애셋이다. 그 필드는 컴포넌트의 것과 같은 방식으로 읽는다. 간접적으로 쥐고 있는
-            // 프리팹이 보관되는 자리가 거기이기 때문이다.
+            // ScriptableObject 등 애셋의 필드도 읽는다. 간접 참조된 프리팹이 여기 있다.
             Onward(value, ownerType, field, depth, seen);
         }
 
@@ -298,15 +265,11 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 값 안의 모든 객체 참조. 게임이 아무리 깊이 중첩해 두었더라도.
+        /// 값 안에 중첩된 모든 객체 참조를 모은다.
         /// </summary>
         /// <remarks>
-        /// 내놓는 참조만으로는 "누가 이것을 만드는가" 에 답할 수 없어서 쓴다. 샘플 게임은 적 프리팹을
-        /// <c>List&lt;EnemyData&gt;</c> 에 두는데 <c>EnemyData</c> 는 평범한 직렬화 가능 구조체다 — 목록이 쥔 것은 객체가
-        /// 아니라 구조체이므로, 객체인 필드만 읽어서는 아무것도 찾지 못했고 살아 있는 적 타입 다섯이 죽은 코드로 읽혔다.
-        ///
-        /// 이 걷기는 리포트에 닿지 않는다. 어떤 타입을 누가 만들지를 등록하려고 존재하고, 직렬화 가능 구조체에서 멈추는 것은
-        /// 답을 한 걸음 앞두고 멈추는 일이다.
+        /// 프리팹이 <c>List&lt;EnemyData&gt;</c> 같은 직렬화 구조체 안에 있으면 객체 필드만 읽어서는 찾지 못한다.
+        /// 결과는 리포트에 직접 쓰지 않고 <c>createdBy</c> 등록에만 쓴다.
         /// </remarks>
         private static void Gather(object value, List<UnityEngine.Object> into, int depth)
         {
@@ -365,11 +328,11 @@ namespace UnityPlayMcp.Affordances.Scan
             }
             catch (Exception)
             {
-                // 읽히지 않는 필드 하나. 그 값의 나머지는 여전히 걸을 값이 있다.
+                // 필드를 읽지 못하면 이 값의 나머지는 건너뛴다.
             }
         }
 
-        /// <summary>객체 참조를 찾아 직렬화 가능한 값을 얼마나 깊이 걷는지.</summary>
+        /// <summary>객체 참조를 찾아 직렬화 값 안으로 내려가는 최대 깊이.</summary>
         private const int MaxNesting = 4;
 
         private static Component[] Components(GameObject subject)
@@ -385,12 +348,10 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 프리팹 위의, 게임 자신의 컴포넌트 타입들. 그 자식까지 포함해서.
+        /// 프리팹과 그 자식에 있는 게임 컴포넌트 타입들. 엔진 타입은 뺀다.
         /// </summary>
         /// <remarks>
-        /// 자식을 포함하는 것은 프리팹이 트리이고 behaviour 가 한 단계 아래에 있을 가능성도 그만큼 크기 때문이다 — animator 와
-        /// collider 가 자식에 매달린 주문 프리팹처럼. 엔진 컴포넌트를 빼는 것은 그 필드를 빼는 것과 같은 이유다: 아무도 그것을
-        /// 쓰지 않았다.
+        /// behaviour 가 자식에 붙은 프리팹도 있으므로 자식까지 본다.
         /// </remarks>
         private static List<string> CarriedBy(GameObject prefab)
         {
@@ -414,8 +375,7 @@ namespace UnityPlayMcp.Affordances.Scan
 
                     if (carried.Count >= MaxCarriedTypes)
                     {
-                        // 목록 길이만으로는 다 실린 것인지 잘린 것인지 알 수 없다. 잘렸다는 사실은
-                        // 여기서만 알 수 있으므로 여기서 적는다.
+                        // 목록 길이만으로는 잘렸는지 알 수 없으므로 gap 을 남긴다.
                         AffordanceReport.CarriedTruncated(prefab.name);
                         continue;
                     }
@@ -429,8 +389,7 @@ namespace UnityPlayMcp.Affordances.Scan
                         continue;
                     }
 
-                    // 기반 클래스도 함께. BossEnemy 를 나르는 프리팹은 인스턴스화되면 Enemy 이기도 하고 — 공유 규칙이 구워지는 타입이
-                    // Enemy 이므로, 정확한 컴포넌트만 물으면 그 기반은 알려진 생성자가 없는 채로 남아 죽은 코드처럼 읽혔다.
+                    // 기반 클래스도 넣는다. 그러지 않으면 공유 규칙을 가진 기반 타입(예: Enemy)이 죽은 코드로 읽힌다.
                     for (var current = type; Walkable(current); current = current.BaseType)
                     {
                         var name = current.FullName;
@@ -460,11 +419,10 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// Unity 가 직렬화할 필드들. 그 타입에서 시작해 엔진 자신의 것이 시작되는 자리까지.
+        /// Unity 가 직렬화하는 필드들. 엔진 기반 타입에 닿으면 멈춘다.
         /// </summary>
         /// <remarks>
-        /// 같은 게임을 두 번 돌면 같은 바이트가 나오도록 이름으로 정렬하고, 한 씬이 적은 수의 타입의 인스턴스를 많이 쥐고 있으므로
-        /// 캐시한다.
+        /// 출력이 결정적이도록 이름순으로 정렬하고, 타입별로 캐시한다.
         /// </remarks>
         private static FieldInfo[] FieldsOf(Type type)
         {
@@ -480,8 +438,7 @@ namespace UnityPlayMcp.Affordances.Scan
             {
                 foreach (var field in current.GetFields(Declared))
                 {
-                    // 파생 클래스가 같은 이름의 기반 필드를 가릴 수 있다. 객체가 내놓는 것은 가장 파생된 쪽이고, 그것이 이미 취해진
-                    // 그것이다.
+                    // 같은 이름의 기반 필드는 파생 필드가 가리므로 먼저 만난 파생 쪽만 쓴다.
                     if (Serialized(field) && named.Add(field.Name))
                     {
                         fields.Add(field);
@@ -497,15 +454,11 @@ namespace UnityPlayMcp.Affordances.Scan
         }
 
         /// <summary>
-        /// 게임 자신의 코드가 멈추는 자리에서 멈춘다.
+        /// 게임 코드 타입인지. UnityEngine 네임스페이스에 닿으면 멈춘다.
         /// </summary>
         /// <remarks>
-        /// 기반 클래스의 이름을 대는 대신 네임스페이스로 한다. <c>Button</c> 은 <c>MonoBehaviour</c> 만큼이나 엔진의 것이고 그
-        /// <c>m_TargetGraphic</c> 은 엔진 배관이기 때문이다 — 맞는 말이고 누가 쓴 배선은 아니다. Chop Chop 에서 실측하니 그
-        /// 필드들만으로 리포트의 3분의 1이었다.
-        ///
-        /// 엔진 타입에서 파생된 게임 타입은 제 필드를 전부 읽는다. 걷기는 사슬에서 엔진의 몫에 닿았을 때 멈추는데, 그 자리가
-        /// 정확히 게임이 쓰기를 멈춘 자리다.
+        /// <c>Button</c> 의 <c>m_TargetGraphic</c> 같은 엔진 필드는 게임의 `wiring` 이 아니고 리포트를 크게 키우므로
+        /// 기반 클래스 이름이 아니라 네임스페이스로 엔진 타입을 거른다.
         /// </remarks>
         private static bool Walkable(Type type)
         {

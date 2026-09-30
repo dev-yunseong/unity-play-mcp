@@ -5,9 +5,7 @@ using UnityPlayMcp.Protocol;
 
 namespace UnityPlayMcp.Capture
 {
-    /// <summary>
-    /// What one `capture_screen` call asks for, after the JSON-RPC params have been read.
-    /// </summary>
+    /// <summary>Parsed `capture_screen` params.</summary>
     internal struct CaptureRequest
     {
         /// <summary>Null captures the whole screen.</summary>
@@ -24,9 +22,8 @@ namespace UnityPlayMcp.Capture
         /// A full screen goes out as JPEG; a crop as PNG.
         /// </summary>
         /// <remarks>
-        /// A crop is usually UI, where JPEG's ringing lands on exactly what is being judged —
-        /// glyph edges and element borders. A full screen is mostly rendered scene and large
-        /// enough that lossless would cost far more than the detail is worth.
+        /// A crop is usually UI, where JPEG artifacts blur glyph edges and borders.
+        /// A full screen is large enough that lossless costs too much.
         /// </remarks>
         public bool UsePng { get { return !IsFullScreen; } }
 

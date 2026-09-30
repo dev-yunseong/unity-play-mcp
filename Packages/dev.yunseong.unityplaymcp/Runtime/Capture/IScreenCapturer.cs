@@ -4,16 +4,14 @@ using UnityEngine;
 
 namespace UnityPlayMcp.Capture
 {
-    /// <summary>
-    /// One encoded still of the screen, or the reason there is none.
-    /// </summary>
+    /// <summary>One encoded screen image, or the error.</summary>
     internal struct CapturedImage
     {
         public byte[] Bytes;
         public int Width;
         public int Height;
 
-        /// <summary>캡처한 순간의 <c>Screen.width</c>/<c>Screen.height</c>. 입력 좌표가 사는 공간이다.</summary>
+        /// <summary>캡처 시점의 <c>Screen.width</c>/<c>Screen.height</c>. 입력 좌표의 기준 공간이다.</summary>
         public int ScreenWidth;
         public int ScreenHeight;
 
@@ -41,9 +39,8 @@ namespace UnityPlayMcp.Capture
     /// Reads the composited screen into encoded bytes.
     /// </summary>
     /// <remarks>
-    /// An interface because everything below it needs a real framebuffer. With a fake in its place
-    /// the executor's branching — unknown target, off-screen target, upload refused — is testable
-    /// without a screen, which is the part that has decisions in it.
+    /// An interface so the executor's cases (unknown target, off-screen target, upload refused)
+    /// can be tested with a fake, without a framebuffer.
     /// </remarks>
     internal interface IScreenCapturer
     {

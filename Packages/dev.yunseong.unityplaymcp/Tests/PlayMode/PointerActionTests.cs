@@ -12,9 +12,9 @@ using UnityEngine.UI;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// The pointer actions end to end, on a live manager. These cannot be edit-mode tests: the
-    /// manager calls <c>DontDestroyOnLoad</c> in <c>Awake</c>, the cursor builds itself in its own
-    /// <c>Awake</c>, and uGUI only registers its graphics for raycasting in <c>OnEnable</c>.
+    /// Pointer actions end to end on a live host. Play mode only: the host calls
+    /// <c>DontDestroyOnLoad</c> in <c>Awake</c>, the cursor builds itself in <c>Awake</c>, and uGUI
+    /// registers graphics for raycasting in <c>OnEnable</c>.
     /// </summary>
     public sealed class PointerActionTests
     {
@@ -28,9 +28,7 @@ namespace UnityPlayMcp.Tests
         [SetUp]
         public void SetUp()
         {
-            // A manager survives scene loads by design, so one left alive anywhere — by the project's
-            // own scene, or by a test that ran before this one — makes the manager built below a
-            // duplicate. Awake destroys duplicates, and a destroyed manager drives nothing.
+            // A leftover host makes the one built below a duplicate, and Awake destroys duplicates.
             foreach (var stale in Object.FindObjectsOfType<UnityPlayMcpHost>(true))
             {
                 Object.DestroyImmediate(stale.gameObject);
@@ -40,8 +38,7 @@ namespace UnityPlayMcp.Tests
         [TearDown]
         public void TearDown()
         {
-            // 가상 입력은 정적이라 테스트 사이를 넘어간다. 버튼을 쥔 채 끝난 테스트가 다음 테스트의
-            // 첫 줄을 참으로 만들어 두면, 실패는 엉뚱한 곳에서 난다.
+            // 가상 입력은 static 이라, 버튼을 쥔 채 끝난 test 가 다음 test 를 실패시킨다.
             VirtualInput.ReleaseAllVirtualInput();
 
             foreach (var alive in new[] { canvasObject, eventSystemObject, host })
@@ -67,8 +64,8 @@ namespace UnityPlayMcp.Tests
             Assert.That(cursor.position.x, Is.EqualTo(320f).Within(0.01f));
             Assert.That(cursor.position.y, Is.EqualTo(180f).Within(0.01f));
 
-            // What gets reported is the cursor's own position, since that is what the virtual mouse
-            // and the drag handlers are told about.
+            // The cursor's own position is reported, since that is what the virtual mouse and drag
+            // handlers see.
             Assert.That(reported, Is.EqualTo(new[] { new Vector2(320f, 180f) }));
         }
 
@@ -91,18 +88,16 @@ namespace UnityPlayMcp.Tests
             yield return RunBatch(manager, NewAction(2, "key_up", Params("LeftShift")));
             yield return null;
 
-            // Only that the hold ended. Which frame reports GetKeyUp is pinned deterministically by
-            // VirtualKeyboardStateTests; here the batch coroutine's own frames make it unknowable.
+            // Only that the hold ended; the exact GetKeyUp frame is covered by VirtualKeyboardStateTests.
             Assert.That(VirtualInput.GetKey(KeyCode.LeftShift), Is.False);
         }
 
         [UnityTest]
         public IEnumerator OneBatch_DragsFromOneTargetToAnother()
         {
-            // The whole reason drag and drop needs no action of its own: the queue runs these in
-            // order, so a held button plus a move is already a drag.
+            // The queue runs actions in order, so a held button plus a move is already a drag.
             var manager = CreateManager();
-            // After a frame, so the screen the coordinates are measured against is the final one.
+            // Wait a frame so the screen size used for coordinates is final.
             yield return null;
             var source = CreateDragTarget("drag source", UnityPointOf(GrabPoint));
             var destination = CreateDragTarget("drop target", UnityPointOf(DropPoint));
@@ -111,8 +106,7 @@ namespace UnityPlayMcp.Tests
 
             yield return RunBatch(manager, NewAction(1, "move_mouse", Coordinates(GrabPoint)));
 
-            // Ahead of the drag, so a coordinate that landed nowhere reads as a coordinate problem
-            // rather than as a drag that silently produced no events.
+            // Checked before the drag so a bad coordinate does not look like a drag with no events.
             Assert.That(
                 (Vector2)VirtualInput.mousePosition,
                 Is.EqualTo(UnityPointOf(GrabPoint)),
@@ -124,9 +118,8 @@ namespace UnityPlayMcp.Tests
                 NewAction(3, "move_mouse", Coordinates(DropPoint)),
                 NewAction(4, "mouse_up", new List<object>()));
 
-            // move_mouse glides, so the number of drag steps is a matter of frame rate. What has to
-            // hold is the order, and that the up arrives before the end of the drag — where Unity's
-            // own input module puts it.
+            // The number of drag steps depends on frame rate. Only the order is fixed, with up before
+            // endDrag as in Unity's own input module.
             Assert.That(source.Events.First(), Is.EqualTo("down"));
             Assert.That(source.Events[1], Is.EqualTo("beginDrag"));
             Assert.That(source.Events, Has.Some.EqualTo("drag"));
@@ -158,14 +151,14 @@ namespace UnityPlayMcp.Tests
             manager.StopTransport();
             yield return null;
 
-            // A run that ends mid-drag must not leave the game waiting for an end that never comes.
+            // A run that ends mid-drag must not leave the game waiting for endDrag.
             Assert.That(source.Events, Does.Contain("endDrag"));
             Assert.That(VirtualInput.GetMouseButton(0), Is.False);
         }
 
         /// <summary>
-        /// <c>KeyCode.Mouse0</c> 은 마우스 왼쪽 버튼 그 자체다. 키로 들어온 요청이 버튼으로 들어온
-        /// 요청과 같은 곳에 닿아야, 클릭을 키코드로 읽는 게임이 에이전트를 본다.
+        /// <c>KeyCode.Mouse0</c> 은 마우스 왼쪽 버튼이다. 키로 누른 요청도 버튼과 같은 경로로 가야
+        /// 클릭을 키코드로 읽는 게임이 입력을 본다.
         /// </summary>
         [UnityTest]
         public IEnumerator KeyDownMouse0_PressesTheButtonAndFiresThePointerHandlers()
@@ -202,8 +195,7 @@ namespace UnityPlayMcp.Tests
             yield return RunBatch(manager, NewAction(1, "mouse_down", Params(0d)));
             yield return null;
 
-            // 반대 방향. 이것이 없으면 Input.GetKey(KeyCode.Mouse0) 으로 클릭을 읽는 게임은
-            // mouse_down 으로 들어온 클릭을 보지 못한다.
+            // 반대 방향이다. Input.GetKey(KeyCode.Mouse0) 으로 클릭을 읽는 게임도 mouse_down 을 봐야 한다.
             Assert.That(VirtualInput.GetKey(KeyCode.Mouse0), Is.True);
 
             yield return RunBatch(manager, NewAction(2, "mouse_up", Params(0d)));
@@ -227,14 +219,13 @@ namespace UnityPlayMcp.Tests
                 NewAction(2, "key_click", Params("Mouse0", 0.05d)));
             yield return null;
 
-            // 만료를 상태에 맡기면 놓이는 순간을 아무도 몰라 up 과 click 이 빠진다.
+            // 만료를 상태에만 맡기면 놓는 순간이 배달되지 않아 up 과 click 이 빠진다.
             Assert.That(target.Events, Is.EqualTo(new[] { "down", "up", "click" }));
             Assert.That(VirtualInput.GetMouseButton(0), Is.False);
         }
 
         /// <summary>
-        /// 게임이 멈춰 있어도 놓여야 한다. scaled time 으로 재면 <c>pause_time</c> 이 걸린 게임에서
-        /// 영영 끝나지 않고, 그 버튼은 실행이 끝날 때까지 눌린 채로 남는다.
+        /// <c>pause_time</c> 중에도 버튼이 놓여야 한다. scaled time 으로 재면 끝나지 않는다.
         /// </summary>
         [UnityTest]
         public IEnumerator KeyClickMouse0_LetsGoEvenWhileGameTimeIsFrozen()
@@ -268,7 +259,7 @@ namespace UnityPlayMcp.Tests
                 NewAction(3, "key_down", Params("Mouse0")));
             yield return null;
 
-            // 같은 버튼을 두 어휘로 눌렀을 뿐이다. 게임이 클릭을 두 번으로 세면 안 된다.
+            // 같은 버튼을 두 방식으로 눌렀으므로 클릭은 한 번만 세야 한다.
             Assert.That(target.Events, Is.EqualTo(new[] { "down" }));
         }
 
@@ -290,7 +281,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 마우스가 아닌 키는 아무것도 바뀌지 않았다. 라우팅이 너무 넓게 잡히면 여기서 걸린다.
+        /// 마우스가 아닌 키는 기존처럼 스스로 만료되고 버튼을 누르지 않는다.
         /// </summary>
         [UnityTest]
         public IEnumerator KeyClick_OnANonMouseKeyStillExpiresOnItsOwn()
@@ -326,9 +317,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// The points in this fixture are written the way a scan reports them — pixels down from
-        /// the top — because that is what move_mouse takes. The canvas the targets sit on counts up
-        /// from the bottom, so placing a target means converting the other way.
+        /// Fixture points are top-left pixels, as move_mouse takes them. The canvas counts up from the
+        /// bottom, so placing a target converts the other way.
         /// </summary>
         private static Vector2 UnityPointOf(Vector2 topLeftPosition)
         {
@@ -383,10 +373,8 @@ namespace UnityPlayMcp.Tests
         /// Runs an action to its end without the coroutine scheduler.
         /// </summary>
         /// <remarks>
-        /// The nested walk is the whole point. `Execute` hands the work to a second enumerator with
-        /// `yield return`, and a plain `MoveNext` loop only yields that enumerator rather than
-        /// running it — the action never completes, and the caller reads a null result instead of
-        /// the refusal it is asserting on.
+        /// `Execute` yields a nested enumerator, so a plain `MoveNext` loop would never run it and the
+        /// result would stay null.
         /// </remarks>
         private static void Drain(IEnumerator routine)
         {
@@ -400,10 +388,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// Leaves the fixture's canvas as the only one answering pointer rays. A game's own canvas
-        /// may otherwise answer first and make the action reach an unrelated object. The manager
-        /// builds its runtime components in <c>Start</c>, so this cannot run any earlier than the
-        /// first frame.
+        /// Leaves the fixture's canvas as the only one answering pointer rays, so a game canvas cannot
+        /// catch the action. The host builds its runtime in <c>Start</c>, so call this after the first frame.
         /// </summary>
         private void IsolateFixtureRaycaster()
         {

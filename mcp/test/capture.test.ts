@@ -7,7 +7,7 @@ import type { ActionRequest, ActionResult, UnityConnection } from "../src/connec
 import { PulseStore, type PulseFrame } from "../src/pulse.js";
 import { describeCapture, registerTools } from "../src/tools.js";
 
-/// #71: 스크린샷 픽셀을 입력 좌표로 되돌릴 수 있는지, 그리고 그 스크린샷이 든 reading 과 같은 장면인지.
+/// #71: 스크린샷 픽셀을 입력 좌표로 바꿀 수 있는지와 스크린샷이 현재 reading 과 같은 장면인지 확인한다.
 
 const IMAGE = "AQIDBA==";
 

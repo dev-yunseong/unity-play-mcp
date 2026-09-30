@@ -5,26 +5,20 @@ using Mono.Cecil.Cil;
 namespace UnityPlayMcp.Affordances.CodeGen
 {
     /// <summary>
-    /// 어떤 메서드가 나중에 자신을 부를 무언가에 걸린 자리.
+    /// 메서드가 나중에 자신을 호출할 델리게이트에 등록되는 지점.
     /// </summary>
     /// <remarks>
-    /// 호출 그래프는 호출을 따라가는데, 이벤트 채널 위에 세워진 게임에는 호출이 거의 없다. 버튼은
-    /// ScriptableObject 애셋에 발행하고, 실제 일을 하는 쪽은 전혀 다른 데서 같은 애셋을 구독해 두었다.
-    /// 두 쪽은 서로의 이름을 한 번도 부르지 않는다. Chop Chop 에서 실측했을 때 이것은 부족분이 아니라
-    /// 결과 전체였다 — 근거 기록 1,468건에 명세를 쓸 수 있는 것은 하나도 없었다. 모든 버튼이 채널에서
-    /// 끝났기 때문이다.
+    /// 이벤트 채널(ScriptableObject 애셋)로 발행자와 구독자가 이어지는 게임은 호출 그래프만으로 따라갈 수
+    /// 없다.
     ///
-    /// 구독 자체는 IL 안에 있고 놓칠 수 없다: 메서드의 주소를 취하는 것이 <c>ldftn</c> 이고, 그럴 이유는
-    /// 정확히 하나뿐이다. 그것이 무엇에 붙었는지는 값을 앞으로 따라가 그것을 소비하는 것에 닿아서 안다 —
-    /// <c>add_</c> 접근자이거나, <c>AddListener</c> 이거나, 델리게이트 필드로의 저장이다.
+    /// <c>ldftn</c> 에서 시작해 값을 앞으로 따라가 <c>add_</c> 접근자, <c>AddListener</c>, 델리게이트 필드
+    /// 저장 중 무엇에 붙는지 찾는다.
     ///
-    /// 이것이 두 쪽을 이어 주지는 않는다. 이을 수 없다: 어느 구독자가 어느 발행자를 듣는지는 인스펙터
-    /// 필드가 가리키는 애셋이 정하고, 그것은 코드가 아니라 씬에 있다. 여기 적히는 것은 양쪽 채널의
-    /// 타입이고, 그것이 후보를 그 타입의 채널들로 좁히며, 나머지는 직렬화된 필드 읽기가 준다.
+    /// 어느 구독자가 어느 발행자를 듣는지는 씬의 직렬화 필드가 정하므로 여기서는 채널 타입만 적는다.
     /// </remarks>
     internal static class Subscriptions
     {
-        /// <summary>델리게이트를 포기하기 전까지 앞으로 몇 명령어나 따라가는지.</summary>
+        /// <summary>델리게이트를 앞으로 따라가는 최대 명령어 수.</summary>
         private const int Reach = 8;
 
         internal static void ReadInto(BasicBlock block, ModuleDefinition module, List<Subscription> found)
@@ -56,7 +50,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
 
             if (handler == null || handler.Module != module)
             {
-                // 엔진 코드 위의 델리게이트. 게임이 쓴 것이 아니고 게임더러 돌리라고 할 수도 없다.
+                // 다른 모듈(엔진 등)의 메서드는 게임 코드가 아니다.
                 return null;
             }
 
@@ -83,9 +77,8 @@ namespace UnityPlayMcp.Affordances.CodeGen
                     return null;
                 }
 
-                // 필드를 선언하는 타입이지 필드 자신의 타입이 아니다. 필드형 이벤트는 델리게이트 필드로
-                // 컴파일되므로 그 타입은 UnityAction 이다 — 맞는 말이고 쓸모없는 말이다. 구독자와 발행자를 만나게
-                // 하는 것은 이벤트가 속한 타입이고, 그것은 발행자가 부른 Raise 를 선언하는 타입이기도 하다.
+                // 필드 타입(UnityAction 등)이 아니라 선언 타입을 쓴다. 발행자가 부르는 Raise 도 그 타입에 있어
+                // 구독자와 발행자를 이을 수 있다.
                 subscription.Channel = IlReading.FieldName(field);
                 subscription.ChannelType = field.DeclaringType?.FullName;
                 subscription.Member = field.Name;
@@ -112,9 +105,8 @@ namespace UnityPlayMcp.Affordances.CodeGen
         /// 델리게이트를 넘겨받는 명령어.
         /// </summary>
         /// <remarks>
-        /// 메서드의 주소를 취하는 것과 그것을 건네는 것 사이에 있는 것은 포장뿐이다: 델리게이트가 만들어지고,
-        /// 때로는 이미 있던 것과 합쳐지고, 때로는 제 타입으로 다시 캐스팅된다. 그 밖의 것은 이 값이 여기서
-        /// 따라갈 수 없는 데로 갔다는 뜻이고, 잘못 따라가면 그것이 붙은 적 없는 채널의 이름을 대게 된다.
+        /// 그 사이에는 델리게이트 생성, <c>Delegate.Combine</c>, 캐스팅만 허용한다. 그 밖의 명령어를 지나치면
+        /// 붙은 적 없는 채널을 가리킬 수 있어 null 을 돌려준다.
         /// </remarks>
         private static Instruction Attachment(Instruction from, BasicBlock block)
         {
@@ -135,7 +127,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
 
                     case Code.Call:
                     case Code.Callvirt:
-                        // Delegate.Combine 은 필드에 대한 += 한가운데 앉아 있다. 그 밖의 것은 구독 대상 그 자체다.
+                        // Delegate.Combine 은 필드 += 의 일부다. 그 밖의 호출이 구독 대상이다.
                         if (!IsCombining(at.Operand as MethodReference))
                         {
                             return at;

@@ -7,46 +7,35 @@ import type {
   PulseObject,
 } from "./pulse.js";
 
-/// 화면에 무언가를 내놓는 컴포넌트가 사는 두 namespace.
+/// 화면에 무언가를 그리는 component 의 namespace.
 ///
-/// 판정이 여기 있고 SDK 에 없는 이유는 그래야 목록을 고치는 데 Unity 재빌드가 필요 없기
-/// 때문이다. SDK 는 타입 이름을 `by[].on` 에 실어 보낼 뿐 그것이 무엇인지 말하지 않는다.
-///
-/// 정확한 타입 이름 열둘(`UnityEngine.UI.Text`, `TMPro.TextMeshProUGUI`, ...)을 따로 적지
-/// 않는다. 전부 이 두 접두사로 시작하므로 같은 규칙을 두 곳에 적는 일이 되고, 목록이 늘 때
-/// 한쪽만 고쳐지는 것이 판정을 한 곳에 모은 이유 그 자체다.
+/// 목록을 고칠 때 Unity 재빌드가 필요 없도록 판정을 SDK 가 아니라 여기 둔다. 개별 타입 이름은
+/// 모두 이 접두사로 시작하므로 따로 적지 않는다.
 const SHOWING_NAMESPACES = ["UnityEngine.UI.", "TMPro."];
 
-/// 이 컴포넌트가 화면에 무언가를 보이고 있는가.
+/// 이 component 가 화면에 무언가를 보이고 있는지 판정한다.
 ///
-/// 접두사만으로 충분한 이유: SDK 는 멤버를 하나라도 읽어 낸 컴포넌트만 `by` 에 쓴다. Unity 나
-/// TextMeshPro 어셈블리의 타입에 멤버가 붙는 길은 둘뿐이다 — 화면에 무언가를 그려서 SDK 가
-/// 그것이 보여 주는 것을 읽었거나, 근거가 그 타입의 멤버를 이름 댔거나. 앞의 것이 찾는
-/// 그것이고 뒤의 것도 근거가 이름 댄 Unity UI 컴포넌트다. `ScrollRect` 나 `LayoutElement`
-/// 처럼 아무도 안 읽는 것은 `by` 에 아예 나오지 않는다.
+/// SDK 는 멤버를 읽은 component 만 `by` 에 싣고, Unity/TextMeshPro 타입은 화면에 보이는 값이나
+/// `evidence` 가 지목한 멤버가 있을 때만 멤버를 가지므로 접두사로 충분하다. 게임이 `Image` 등을
+/// 상속한 타입(`MyGame.HealthBar`)은 잡지 못한다.
 ///
-/// 못 잡는 것: 게임이 `Image` 나 `Button` 을 상속해 만든 타입은 제 이름(`MyGame.HealthBar`)
-/// 으로 오므로 접두사에 안 걸린다.
-///
-/// 반환 타입이 `boolean` 이 아니라 type predicate 인 이유: 이 검사를 지난 컴포넌트는
-/// `members` 를 반드시 지니는데, `boolean` 이면 `tsc` 가 그 사실을 호출한 쪽으로 못 가져가
-/// `elementsOf` 가 같은 검사를 한 번 더 해야 한다. #19 이후 `members` 는 optional 이다.
+/// `members` 가 optional 이므로(#19) `elementsOf` 가 다시 검사하지 않도록 type predicate 로 둔다.
 function shows(component: PulseComponent): component is PulseComponent & { members: PulseMember[] } {
   if (component.members === undefined || component.members.length === 0) return false;
   return SHOWING_NAMESPACES.some((prefix) => component.on.startsWith(prefix));
 }
 
-/// 화면 위의 요소 하나. 무엇을 보이고 있고, 어디 있고, 지금 눈에 닿는지.
+/// 화면 위의 요소 하나와 그 내용, 위치, 가시성.
 export interface VisibleElement {
   id: number;
   path: string;
   selector: string;
   scene?: string;
-  /// 그것을 보이고 있는 컴포넌트의 타입 이름. SDK 가 `by[].on` 에 실어 보낸 그대로다.
+  /// 이 요소를 그리는 component 의 타입 이름(`by[].on`).
   on: string;
-  /// 그 컴포넌트가 지금 보이고 있는 것 — 글자, 채움 비율, 값.
+  /// 보이고 있는 값(글자, 채움 비율 등).
   shows: Record<string, JsonValue>;
-  /// 좌상단 기준 화면 픽셀. SDK 의 `rect` 를 그대로 옮긴다.
+  /// 좌상단 기준 화면 픽셀. SDK 의 `rect` 그대로다.
   rect?: JsonValue;
   active: boolean;
   onScreen?: boolean;
@@ -63,25 +52,22 @@ function flagOf(object: PulseObject, name: string): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-/// 이 객체 자신이 화면에 보이고 있는 문자열 중 첫 번째. `search.ts`가 후보 요약에 쓴다.
+/// 이 객체가 화면에 보이는 첫 문자열 값. `search.ts` 가 후보 요약에 쓴다.
 ///
-/// `object.by`를 앞에서부터 훑어 `shows`가 참인 첫 component 를 찾고, 그 `members`를
-/// 앞에서부터 훑어 문자열 값을 지닌 첫 멤버를 낸다 — 라벨 글자처럼 사람이 실제로 읽을 만한
-/// 값이 대개 문자열이기 때문이다. `fillAmount`(number)나 `isOn`(boolean) 같은 값은 이 함수가
-/// 찾는 "표시 텍스트"가 아니다. 그런 component/멤버가 하나도 없으면 `undefined`.
+/// 사람이 읽을 값은 대개 문자열이므로 `fillAmount` 나 `isOn` 같은 값은 건너뛴다.
 export function displayedTextOf(object: PulseObject): string | undefined {
   for (const component of object.by ?? []) {
     if (!shows(component)) continue;
     for (const member of component.members) {
       if (typeof member.value === "string") return member.value;
-      // 가린 글자는 "글자가 없다" 가 아니다. 검색 후보가 둘을 가르도록 가렸다는 말을 대신 낸다 (#72).
+      // 가린 값은 글자가 없는 것과 다르므로 가렸다는 표시를 돌려준다 (#72).
       if (holdsRedaction(member.value)) return REDACTED_TEXT;
     }
   }
   return undefined;
 }
 
-/// 이 요소를 사람이 지금 볼 수 있는가. 셋 중 하나라도 아니면 기본 응답에서 뺀다.
+/// 이 요소를 지금 볼 수 있는지 판정한다. 아니면 기본 응답에서 뺀다.
 function inSight(element: VisibleElement): boolean {
   return element.active && element.onScreen !== false && element.covered !== true;
 }
@@ -111,10 +97,10 @@ function elementsOf(object: PulseObject, active: boolean): VisibleElement[] {
   return found;
 }
 
-/// 마지막 reading 이 말한 것 중 화면에 보이는 요소들. 게임에 묻지 않는다.
+/// 마지막 reading 에서 화면에 보이는 요소들. 게임에 새로 묻지 않는다.
 ///
-/// 꺼져 있거나 화면 밖이거나 가려진 것은 기본으로 뺀다. `includeHidden` 이 서면 전부 내고,
-/// 각 요소가 제 `active`/`onScreen`/`covered` 로 왜 빠졌을지를 말한다.
+/// 꺼져 있거나 화면 밖이거나 가려진 것은 기본으로 뺀다. `includeHidden` 이면 전부 돌려주고
+/// 각 요소의 `active`/`onScreen`/`covered` 로 이유를 알 수 있다.
 export function visibleElements(
   state: FoldedPulseState,
   query: VisibleQuery = {},

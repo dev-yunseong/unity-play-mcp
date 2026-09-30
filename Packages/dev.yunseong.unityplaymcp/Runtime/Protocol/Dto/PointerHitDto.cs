@@ -3,11 +3,11 @@ using Newtonsoft.Json;
 namespace UnityPlayMcp.Protocol.Dto
 {
     /// <summary>
-    /// 포인터가 한쪽 끝에서 무엇을 겨눴고 무엇을 맞혔는지.
+    /// 포인터가 겨눈 대상과 실제로 맞힌 대상.
     /// </summary>
     /// <remarks>
-    /// <c>pointer_click</c> 과 <c>pointer_hover</c> 의 <c>returnValue</c> 이자, <see cref="PointerDragResultDto"/> 의 두
-    /// 끝 각각이다. hover 에서는 포인터가 도착한 뒤 그 자리에서 다시 물은 hit 이다.
+    /// <c>pointer_click</c>·<c>pointer_hover</c> 의 <c>returnValue</c> 이고 <see cref="PointerDragResultDto"/> 의 각 끝이다.
+    /// hover 에서는 포인터가 도착한 뒤 다시 raycast 한 결과다.
     /// </remarks>
     internal sealed class PointerHitDto
     {
@@ -19,10 +19,8 @@ namespace UnityPlayMcp.Protocol.Dto
         /// raycast 가 실제로 답한 오브젝트의 id.
         /// </summary>
         /// <remarks>
-        /// <c>targetId</c> 와 다를 수 있고, 다른 것이 정상이다. <c>Button</c> 의 graphic 이 자식에
-        /// 앉아 있으면 자식이 답하고, 대상이 라벨이면 그 위를 덮은 부모의 <c>Image</c> 가 답한다.
-        /// 둘 다 같은 handler 사슬에 닿으므로 성공이지만, 어느 쪽이 답했는지는 호출자가 알아야
-        /// 한다.
+        /// <c>targetId</c> 와 다를 수 있다. <c>Button</c> 의 graphic 이 자식에 있거나 라벨을 부모의
+        /// <c>Image</c> 가 덮으면 그쪽이 맞는다. 같은 handler 에 닿으므로 성공이다.
         /// </remarks>
         [JsonProperty("hitId")]
         public int HitId { get; set; }
@@ -32,11 +30,10 @@ namespace UnityPlayMcp.Protocol.Dto
         public string Hit { get; set; }
 
         /// <summary>
-        /// 겨눈 화면 좌표. 좌상단에서 잰 픽셀이다.
+        /// 겨눈 화면 좌표. 좌상단 기준 픽셀이다.
         /// </summary>
         /// <remarks>
-        /// scan 이 보고하는 좌표계이자 <c>move_mouse</c> 가 받는 좌표계다. 그래서 이 값을 그대로
-        /// 되돌려 보내면 같은 자리를 다시 겨눈다.
+        /// scan 과 <c>move_mouse</c> 가 쓰는 좌표계라 그대로 다시 보낼 수 있다.
         /// </remarks>
         [JsonProperty("x")]
         public float X { get; set; }

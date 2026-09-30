@@ -21,16 +21,13 @@ namespace UnityPlayMcp.Protocol.Dto
         public int? TargetId { get; set; }
 
         /// <summary>
-        /// True when the screen cut the requested element short.
+        /// True when the screen clipped the requested element. Reported, not failed:
+        /// an element off the screen edge is itself a finding.
         /// </summary>
-        /// <remarks>
-        /// Reported rather than failed: an element hanging off the edge of the screen is itself a
-        /// finding, and the visible part is still evidence for it.
-        /// </remarks>
         [JsonProperty("clipped")]
         public bool Clipped { get; set; }
 
-        /// <summary>캡처한 순간의 <c>Screen.width</c>/<c>Screen.height</c>. <c>move_mouse</c> 와 scene rect 가 쓰는 공간이다.</summary>
+        /// <summary>캡처 시점의 <c>Screen.width</c>/<c>Screen.height</c>. <c>move_mouse</c> 와 scene rect 의 좌표 공간이다.</summary>
         [JsonProperty("screen", NullValueHandling = NullValueHandling.Ignore)]
         public CaptureScreenSizeDto Screen { get; set; }
 
@@ -43,7 +40,7 @@ namespace UnityPlayMcp.Protocol.Dto
         [JsonProperty("requestedRegion", NullValueHandling = NullValueHandling.Ignore)]
         public CaptureAreaDto RequestedRegion { get; set; }
 
-        /// <summary>화면 픽셀 하나가 이미지에서 차지하는 픽셀 수. 축마다 따로 잰다 — 줄인 크기를 정수로 반올림하기 때문이다.</summary>
+        /// <summary>화면 픽셀 하나가 이미지에서 차지하는 픽셀 수. 크기를 정수로 반올림하므로 축마다 다르다.</summary>
         [JsonProperty("scale", NullValueHandling = NullValueHandling.Ignore)]
         public CaptureScaleDto Scale { get; set; }
 

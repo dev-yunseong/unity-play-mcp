@@ -4,8 +4,7 @@ using UnityPlayMcp.Protocol.Dto;
 namespace UnityPlayMcp.Protocol.Mapping
 {
     /// <summary>
-    /// 프로세스 사용량을 전송용 DTO로 옮긴다. 바이트와 비율은 그대로 가고, 초를 밀리초로 바꾸는
-    /// 지점만 여기 한 곳으로 모은다.
+    /// 프로세스 사용량을 전송용 DTO 로 옮기며 초를 밀리초로 바꾼다.
     /// </summary>
     internal static class ProcessResourcesMapper
     {

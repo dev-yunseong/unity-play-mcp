@@ -5,13 +5,11 @@ using NUnit.Framework;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// pulse 가 기존 연결로 나가는 모양을 고정한다.
+    /// 기존 연결로 나가는 pulse 메시지의 형태를 고정한다.
     /// </summary>
     /// <remarks>
-    /// 단언 대상이 "보냈는가"가 아니라 <em>무엇을 보냈는가</em>인 이유는, 이 문자열을 읽는
-    /// 쪽이 이 저장소 밖에 둘 있기 때문이다 — orchestration 의 타입별 핸들러 등록제가
-    /// <c>type</c> 을 보고 고르고, 그 뒤 agent 가 나머지를 pulse 문서로 읽는다. 봉투를 끼우는
-    /// 방식이 문자열 이어붙이기라 조용히 깨질 수 있고, 그때 이 테스트가 가장 먼저 실패한다.
+    /// orchestration 은 <c>type</c> 으로 handler 를 고르고 agent 는 나머지를 pulse 문서로 읽는다.
+    /// envelope 는 문자열 이어붙이기라 조용히 깨질 수 있어 보낸 내용을 확인한다.
     /// </remarks>
     public sealed class WebSocketPulseSinkTests
     {
@@ -67,7 +65,7 @@ namespace UnityPlayMcp.Tests
 
             sink.Send(Reading);
 
-            // 봉투 두 칸을 걷어내면 넣은 것이 그대로 남아야 한다.
+            // envelope 두 필드를 걷어내면 넣은 내용이 그대로 남아야 한다.
             var framed = transport.Sent[0];
             var body = "{" + framed.Substring(framed.IndexOf("\"schema\"", StringComparison.Ordinal));
             Assert.That(body, Is.EqualTo(Reading));
@@ -90,8 +88,7 @@ namespace UnityPlayMcp.Tests
         [Test]
         public void 연결이_없으면_던진다()
         {
-            // 조용히 삼키면 Pulse 의 손실 복구가 돌지 않는다. 그러면 독자는 받지 못한 차이에
-            // 대해 다음 전량 pulse 가 올 때까지 틀린 채로 남는다.
+            // 실패를 삼키면 Pulse 의 손실 복구가 돌지 않아, 읽는 쪽은 다음 whole pulse 까지 틀린 상태로 남는다.
             var sink = new WebSocketPulseSink(() => null, () => 1L);
 
             Assert.Throws<InvalidOperationException>(() => sink.Send(Reading));
@@ -110,7 +107,7 @@ namespace UnityPlayMcp.Tests
         [Test]
         public void 전송은_보낼_때마다_다시_묻는다()
         {
-            // 매니저가 전송을 갈아끼운다. 한 번 잡아 두면 사라진 소켓에 계속 쓰게 된다.
+            // host 가 transport 를 교체한다. 한 번 잡아 두면 사라진 socket 에 계속 쓴다.
             var first = new FakeTransport();
             var second = new FakeTransport();
             var current = (IAgentTransport)first;

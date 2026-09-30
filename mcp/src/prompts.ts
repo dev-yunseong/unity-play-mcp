@@ -1,15 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-/// 사용자가 골라서 부르는 정형 작업 하나.
+/// 사용자가 slash command 로 직접 고르는 정형 작업 하나.
 ///
-/// `instructions` 와 나누는 기준은 누가 고르느냐다. agent 가 스스로 판단해야 하는 전제와 순서는
-/// `instructions` 에 있고, 여기 있는 것은 사용자가 slash command 로 직접 고르는 작업이다.
+/// agent 가 스스로 따라야 하는 전제와 순서는 `instructions` 에 둔다.
 export interface UnityPrompt {
   name: string;
   title: string;
   description: string;
-  /// MCP 의 prompt 인자는 문자열만 받는다. 숫자나 boolean 을 받고 싶으면 문자열로 받아 render 가 읽는다.
+  /// MCP prompt 인자는 문자열만 받으므로 숫자나 boolean 은 render 가 문자열에서 읽는다.
   argsSchema: Record<string, z.ZodType<string | undefined>>;
   render(args: Record<string, string | undefined>): string;
 }

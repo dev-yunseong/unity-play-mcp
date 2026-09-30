@@ -9,15 +9,11 @@ using UnityEngine.TestTools;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// play 중 assembly reload 를 건넌 host 가 자기 runtime 과 transport 를 다시 세우는지.
+    /// play 중 assembly reload 뒤 host 가 runtime 과 transport 를 다시 세우는지 확인한다.
     /// </summary>
     /// <remarks>
-    /// edit mode 로 내려올 수 없다. 여기서 보는 것이 <c>Awake</c>, <c>OnEnable</c>, <c>Update</c> 가 서로에게
-    /// 무엇을 남기는가이고, 그 셋은 play mode 밖에서 돌지 않는다.
-    ///
-    /// 실패는 대개 assert 가 아니라 log 로 온다. Unity Test Framework 는 test 가 도는 동안 올라온 예외를
-    /// 그대로 실패로 치므로, reload 뒤 <c>Update</c> 가 <c>RecordFrameTime</c> 에서 던지면 — issue #57 이 그것이다 —
-    /// 프레임을 넘기는 것만으로 이 fixture 가 붉어진다.
+    /// <c>Awake</c>, <c>OnEnable</c>, <c>Update</c> 순서에 의존하므로 play mode 에서만 돈다.
+    /// reload 뒤 <c>Update</c> 가 던지는 예외는 log 로 올라와 test 실패가 된다 (#57).
     /// </remarks>
     public sealed class HostReloadRecoveryTests
     {
@@ -25,7 +21,7 @@ namespace UnityPlayMcp.Tests
 
         private GameObject host;
 
-        /// <summary>이 fixture 가 건드리는 유일한 전역. project 의 값을 그대로 돌려주려고 적어 둔다.</summary>
+        /// <summary>fixture 가 바꾸는 전역 값이다. TearDown 에서 project 값으로 되돌린다.</summary>
         private bool projectRunInBackground;
 
         [SetUp]
@@ -33,8 +29,7 @@ namespace UnityPlayMcp.Tests
         {
             projectRunInBackground = Application.runInBackground;
 
-            // 다른 fixture 가 남긴 host 는 port 17311 을 쥐고 있다. 그것을 그대로 두면 여기서 세운 host 가
-            // server 를 열지 못한다.
+            // 다른 fixture 가 남긴 host 가 port 17311 을 쥐고 있으면 새 host 가 server 를 열지 못한다.
             ClearHosts();
         }
 
@@ -65,12 +60,11 @@ namespace UnityPlayMcp.Tests
         public IEnumerator RebuildsItsRuntimeAfterAnAssemblyReload()
         {
             var manager = CreateHost();
-            // Start 가 지나가야 host 가 reload 를 건널 자격을 갖춘다.
+            // Start 가 지나야 host 가 reload 를 건널 수 있다.
             yield return null;
 
             AssemblyReloadSimulation.Rehearse(manager);
 
-            // 예전에는 여기서 매 프레임 NullReferenceException 이 올라왔다.
             yield return null;
             yield return null;
 
@@ -79,9 +73,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// scene 이 host 를 꺼진 채로 들고 오면 <c>Awake</c> 는 그때 돌고 <c>Start</c> 는 게임이 켤 때까지
-        /// 오지 않는다. 그 사이의 reload 는 <c>Awake</c> 가 만든 것을 지우는데, 그때 <c>OnEnable</c> 은
-        /// <c>hasStarted</c> 가 아직 false 라 그냥 돌아간다. 다시 세울 자리가 <c>Start</c> 말고 없다.
+        /// host 가 꺼진 채 로드되면 <c>Awake</c> 뒤 <c>Start</c> 전에 reload 가 올 수 있다.
+        /// 이때 <c>OnEnable</c> 은 <c>hasStarted</c> 가 false 라 돌아가므로 <c>Start</c> 가 runtime 을 다시 세워야 한다.
         /// </remarks>
         [UnityTest]
         public IEnumerator RebuildsItsRuntimeWhenTheReloadLandsBeforeStart()
@@ -91,7 +84,6 @@ namespace UnityPlayMcp.Tests
 
             AssemblyReloadSimulation.Rehearse(manager);
 
-            // Start 가 이 프레임에 온다.
             yield return null;
             yield return null;
 
@@ -122,7 +114,7 @@ namespace UnityPlayMcp.Tests
             AssemblyReloadSimulation.Rehearse(manager);
             yield return null;
 
-            // start_readings 가 15초 timeout 대신 답을 주는지가 issue #57 의 두 번째 acceptance criterion 이다.
+            // start_readings 가 timeout 없이 답해야 한다 (#57).
             Assert.That(manager.StartReadings(), Is.True);
             Assert.That(manager.Reading, Is.True);
 
@@ -130,9 +122,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// reload 는 static 도 지우므로, 되살아난 host 는 자기가 살아 있는 하나라는 표시를 잃은 채로 깨어난다.
-        /// 그 표시를 되찾지 못하면 다음에 로드된 scene 의 host 가 빈 자리를 차지해 두 host 가 같은 port 를
-        /// 두고 다툰다.
+        /// reload 는 static slot 도 지운다. 되살아난 host 가 slot 을 되찾지 못하면 다음 scene 의 host 와
+        /// 같은 port 를 두고 다툰다.
         /// </remarks>
         [UnityTest]
         public IEnumerator KeepsTheRecoveredHostWhenASecondOneAppears()
@@ -152,9 +143,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// domain reload 를 끄고 play mode 에 드는 project 에서는 static 이 play 세션을 건너 살아남아, 지난
-        /// 세션에 파괴된 host 가 자리에 남는다. <c>instance != null</c> 이 Unity 의 비교라서 그 자리는 비어
-        /// 있는 것으로 읽히고, 새 host 가 그것을 차지한다.
+        /// domain reload 를 끈 project 에서는 static slot 에 지난 세션의 파괴된 host 가 남는다.
+        /// <c>instance != null</c> 은 Unity 비교라 이 slot 을 빈 것으로 보고 새 host 가 차지해야 한다.
         /// </remarks>
         [UnityTest]
         public IEnumerator ClaimsTheSlotWhenItStillHoldsADestroyedHost()
@@ -173,9 +163,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// <c>RecordFrameTime</c> 의 문서가 약속하는 것은 "전송 상태와 무관하게 매 프레임" 이다. 그것을 지키는
-        /// 것이 <c>Update</c> 안에서의 위치이고, transport 를 다루는 자리 안쪽으로 들어가는 순간 아무도 연결하지
-        /// 않은 세션의 프레임타임이 통째로 비어 버린다.
+        /// <c>RecordFrameTime</c> 은 transport 상태와 무관하게 매 프레임 돌아야 한다. transport 처리 안쪽으로
+        /// 옮기면 client 가 없는 세션의 frame time 이 비게 된다.
         /// </remarks>
         [UnityTest]
         public IEnumerator KeepsRecordingFrameTimesWithNoClientConnected()
@@ -185,8 +174,8 @@ namespace UnityPlayMcp.Tests
 
             Assert.That(manager.TransportOpen, Is.True, "server 는 서 있고, 붙은 client 는 없다.");
 
-            // 프레임을 세지 않고 몇 번 물어본다. 첫 프레임은 씬 로드 시간이 실려 있어 recorder 가 버리고,
-            // host 의 성능 보고도 1초에 한 번 같은 창을 가져가므로 특정 프레임 수를 못 박으면 흔들린다.
+            // 특정 프레임 수를 고정하지 않는다. recorder 는 첫 프레임을 버리고 성능 보고도 1초마다
+            // 같은 창을 가져가므로 프레임 수를 못 박으면 흔들린다.
             var recorded = false;
             for (var attempt = 0; attempt < 10 && !recorded; attempt++)
             {
@@ -198,8 +187,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// reload 가 아니라 그냥 껐다 켜는 길. <c>OnEnable</c> 을 통째로 바꾼 변경이라 이쪽이 예전처럼 도는지를
-        /// 함께 지킨다.
+        /// reload 가 아닌 단순 disable/enable 경로도 transport 와 runtime 을 유지하는지 확인한다.
         /// </remarks>
         [UnityTest]
         public IEnumerator ReopensTheTransportOnAPlainReEnable()
@@ -218,9 +206,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// issue #57 의 Constraints 가 짚은 자리다. 예전에는 <c>RecordFrameTime</c> 이 <c>Update</c> 의 첫
-        /// 줄이라 거기서 던지면 그 프레임의 입력 전진도 요청 처리도 통째로 사라졌다. 지표 하나를 잃는 것과
-        /// 원격 제어 전체를 잃는 것은 값이 다르다.
+        /// <c>RecordFrameTime</c> 이 던져도 그 프레임의 입력 진행과 요청 처리는 끝나 있어야 한다 (#57).
         /// </remarks>
         [UnityTest]
         public IEnumerator KeepsHandlingRequestsWhenFrameTimeRecordingThrows()
@@ -228,19 +214,18 @@ namespace UnityPlayMcp.Tests
             var manager = CreateHost();
             yield return null;
 
-            // transport 를 다룬 흔적을 지우고, 진단 수집만 부러뜨린다.
+            // transport 표시를 지우고 진단 수집만 망가뜨린다.
             Set(manager, "transportWasConnected", false);
             Set(manager, "frameTimeRecorder", null);
 
-            // 성능 보고도 recorder 를 읽는다. 그쪽 문을 명시적으로 닫아, 이번 프레임에 던지는 자리가
-            // RecordFrameTime 하나임을 우연이 아니라 약속으로 쥔다.
+            // 성능 보고도 recorder 를 읽으므로 미뤄서, 이번 프레임에 던지는 곳을 RecordFrameTime 하나로 고정한다.
             Set(manager, "nextPerformanceReportTime", Time.unscaledTime + 60f);
 
-            // 예외는 삼키지 않는다. 삼켰다면 이 결함이 로그에 남지 않아 아무도 찾지 못했을 것이다.
+            // 예외는 삼키지 않아 log 에 남아야 한다.
             LogAssert.Expect(LogType.Exception, new Regex("NullReferenceException"));
             yield return null;
 
-            // 다음 프레임이 또 던지지 않도록 바로 되돌린다.
+            // 다음 프레임이 또 던지지 않게 바로 되돌린다.
             Set(manager, "frameTimeRecorder", new FrameTimeRecorder());
 
             Assert.That(NoticedTheTransport(manager), Is.True,
@@ -248,9 +233,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// server 가 열려 있는 동안만 <c>Application.runInBackground</c> 를 빌리고, 내려갈 때 게임의 값을
-        /// 돌려준다. reload 는 그 사이를 지나가므로 빌린 값을 게임의 값으로 착각할 위험이 여기에 있다 —
-        /// 착각하면 게임은 제가 꺼 둔 설정을 영영 돌려받지 못한다.
+        /// host 는 server 가 열린 동안만 <c>Application.runInBackground</c> 를 켜고 내려갈 때 게임 값을 돌려준다.
+        /// reload 뒤 켜 둔 값을 게임 값으로 저장하면 게임 설정이 복구되지 않는다.
         /// </remarks>
         [UnityTest]
         public IEnumerator GivesTheGameItsRunInBackgroundBackAcrossAReload()
@@ -271,8 +255,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// reload 직전에 실제로 도는 것은 <c>OnDisable</c> 이고, 그것이 잡고 있던 입력을 놓는다. 손을 뗀 적 없는
-        /// 키를 게임에 남긴 채 domain 이 내려가면 게임은 영영 오지 않을 key up 을 기다린다.
+        /// reload 직전에는 <c>OnDisable</c> 이 돈다. 여기서 입력을 놓지 않으면 게임은 오지 않을 key up 을 기다린다.
         /// </remarks>
         [UnityTest]
         public IEnumerator ReleasesHeldInputWhenItGoesDown()
@@ -282,8 +265,7 @@ namespace UnityPlayMcp.Tests
 
             VirtualInput.PressKey(KeyCode.A);
 
-            // 누름은 다음 프레임부터 눌린 것으로 읽힌다. 폴링하는 쪽이 script 실행 순서와 무관하게 그것을
-            // 보게 하려고 VirtualKeyboardState 가 그렇게 정해 두었고, 놓는 것도 같은 규칙을 따른다.
+            // VirtualKeyboardState 는 누름과 놓음을 다음 프레임부터 반영한다.
             yield return null;
             Assert.That(VirtualInput.GetKey(KeyCode.A), Is.True);
 
@@ -301,8 +283,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// host 가 쥔 <see cref="FrameTimeRecorder"/>. reload 뒤 이것이 다시 만들어졌는지가 issue #57 의
-        /// 전부라서, test 가 그것을 직접 붙잡는다.
+        /// host 의 <see cref="FrameTimeRecorder"/> 를 읽는다. reload 뒤 다시 만들어졌는지 확인하는 데 쓴다 (#57).
         /// </summary>
         private static FrameTimeRecorder FrameTimes(UnityPlayMcpHost manager)
         {
@@ -310,8 +291,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 이번 프레임에 <c>PumpTransport</c> 가 돌았는지. <c>NoticeNewConnection</c> 이 거기서만
-        /// 이 표시를 쓰므로, 그 자리까지 내려갔다는 증거가 된다.
+        /// 이번 프레임에 <c>PumpTransport</c> 가 돌았는지 반환한다. 이 필드는 <c>NoticeNewConnection</c> 만 쓴다.
         /// </summary>
         private static bool NoticedTheTransport(UnityPlayMcpHost manager)
         {

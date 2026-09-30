@@ -9,12 +9,11 @@ using UnityEngine;
 namespace UnityPlayMcp.Tests.Diagnostics
 {
     /// <summary>
-    /// 실제 하드웨어 값을 단정하면 실행 기기마다 결과가 갈린다. 그래서 어느 환경에서나
-    /// 성립해야 하는 불변식만 확인한다.
+    /// 하드웨어 값은 기기마다 다르므로 어느 환경에서나 성립하는 불변식만 확인한다.
     /// </summary>
     public sealed class RuntimeEnvironmentTests
     {
-        /// <summary>기기 식별자로 읽힐 수 있는 이름 조각. 어떤 필드도 이걸 담으면 안 된다.</summary>
+        /// <summary>기기 식별자로 읽힐 수 있는 이름 조각이다. 어떤 필드도 이것을 담으면 안 된다.</summary>
         private static readonly string[] IdentifierNameFragments = { "unique", "identifier", "udid" };
 
         [Test]
@@ -22,7 +21,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         {
             var context = RuntimeEnvironment.ReadDeviceContext();
 
-            // 빈 문자열이나 null이 오면 소비자가 "값이 없음"과 "값이 unknown"을 구분하지 못한다.
+            // 빈 문자열이나 null 이면 소비자가 "값 없음" 과 "unknown" 을 구분하지 못한다.
             Assert.IsNotEmpty(context.DeviceModel);
             Assert.IsNotEmpty(context.ProcessorType);
             Assert.IsNotEmpty(context.OperatingSystem);
@@ -44,8 +43,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         [Test]
         public void ReadDeviceContext_MarksTheSessionAsEditor()
         {
-            // 이 어셈블리는 에디터에서만 돌기 때문에 항상 참이어야 한다. 거짓이면 소비자가
-            // 씬 뷰 비용이 얹힌 표본을 Standalone 통계에 섞게 된다.
+            // 이 assembly 는 editor 에서만 돌므로 항상 참이다. 거짓이면 scene view 비용이 섞인 표본이 Standalone 통계에 들어간다.
             var context = RuntimeEnvironment.ReadDeviceContext();
 
             Assert.IsTrue(context.IsEditor);
@@ -56,8 +54,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         {
             var context = RuntimeEnvironment.ReadDeviceContext();
 
-            // 주사율과 DPI는 못 읽으면 0으로 눌러 보낸다. 음수나 NaN이 새어 나가면
-            // JSON이 깨지거나 소비자의 예산 계산이 뒤집힌다.
+            // 주사율과 DPI 는 못 읽으면 0 을 보낸다. 음수나 NaN 은 JSON 을 깨거나 예산 계산을 뒤집는다.
             Assert.GreaterOrEqual(context.RefreshRateHz, 0d);
             Assert.IsFalse(double.IsNaN(context.RefreshRateHz));
             Assert.IsFalse(double.IsInfinity(context.RefreshRateHz));
@@ -73,8 +70,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         [Test]
         public void ReadDeviceContext_ReportsTheVersionFromPackageJson()
         {
-            // 버전은 런타임에서 package.json을 읽을 수 없어 상수로 박아 둔다. 그 상수가
-            // 조용히 낡는 것이 유일한 위험이라, 동기화를 여기서 강제한다.
+            // runtime 에서 package.json 을 읽을 수 없어 버전을 상수로 둔다. 상수가 낡지 않게 여기서 동기화를 확인한다.
             var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(
                 typeof(RuntimeEnvironment).Assembly);
             if (package == null)
@@ -88,9 +84,8 @@ namespace UnityPlayMcp.Tests.Diagnostics
         [Test]
         public void ReadDeviceContext_DeclaresTheCollectedMetricGroups()
         {
-            // 이 목록이 비면 서버는 값이 없는 군을 전부 "이 SDK가 모르는 군"으로 읽는다.
-            // 못 쟀다는 것과 아예 모른다는 것이 한 덩어리가 되어 회귀 판단이 성립하지 않는다.
-            // 목록과 실제 보고 필드의 대응은 MetricGroupContractTests가 지킨다.
+            // 목록이 비면 서버는 값이 없는 군을 "SDK 가 모르는 군" 으로 읽어 "못 쟀다" 와 구분하지 못한다.
+            // 목록과 보고 필드의 대응은 MetricGroupContractTests 가 확인한다.
             var context = RuntimeEnvironment.ReadDeviceContext();
 
             CollectionAssert.IsNotEmpty(context.CollectedGroups);
@@ -117,8 +112,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         [TestCase(typeof(RuntimeStatusDto))]
         public void Payload_HasNoFieldThatCouldCarryADeviceIdentifier(Type dtoType)
         {
-            // SystemInfo.deviceUniqueIdentifier는 성능 해석에 쓰이지 않는데 한 번 실리면
-            // 보고 전체가 개인정보가 된다. 나중에 누가 필드를 늘려도 여기서 걸린다.
+            // SystemInfo.deviceUniqueIdentifier 가 실리면 보고 전체가 개인정보가 된다. 필드가 늘어도 여기서 잡는다.
             foreach (var property in dtoType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 var jsonName = property.GetCustomAttribute<JsonPropertyAttribute>()?.PropertyName;
@@ -136,7 +130,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
             var identifier = SystemInfo.deviceUniqueIdentifier;
             if (string.IsNullOrEmpty(identifier) || identifier == SystemInfo.unsupportedIdentifier)
             {
-                // 플랫폼이 "n/a" 같은 자리표시자를 주면 우연히 겹칠 수 있어 판정이 무의미해진다.
+                // "n/a" 같은 placeholder 는 우연히 겹칠 수 있어 비교가 무의미하다.
                 Assert.Ignore("This platform does not expose a device identifier to compare against.");
             }
 

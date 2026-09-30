@@ -23,11 +23,11 @@ namespace UnityPlayMcp.Tests.Diagnostics
         {
             var dto = EditorRenderStatsMapper.ToDto(Stats(0.016f, 0.004f));
 
-            // UnityStats.frameTime·renderTime은 초 단위다. Stats 창도 표시할 때 1000을 곱한다.
+            // UnityStats.frameTime·renderTime 은 초 단위다. Stats 창도 1000 을 곱해 표시한다.
             Assert.AreEqual(16f, dto.MainThreadMs, 1e-3f);
             Assert.AreEqual(4f, dto.RenderThreadMs, 1e-3f);
 
-            // 카운터는 단위가 없어 변환 대상이 아니다.
+            // 카운터는 단위가 없어 변환하지 않는다.
             Assert.AreEqual(120, dto.DrawCalls);
             Assert.AreEqual(84, dto.Batches);
             Assert.AreEqual(31, dto.SetPassCalls);
@@ -36,8 +36,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         }
 
         /// <summary>
-        /// 0초를 0ms로 옮기는 것은 스케일 실수를 잡지 못한다. 단위를 잘못 잡으면 60fps 프레임이
-        /// 0.016ms로 올라가 서버에서 정상으로 읽히므로, 배율 자체를 못박는다.
+        /// 0초 → 0ms 로는 배율 실수를 잡지 못한다. 배율을 틀리면 60fps 프레임이 0.016ms 로 올라가 정상으로 읽히므로 배율을 확인한다.
         /// </summary>
         [Test]
         public void ToDto_ScalesTimesByExactlyOneThousand()

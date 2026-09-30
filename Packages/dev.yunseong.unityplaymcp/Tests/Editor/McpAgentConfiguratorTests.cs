@@ -8,10 +8,8 @@ using NUnit.Framework;
 namespace UnityPlayMcp.Tests.McpConfig
 {
     /// <remarks>
-    /// <see cref="McpAgentConfigurator"/> 는 <see cref="McpConfigFileStore"/> 로 실제 disk 를 읽고 쓰므로,
-    /// mock 이 아니라 <c>Path.GetTempPath()</c> 아래의 진짜 파일로 검증해야 scope 별로 다른 자리에만
-    /// 쓰는지, 사람이 적어 둔 내용이 남는지를 믿을 수 있다. <see cref="TearDown"/> 에서 temp 디렉터리를
-    /// 통째로 지운다.
+    /// <see cref="McpAgentConfigurator"/> 는 <see cref="McpConfigFileStore"/> 로 실제 disk 에 쓰므로
+    /// <c>Path.GetTempPath()</c> 아래 실제 파일로 검증한다. <see cref="TearDown"/> 에서 temp 디렉터리를 지운다.
     /// </remarks>
     public sealed class McpAgentConfiguratorTests
     {
@@ -52,10 +50,9 @@ namespace UnityPlayMcp.Tests.McpConfig
             return new McpServerEntry("node", new[] { "/somewhere/index.js" });
         }
 
-        /// <summary>사람이 이미 써 둔 설정 파일을 만든다.</summary>
+        /// <summary>사용자가 이미 써 둔 설정 파일을 만든다.</summary>
         /// <remarks>
-        /// Codex 의 <c>.codex</c> 나 Cursor 의 <c>.cursor</c> 처럼 아직 없는 디렉터리 아래에 있는 자리가 있다.
-        /// <see cref="McpConfigFileStore"/> 는 쓸 때 만들어 주지만 test 가 직접 심을 때는 만들어야 한다.
+        /// <c>.codex</c>, <c>.cursor</c> 처럼 아직 없는 디렉터리가 있으므로 test 가 직접 만든다.
         /// </remarks>
         private static void Seed(McpAgent agent, string text)
         {
@@ -149,14 +146,12 @@ namespace UnityPlayMcp.Tests.McpConfig
 
             McpAgentConfigurator.Remove(agent, ServerName);
 
-            // mtime 이 아니라 내용을 문자열로 그대로 비교한다. 형식 변환을 한 번 거쳤다가 우연히 같은
-            // 내용으로 되돌아온 것과, 애초에 손대지 않은 것은 다르다.
+            // 파일이 다시 쓰이지 않았는지 내용 문자열로 비교한다.
             Assert.AreEqual(original, File.ReadAllText(agent.ConfigPath));
         }
 
         /// <remarks>
-        /// 사람이 손으로 망가뜨린 JSON 을 만나면 조용히 덮어쓰지 않고 멈춰야, 그 파일에 남아 있던 다른
-        /// 설정이 지워지지 않는다.
+        /// 손상된 JSON 은 덮어쓰지 않고 멈춰야 그 파일의 다른 설정이 지워지지 않는다.
         /// </remarks>
         [Test]
         public void ThrowsOnAMalformedFileAndLeavesItUntouched()

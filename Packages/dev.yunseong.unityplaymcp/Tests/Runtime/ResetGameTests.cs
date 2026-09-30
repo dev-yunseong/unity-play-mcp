@@ -7,12 +7,11 @@ using UnityEngine;
 namespace UnityPlayMcp.Tests
 {
     /// <summary>
-    /// reset_game reloads the scene the run started in. The one thing it must never do is reload
-    /// some other scene, because the scene it aims at is the whole meaning of the action.
+    /// reset_game reloads the scene the run started in, and must never reload any other scene.
     /// </summary>
     public sealed class ResetGameTests
     {
-        /// <summary>게임이 쓴 것처럼 굴 키. 이 스위트가 PlayerPrefs 에 남기는 유일한 흔적이다.</summary>
+        /// <summary>게임이 쓴 것처럼 쓰는 키다. 이 suite 가 PlayerPrefs 에 남기는 유일한 값이다.</summary>
         private const string GameKey = "unityplaymcp.tests.gameKey";
 
         [TearDown]
@@ -23,8 +22,8 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// The test runner's scene is not in Build Settings, which is the same position a game
-        /// launched from an unlisted scene is in: there is no index to go back to.
+        /// The test runner's scene is not in Build Settings, like a game launched from an unlisted
+        /// scene: there is no index to go back to.
         /// </summary>
         [Test]
         public void ResetFailsWhenTheStartupSceneIsNotInBuildSettings()
@@ -38,8 +37,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// A refused reset must leave a paused game paused: it did not reload anything, so the run
-        /// still owns the freeze and resume_time still has to work.
+        /// A refused reset reloads nothing, so a paused game stays paused and resume_time still works.
         /// </summary>
         [Test]
         public void ARefusedResetLeavesThePauseAlone()
@@ -62,7 +60,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// options 자리에 오브젝트가 아닌 것이 오면 거절한다. 강제 변환하지 않는다.
+        /// options 가 오브젝트가 아니면 강제 변환하지 않고 거절한다.
         /// </summary>
         [Test]
         public void ResetRejectsAParamThatIsNotAnObject()
@@ -76,8 +74,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// 문자열 "true" 는 true 가 아니다. 파괴적인 flag 를 truthy 에서 만들어 내면,
-        /// 서버가 실수로 보낸 "false" 조차 저장소를 비우는 명령이 된다.
+        /// 문자열 "true" 는 true 가 아니다. truthy 로 해석하면 실수로 보낸 "false" 도 저장소를 비운다.
         /// </summary>
         [Test]
         public void ResetRejectsANonBooleanClearFlag()
@@ -108,18 +105,15 @@ namespace UnityPlayMcp.Tests
 
             Assert.That(result.IsSuccess, Is.False);
 
-            // Build Settings 실패가 아니라 params 실패여야 한다. 메시지를 보지 않으면 개수
-            // 검사를 지워도 테스트가 그대로 통과한다 — 가드가 어차피 실패를 돌려주기 때문이다.
+            // Build Settings 가드도 실패를 돌려주므로, 메시지를 확인해야 개수 검사가 빠진 것을 잡는다.
             Assert.That(result.Error, Does.Contain("params are [] or [options]"));
         }
 
         /// <summary>
-        /// 거절된 리셋은 아무것도 바꾸지 않는다. <c>PlayerPrefs</c> 도 마찬가지다.
+        /// 거절된 리셋은 <c>PlayerPrefs</c> 를 포함해 아무것도 바꾸지 않는다.
         /// </summary>
         /// <remarks>
-        /// 지우기는 Build Settings 가드보다 뒤에 있어야 한다는 것을 못 박는 테스트다.
-        /// 순서가 뒤집히면 씬으로 돌아가지도 못하는 리셋이 게임의 세이브만 날리고 실패를
-        /// 돌려준다 — 되돌릴 수 없는 쪽으로만 반쯤 실행된 액션이다.
+        /// 지우기는 Build Settings 가드 뒤에 있어야 한다. 순서가 바뀌면 실패한 리셋이 세이브만 지운다.
         /// </remarks>
         [Test]
         public void ARefusedResetDoesNotTouchPlayerPrefs()
@@ -140,8 +134,7 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <summary>
-        /// params 를 보내지 않는 서버는 이 flag 가 생기기 전과 똑같이 동작해야 한다.
-        /// Build Settings 실패까지 도달하는 것이 그 증거다 — params 실패가 아니다.
+        /// params 를 보내지 않는 서버는 이 flag 이전과 같이 동작해 Build Settings 실패에 도달해야 한다.
         /// </summary>
         [Test]
         public void ResetWithNoParamsStillWorks()

@@ -3,17 +3,14 @@ using global::UnityEngine;
 namespace UnityPlayMcp
 {
     /// <summary>
-    /// Calls the <c>OnMouse*</c> handlers the engine would call, for the agent's pointer instead of
-    /// the real one.
+    /// Calls the <c>OnMouse*</c> handlers the engine would call, for the agent's pointer.
     /// </summary>
     /// <remarks>
-    /// These are not EventSystem events and no amount of input mocking reaches them: the engine
-    /// picks a collider from the OS cursor every frame and invokes the handler itself, and the
-    /// legacy input backend takes no injected values. A game built on <c>OnMouseDown</c> — which
-    /// most 2D Unity games are — is otherwise entirely unreachable.
+    /// These are not EventSystem events: the engine picks a collider from the OS cursor and
+    /// invokes them itself, and the legacy input backend takes no injected values. Without this a
+    /// game built on <c>OnMouseDown</c> is unreachable.
     /// <para>
-    /// The handlers are private by convention, so they are reached the way the engine reaches them:
-    /// by name, on every component of the object.
+    /// The handlers are usually private, so they are sent by name like the engine does.
     /// </para>
     /// </remarks>
     internal sealed class VirtualMouseMessenger
@@ -33,15 +30,12 @@ namespace UnityPlayMcp
         private GameObject pressed;
 
         /// <summary>
-        /// One tick of what the engine does every frame: work out what the pointer is over, tell it
-        /// so, and keep telling whatever is being dragged.
+        /// One frame of engine behavior: hover the object under the pointer and keep dragging the pressed one.
         /// </summary>
         public void Tick(Vector2 screenPosition, bool buttonHeld)
         {
-            // 엔진이라면 배달했을 그 오브젝트 하나. 고르는 규칙과 왜 그 규칙인지는
-            // PointerTargeting.ColliderUnder 에 있다 — ID 로 겨누는 쪽이 커서를 옮기기 전에 같은
-            // 규칙으로 확인해야 하기 때문이다. 두 벌이 되면 "확인할 때는 맞았는데 배달은 딴 데로
-            // 간" 클릭이 생긴다.
+            // 대상 선택 규칙은 PointerTargeting.ColliderUnder 하나에 둔다. ID 로 겨누는 쪽도 같은
+            // 규칙으로 확인해야 확인과 전달 대상이 어긋나지 않는다.
             var target = PointerTargeting.ColliderUnder(screenPosition);
             UpdateHover(target);
 
@@ -49,8 +43,7 @@ namespace UnityPlayMcp
             {
                 if (buttonHeld)
                 {
-                    // The engine keeps sending this to the object the press started on, even after
-                    // the pointer has left it. That is what makes dragging past the edge work.
+                    // Sent to the pressed object even after the pointer leaves it, like the engine.
                     Send(pressed, MouseDrag);
                 }
                 else
@@ -69,8 +62,8 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// Ends a press without a release of its own. The connection dropping mid-drag has to look
-        /// to the game like the button coming up, or its handler waits forever.
+        /// Ends a press without a release. A dropped connection mid-drag must look like the button
+        /// coming up, or the game's handler waits forever.
         /// </summary>
         public void Clear()
         {
@@ -108,8 +101,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// The null check is Unity's, so an object destroyed while the pointer was on it is simply
-        /// not told anything.
+        /// Unity's null check skips an object destroyed under the pointer.
         /// </summary>
         private static void Send(GameObject target, string message)
         {

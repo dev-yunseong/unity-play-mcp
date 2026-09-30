@@ -7,16 +7,14 @@ using NUnit.Framework;
 namespace UnityPlayMcp.Tests.Diagnostics
 {
     /// <summary>
-    /// 실제 렌더 수치를 단정하면 실행 환경마다 결과가 갈린다. 배치모드에서는 그리는 것이 거의
-    /// 없어 값이 0일 수도 있으므로, 어느 환경에서나 성립해야 하는 불변식만 확인한다.
+    /// 렌더 수치는 환경마다 다르고 batch mode 에서는 0 일 수 있으므로 불변식만 확인한다.
     /// </summary>
     public sealed class EditorRenderStatsReaderTests
     {
         [Test]
         public void TryRead_SucceedsInTheEditor()
         {
-            // 이 어셈블리는 에디터에서만 돌기 때문에 항상 참이어야 한다. 거짓이면 보고에서
-            // editorRender가 통째로 사라져도 아무도 눈치채지 못한다.
+            // editor 에서만 도는 assembly 라 항상 참이다. 거짓이면 editorRender 가 보고에서 빠져도 알 수 없다.
             Assert.IsTrue(EditorRenderStatsReader.TryRead(out _));
         }
 
@@ -25,7 +23,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         {
             Assert.IsTrue(EditorRenderStatsReader.TryRead(out var stats));
 
-            // 음수는 UnityStats의 UInt64 카운터를 int로 좁히다 넘친 흔적이다.
+            // 음수는 UnityStats 의 UInt64 카운터를 int 로 좁히다 넘친 것이다.
             Assert.GreaterOrEqual(stats.DrawCalls, 0);
             Assert.GreaterOrEqual(stats.Batches, 0);
             Assert.GreaterOrEqual(stats.SetPassCalls, 0);
@@ -38,8 +36,8 @@ namespace UnityPlayMcp.Tests.Diagnostics
         // --- wire shape ---
 
         /// <summary>
-        /// 가용성을 알리는 유일한 신호가 필드의 부재다. 코덱의 기본값이
-        /// <c>NullValueHandling.Include</c>라 속성의 <c>Ignore</c>가 없으면 null이 그대로 실린다.
+        /// 필드가 없는 것이 가용성의 유일한 신호다. codec 기본값이 <c>NullValueHandling.Include</c> 라
+        /// 속성에 <c>Ignore</c> 가 없으면 null 이 실린다.
         /// </summary>
         [Test]
         public void Serialize_OmitsTheRenderGroupWhenItWasNotRead()

@@ -27,7 +27,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
         {
             var dto = FrameTimingMapper.ToDto(Breakdown());
 
-            // Unity가 ms로 주는 값이라 변환 지점이 없다. 초로 착각해 1000을 곱하면 천 배가 된다.
+            // Unity 가 ms 로 주므로 변환하지 않는다. 1000 을 곱하면 안 된다.
             Assert.AreEqual(42, dto.FrameCount);
             Assert.AreEqual(15f, dto.CpuMs.Value, 1e-3f);
             Assert.AreEqual(14f, dto.CpuMainThreadMs.Value, 1e-3f);
@@ -62,7 +62,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             var json = JsonConvert.SerializeObject(dto);
 
-            // 0을 실으면 "GPU가 공짜"로 읽힌다. 필드가 없어야 미수집이다.
+            // 0 을 실으면 "GPU 비용 없음" 으로 읽힌다. 미수집은 필드가 없어야 한다.
             StringAssert.DoesNotContain("gpuMs", json);
             StringAssert.DoesNotContain("cpuRenderThreadMs", json);
             StringAssert.Contains("cpuMainThreadMs", json);
@@ -75,7 +75,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             var json = JsonConvert.SerializeObject(report);
 
-            // process와 같은 규칙이다. 그룹이 없으면 이 환경에서 재지 못했다는 뜻이다.
+            // process 와 같은 규칙이다. 그룹이 없으면 이 환경에서 재지 못했다는 뜻이다.
             StringAssert.DoesNotContain("frameTiming", json);
         }
 
@@ -92,7 +92,7 @@ namespace UnityPlayMcp.Tests.Diagnostics
 
             var json = JsonConvert.SerializeObject(report);
 
-            // frameTimes와 창이 달라 섞으면 안 되는 값이다. 형제 그룹으로 나가야 한다.
+            // frameTimes 와 측정 창이 달라 섞으면 안 되므로 별도 그룹으로 나간다.
             StringAssert.Contains("\"frameTimes\":{\"frameCount\":60", json);
             StringAssert.Contains("\"frameTiming\":{\"frameCount\":42", json);
         }

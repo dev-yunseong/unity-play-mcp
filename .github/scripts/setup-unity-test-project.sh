@@ -2,10 +2,8 @@
 #
 # Assemble the throwaway Unity project used to run the package's tests.
 #
-# The repository root is not a Unity project and the only Unity project in the
-# tree (samples/WordVenture) does not declare dev.yunseong.unityplaymcp as a testable, so the
-# Test Runner cannot discover Packages/dev.yunseong.unityplaymcp/Tests anywhere. This script
-# materialises a minimal project that does:
+# No project in the tree declares dev.yunseong.unityplaymcp as a testable, so this
+# script builds a minimal one:
 #
 #   <dest>/ProjectSettings/ProjectVersion.txt   pinned editor version
 #   <dest>/Packages/manifest.json               deps + "testables": ["dev.yunseong.unityplaymcp"]
