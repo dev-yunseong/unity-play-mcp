@@ -1,3 +1,4 @@
+using UnityPlayMcp.Protocol.Dto;
 using UnityEngine;
 
 namespace UnityPlayMcp.Capture
@@ -11,6 +12,9 @@ namespace UnityPlayMcp.Capture
 
         /// <summary>True when the screen clipped the requested area away.</summary>
         public bool Clipped;
+
+        /// <summary>화면에 잘리기 전의 영역. Unity 화면 좌표다.</summary>
+        public Rect Requested;
     }
 
     /// <summary>
@@ -71,9 +75,36 @@ namespace UnityPlayMcp.Capture
                 PixelRect = visible,
                 // Reported rather than treated as failure: a half-visible button is exactly the
                 // kind of defect the agent is looking at the screen to find.
-                Clipped = visible != requested
+                Clipped = visible != requested,
+                Requested = requested
             };
             return true;
+        }
+
+        /// <summary>Unity 화면 좌표(좌하단 기준)의 영역을 좌상단 기준으로 옮긴다.</summary>
+        /// <remarks>
+        /// 뒤집기는 보고하는 이 자리에서만 한다. <c>move_mouse</c> 와 scene 의 rect 가 좌상단 기준이라 agent 는 이 값을 그대로
+        /// 되쓴다.
+        /// </remarks>
+        public static CaptureAreaDto TopLeft(Rect area, int screenHeight)
+        {
+            return new CaptureAreaDto
+            {
+                X = area.xMin,
+                Y = screenHeight - area.yMax,
+                Width = area.width,
+                Height = area.height
+            };
+        }
+
+        /// <summary>화면 픽셀 하나가 이미지에서 차지하는 픽셀 수.</summary>
+        public static CaptureScaleDto Scale(Rect source, int imageWidth, int imageHeight)
+        {
+            return new CaptureScaleDto
+            {
+                X = source.width <= 0f ? 0f : imageWidth / source.width,
+                Y = source.height <= 0f ? 0f : imageHeight / source.height
+            };
         }
 
         /// <summary>
