@@ -273,9 +273,36 @@ function describeResults(results: ActionResult[]): string {
   return JSON.stringify(results, null, 2);
 }
 
+/// 배치 결과에서 `capture_screen` 의 이미지를 꺼내 image block 으로 만든다.
+///
+/// 캡처가 없는 배치는 결과를 그대로 돌려준다. 캡처 결과는 `data` 를 빼고 `capture_screen` 도구와 같은
+/// 설명으로 바꾸며, 몇 번째 image block 인지 적는다. 형식이 맞지 않는 payload 는 건드리지 않는다.
+function liftCaptureImages(
+  requests: readonly ActionRequest[],
+  results: ActionResult[],
+  store: PulseStore | undefined,
+): { results: ActionResult[]; images: ToolContent[] } {
+  const images: ToolContent[] = [];
+  const lifted = results.map((result, index) => {
+    if (!result.success || requests[index]?.method !== "capture_screen") return result;
+    const parsed = capturePayloadSchema.safeParse(result.returnValue);
+    if (!parsed.success) return result;
+    images.push({ type: "image", data: parsed.data.data, mimeType: parsed.data.mimeType });
+    return {
+      ...result,
+      returnValue: {
+        ...describeCaptureFor(parsed.data, store),
+        imageBlock: images.length,
+      },
+    };
+  });
+  return { results: images.length === 0 ? results : lifted, images };
+}
+
 export async function dispatchActions(
   connection: Pick<UnityConnection, "sendActions">,
   actions: ReadonlyArray<{ method: string; params: unknown[] }>,
+  store?: PulseStore,
 ): Promise<ToolResponse> {
   // 진행 중인 act_and_observe 의 입력 사이에 끼어들지 않는다. 입력이 아닌 도구(capture, readings)는 통과한다.
   const holder = defaultInputGate.activeOperationId;
@@ -290,7 +317,9 @@ export async function dispatchActions(
   }));
 
   try {
-    const results = await connection.sendActions(requests);
+    const sent = await connection.sendActions(requests);
+    // 배치 안의 캡처는 base64 문자열이 아니라 `capture_screen` 도구와 같은 image block 으로 돌려준다 (#89, #92).
+    const { results, images } = liftCaptureImages(requests, sent, store);
     const failed = results.filter((result) => !result.success);
     return {
       content: [{
@@ -298,7 +327,7 @@ export async function dispatchActions(
         text: failed.length === 0
           ? `Action batch completed.\n${describeResults(results)}`
           : `${failed.length} of ${results.length} actions failed.\n${describeResults(results)}`,
-      }],
+      }, ...images],
       ...(failed.length > 0 ? { isError: true } : {}),
     };
   } catch (error) {
@@ -778,6 +807,18 @@ export function describeCapture(
   };
 }
 
+/// 캡처 설명에 낡은 reading 표시까지 붙인다. 낡은 reading 은 frame 이 가까워도 이 화면의 상태가
+/// 아니므로 `readingHeader` 와 같은 `stale` 을 싣는다 (#69).
+function describeCaptureFor(capture: CapturePayload, store: PulseStore | undefined): CaptureDescription {
+  const state = store?.getState() ?? undefined;
+  const description = describeCapture(capture, state);
+  const stale = store === undefined || state === undefined ? undefined : readingHeader(store, state).stale;
+  if (description.reading !== undefined && stale !== undefined) {
+    description.reading = { ...description.reading, stale };
+  }
+  return description;
+}
+
 function findCapture(results: ActionResult[]): CapturePayload | undefined {
   const successful = results.find((result) => result.success);
   if (successful === undefined) return undefined;
@@ -958,14 +999,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         return { ...text("Screenshot failed: Unity returned an invalid capture payload."), isError: true };
       }
       // 첫 줄은 기존 형식을 유지하고, 그 뒤에 좌표 변환과 reading 관계를 JSON 으로 싣는다.
-      const state = store.getState();
-      const description = describeCapture(capture, state);
-      // 낡은 reading 은 frame 이 가까워도 이 화면의 상태가 아니므로 `readingHeader` 와 같은 `stale` 을
-      // 싣는다 (#69).
-      const stale = state === undefined ? undefined : readingHeader(store, state).stale;
-      if (description.reading !== undefined && stale !== undefined) {
-        description.reading = { ...description.reading, stale };
-      }
+      const description = describeCaptureFor(capture, store);
       return { content: [
         { type: "image", data: capture.data, mimeType: capture.mimeType },
         {
@@ -987,7 +1021,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   const runAction = async (action: PerformAction) => {
     const expanded = expandActions([action], store);
     if (!expanded.ok) return { ...text(expanded.error), isError: true };
-    return dispatchActions(connection, expanded.wire);
+    return dispatchActions(connection, expanded.wire, store);
   };
   const refIssue = (issue: string | undefined) => issue === undefined ? undefined : { ...text(issue), isError: true };
 
@@ -1068,12 +1102,13 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
 
   server.registerTool("perform_actions", {
     description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}. "
-      + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect.",
+      + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect. "
+      + "A capture_screen action returns its screenshot as an image content block, like the capture_screen tool, and its result entry carries the same description with imageBlock (the 1-based image position) instead of the base64 data.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
   }, async ({ actions }) => {
     const expanded = expandActions(actions, store);
     if (!expanded.ok) return { ...text(expanded.error), isError: true };
-    return dispatchActions(connection, expanded.wire);
+    return dispatchActions(connection, expanded.wire, store);
   });
 
   server.registerTool("wait_for_condition", {

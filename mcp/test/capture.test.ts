@@ -187,3 +187,46 @@ test("a stale held reading carries its stale marker next to the capture", async 
 
   assert.equal(parsed.reading?.stale?.reason, "disconnected");
 });
+
+async function performThroughTool(actions: unknown[], returnFor: (method: string) => unknown) {
+  const connection = {
+    endpoint: "ws://127.0.0.1:17311/ws",
+    isConnected: () => true,
+    async ensureConnected(): Promise<void> {},
+    async sendActions(sent: ActionRequest[]): Promise<ActionResult[]> {
+      return sent.map((action) => ({ id: action.id, success: true, returnValue: returnFor(action.method) as never }));
+    },
+  } as unknown as UnityConnection;
+  const server = new McpServer({ name: "unity-play-mcp-test", version: "0" });
+  registerTools(server, connection, new PulseStore());
+  const handler = (server.server as unknown as {
+    _requestHandlers?: Map<string, CallToolHandler>;
+  })._requestHandlers?.get("tools/call");
+  assert.ok(handler !== undefined);
+  return handler(
+    { method: "tools/call", params: { name: "perform_actions", arguments: { actions } } },
+    { signal: new AbortController().signal },
+  );
+}
+
+test("#89/#92: a capture_screen inside perform_actions comes back as an image, not base64 text", async () => {
+  const response = await performThroughTool(
+    [{ method: "move_mouse", x: 1, y: 2 }, { method: "capture_screen" }],
+    (method) => (method === "capture_screen" ? fullScreen() : null),
+  );
+
+  const images = response.content.filter((item) => item.type === "image");
+  assert.equal(images.length, 1);
+  assert.equal(images[0]?.data, IMAGE);
+  const body = response.content.filter((item) => item.type === "text").map((item) => item.text).join("\n");
+  assert.doesNotMatch(body, new RegExp(IMAGE.replace(/[+/=]/g, "\\$&")));
+  assert.match(body, /"imageBlock": 1/);
+  assert.match(body, /"toScreen"/);
+});
+
+test("a batch without capture_screen answers exactly as before", async () => {
+  const response = await performThroughTool([{ method: "move_mouse", x: 1, y: 2 }], () => null);
+
+  assert.deepEqual(response.content.map((item) => item.type), ["text"]);
+  assert.match(response.content[0]?.text ?? "", /^Action batch completed\./);
+});
