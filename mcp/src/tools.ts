@@ -22,10 +22,12 @@ import {
   type Resolution,
   type TargetRef,
 } from "./target-ref.js";
+import { busyText, defaultInputGate, isMutatingMethod } from "./play-operations.js";
 import { REDACTED_TEXT } from "./secrets.js";
 import { searchTargets } from "./search.js";
 import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
+import { registerPlayTools } from "./play-tools.js";
 import { visibleElements } from "./visible.js";
 
 type ToolContent =
@@ -275,6 +277,12 @@ export async function dispatchActions(
   connection: Pick<UnityConnection, "sendActions">,
   actions: ReadonlyArray<{ method: string; params: unknown[] }>,
 ): Promise<ToolResponse> {
+  // 진행 중인 act_and_observe 의 입력 사이에 끼어들지 않는다. 입력이 아닌 도구(capture, readings)는 통과한다.
+  const holder = defaultInputGate.activeOperationId;
+  if (holder !== undefined && actions.some((action) => isMutatingMethod(action.method))) {
+    return { content: [{ type: "text", text: busyText(holder) }], isError: true };
+  }
+
   const requests: ActionRequest[] = actions.map((action) => ({
     id: nextActionId++,
     method: action.method,
@@ -1103,4 +1111,6 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       ...(isError ? { isError: true } : {}),
     };
   });
+
+  registerPlayTools(server, connection, store);
 }
