@@ -2,6 +2,9 @@ import WebSocket from "ws";
 
 import type { GamePush, PulseStore } from "./pulse.js";
 
+/// connection 이 store 에 하는 일은 frame 을 접게 하는 것과, 든 상태가 끊겼다고 적는 것 둘뿐이다.
+type PulseSink = Pick<PulseStore, "fold" | "markInterrupted">;
+
 export interface ActionRequest {
   id: number;
   method: string;
@@ -53,7 +56,7 @@ interface TimerApi {
 export interface UnityConnectionOptions {
   url?: string;
   timeoutMilliseconds?: number;
-  pulseStore: PulseStore;
+  pulseStore: PulseSink;
   createWebSocket?: (url: string) => WebSocketLike;
   timers?: TimerApi;
   reconnectBaseMilliseconds?: number;
@@ -88,7 +91,7 @@ const OPEN = 1;
 export class UnityConnection {
   private readonly url: string;
   private readonly timeoutMilliseconds: number;
-  private readonly pulseStore: PulseStore;
+  private readonly pulseStore: PulseSink;
   private readonly createWebSocket: (url: string) => WebSocketLike;
   private readonly timers: TimerApi;
   private readonly reconnectBaseMilliseconds: number;
@@ -149,7 +152,21 @@ export class UnityConnection {
         this.settlePendingFailure(requestId, toError(error, `Failed to send ACTION ${requestId}`));
       }
     });
+    this.noteStoppedReadings(actions, resultFrame.results);
     return resultFrame.results;
+  }
+
+  /// `stop_readings` 가 성공했으면 든 상태를 낡았다고 적는다.
+  ///
+  /// 어느 tool 로 보냈든(`stop_readings` 든 `perform_actions` 든) 이 자리를 지나므로 여기서 한 번
+  /// 한다. Unity 는 `Pulse.Stop` 이 남은 reading 을 먼저 보낸 뒤에 결과를 돌려주므로, 결과가
+  /// 도착한 이 시점에는 마지막 reading 이 이미 접혀 있다.
+  private noteStoppedReadings(actions: ActionRequest[], results: ActionResult[]): void {
+    const stopped = actions.some((action) => action.method === "stop_readings"
+      && results.some((result) => result.id === action.id && result.success));
+    if (stopped) {
+      this.pulseStore.markInterrupted("stopped");
+    }
   }
 
   /// 지금 이 순간 소켓이 열려 있는지. 새로 연결하지 않으므로 상태를 보는 쪽이 상태를 바꾸지 않는다.
@@ -234,6 +251,8 @@ export class UnityConnection {
     }
     this.socket = undefined;
     this.rejectAllPending(error);
+    // 끊긴 동안의 차이는 아무도 받지 못한다. 다음 reading 이 적용될 때까지 든 상태를 낡았다고 둔다.
+    this.pulseStore.markInterrupted("disconnected");
     for (const listener of this.disconnectListeners) {
       listener();
     }

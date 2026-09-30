@@ -93,6 +93,22 @@ namespace UnityPlayMcp.Affordances.Live
         /// <summary>직전 pulse 가 sink 에 닿지 못했는지.</summary>
         private bool _lost;
 
+        /// <summary>다음 pulse 를 차이가 아니라 전량으로 찍으라는 청이 왔는지.</summary>
+        /// <remarks>
+        /// <see cref="_lost"/> 와 따로 두는 것은 까닭이 달라서다. 그쪽은 sink 가 실패했다는 사실이고, 이쪽은 읽는 쪽이 새로 붙었거나
+        /// 이미 도는 채널에 <c>start_readings</c> 를 다시 보냈다는 사실이다. 소켓은 client 가 없어도 보내기에 실패하지 않으므로,
+        /// 끊겼다 다시 붙은 독자는 그 사이의 차이를 잃었는데도 <see cref="_lost"/> 가 서지 않는다 (#69).
+        /// </remarks>
+        private bool _wholeRequested;
+
+        /// <summary>이 인스턴스가 찍는 reading 들의 run.</summary>
+        /// <remarks>
+        /// <see cref="_reading"/> 은 <see cref="Begin"/> 마다 1부터 다시 센다. 읽는 쪽이 그보다 오래 살면 새 run 의 번호가 이전 run 의
+        /// 번호보다 작아 이미 지나간 reading 처럼 보이고, 실제로 MCP server 가 그렇게 새 장면을 버렸다 (#69). 번호끼리 비교해도 되는지를
+        /// 읽는 쪽이 알도록 run 을 함께 싣는다.
+        /// </remarks>
+        private string _run;
+
         /// <summary>
         /// 감시가 시작된 순간부터 세어 이것이 몇 번째 pulse 인지.
         /// </summary>
@@ -144,11 +160,21 @@ namespace UnityPlayMcp.Affordances.Live
             _beating = carrier.AddComponent<Pulse>();
             _beating._sink = sink;
             _beating._interval = interval;
+            _beating._run = Guid.NewGuid().ToString("N");
             Sent = 0;
             Held = 0;
 
             _beating.StartCoroutine(_beating.Beat());
             return true;
+        }
+
+        /// <summary>도는 채널이 있으면 다음 pulse 를 전량으로 찍게 한다. 없으면 아무것도 하지 않는다.</summary>
+        internal static void RequestWhole()
+        {
+            if (_beating != null)
+            {
+                _beating._wholeRequested = true;
+            }
         }
 
         internal static void Stop()
@@ -230,14 +256,15 @@ namespace UnityPlayMcp.Affordances.Live
         {
             string document;
             var settled = false;
+            var forced = _wholeRequested;
 
             try
             {
                 // carrier 는 씬 로드보다 오래 살도록 만들어졌으므로, 그것을 쥔 씬은 Unity 가 그렇게 오래 사는 나머지 전부를 두는
                 // 바로 그 씬이다. 스스로 설치되는 패키지가 그 씬에 대해 가진 유일한 손잡이이고, 스캔 자신의 순회도 같은 방식으로
                 // 그것을 잡는다.
-                document = LiveState.Compose(
-                    ++_reading, gameObject.scene, _restless, _pixels, _since, _lost, out settled);
+                document = WithRun(LiveState.Compose(
+                    ++_reading, gameObject.scene, _restless, _pixels, _since, _lost || forced, out settled));
             }
             catch (Exception exception)
             {
@@ -247,7 +274,10 @@ namespace UnityPlayMcp.Affordances.Live
                 return;
             }
 
-            if (_read && settled)
+            _wholeRequested = false;
+
+            // 청해진 전량 pulse 는 아무것도 안 움직였어도 나간다. 청한 쪽은 바로 그 한 장을 기다리고 있다.
+            if (_read && settled && !forced)
             {
                 Held++;
                 return;
@@ -257,6 +287,16 @@ namespace UnityPlayMcp.Affordances.Live
 
             // 여기서 보내지 않고 전달 박자까지 쥐고 있는다. 찍는 것과 건네는 것은 두 속도이고, 이것은 게임을 따라가야 하는 쪽이다.
             _pending.Add(document);
+        }
+
+        /// <summary>문서 맨 앞에 run 을 끼운다.</summary>
+        /// <remarks>
+        /// <see cref="LiveState"/> 가 문서를 <c>{"schema":</c> 로 시작한다는 것에 기댄다. <c>WebSocketPulseSink</c> 가 봉투를
+        /// 끼우는 것과 같은 방식이고 같은 까닭이다: 다시 파싱해 직렬화하면 전량 pulse 를 한 번 더 훑는다.
+        /// </remarks>
+        private string WithRun(string document)
+        {
+            return "{\"run\":\"" + _run + "\"," + document.Substring(1);
         }
 
         private void OnDestroy()

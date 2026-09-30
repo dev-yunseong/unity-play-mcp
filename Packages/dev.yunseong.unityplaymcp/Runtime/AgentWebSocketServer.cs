@@ -27,6 +27,7 @@ namespace UnityPlayMcp
         private readonly Dictionary<string, Action<string>> sendByConnectionId =
             new Dictionary<string, Action<string>>();
         private WebSocketServer server;
+        private int clientsOpened;
 
         public AgentWebSocketServer(string bindAddress, int port)
         {
@@ -37,6 +38,11 @@ namespace UnityPlayMcp
         public bool IsConnected
         {
             get { return server != null; }
+        }
+
+        public int ClientsOpened
+        {
+            get { return System.Threading.Volatile.Read(ref clientsOpened); }
         }
 
         public void Start()
@@ -93,6 +99,9 @@ namespace UnityPlayMcp
                     {
                         sendByConnectionId[connectionId] = send;
                     }
+
+                    // websocket-sharp 의 thread 에서 불린다. 읽는 쪽은 main thread 의 host 다.
+                    System.Threading.Interlocked.Increment(ref clientsOpened);
                 },
                 connectionId =>
                 {

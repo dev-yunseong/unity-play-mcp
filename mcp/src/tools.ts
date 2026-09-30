@@ -5,9 +5,11 @@ import { UnityUnreachableError } from "./connection.js";
 import type { ActionRequest, ActionResult, UnityConnection } from "./connection.js";
 import {
   objectKey,
+  type FoldedPulseState,
   type PulseObject,
   type PulseStatic,
   type PulseStore,
+  type Staleness,
   type UnreadableFrame,
 } from "./pulse.js";
 import { REDACTED_TEXT } from "./secrets.js";
@@ -71,6 +73,7 @@ export const performActionSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("button_click"), targetId: targetIdSchema() }).strict(),
   z.object({ method: z.literal("pointer_click"), targetId: targetIdSchema() }).strict(),
   z.object({ method: z.literal("pointer_drag"), sourceId: targetIdSchema(), targetId: targetIdSchema() }).strict(),
+  z.object({ method: z.literal("pointer_hover"), targetId: targetIdSchema() }).strict(),
   z.object({ method: z.literal("enter_text"), targetId: targetIdSchema(), text: z.string() }).strict(),
   z.object({ method: z.literal("move_mouse"), x: z.number(), y: z.number() }).strict(),
   z.object({ method: z.literal("mouse_down"), button: mouseButtonSchema() }).strict(),
@@ -130,6 +133,7 @@ export function toWireAction(action: PerformAction): { method: string; params: u
   switch (action.method) {
     case "button_click":
     case "pointer_click":
+    case "pointer_hover":
       return { method: action.method, params: [action.targetId] };
     case "pointer_drag":
       return { method: action.method, params: [action.sourceId, action.targetId] };
@@ -223,7 +227,56 @@ export interface UnityStatus {
   scene?: string;
   lastReadingAt?: number;
   lastUnreadableFrame?: UnreadableFrame;
+  staleness?: Staleness;
   now: number;
+}
+
+const STALE_RECOVERY =
+  "Call start_readings and read again; if the state stays stale, call stop_readings and then start_readings.";
+
+/// 낡은 까닭 하나를 agent 가 읽을 문장으로 바꾼다. 무엇을 믿으면 안 되는지와 어떻게 되돌리는지를 함께 말한다.
+function stalenessMessage(staleness: Staleness): string {
+  switch (staleness.reason) {
+    case "restarted":
+      return "Unity restarted its readings and no whole reading of the new run has arrived yet. "
+        + "This state belongs to the previous run: its ids, rects, and scene may no longer exist. "
+        + STALE_RECOVERY;
+    case "disconnected":
+      return "The connection to Unity dropped after this reading, so changes since then may be missing. "
+        + STALE_RECOVERY;
+    case "stopped":
+      return "Readings were stopped with stop_readings, so this state no longer follows the game. "
+        + "Call start_readings to resume.";
+  }
+}
+
+function isoTime(at: number | undefined): string | undefined {
+  return at === undefined ? undefined : new Date(at).toISOString();
+}
+
+/// 모든 읽기 tool 이 상태 앞에 싣는 머리.
+///
+/// 낡았으면 `stale` 을 맨 앞에 둔다. 그래야 응답을 위에서부터 읽는 agent 가 id 를 쓰기 전에 본다.
+/// 낡은 상태를 아예 내주지 않는 쪽은 택하지 않았다 — 직전 장면을 확인하는 데는 여전히 쓸모 있고,
+/// 무엇이 낡았는지 말해 주면 쓸지 말지는 agent 가 정할 수 있다.
+export function readingHeader(store: PulseStore, state: FoldedPulseState): Record<string, unknown> {
+  const staleness = store.getStaleness();
+  return {
+    ...(staleness === undefined
+      ? {}
+      : {
+          stale: {
+            reason: staleness.reason,
+            message: stalenessMessage(staleness),
+            since: isoTime(staleness.at),
+            lastReadingAt: isoTime(staleness.lastReadingAt),
+          },
+        }),
+    ...(state.run === undefined ? {} : { run: state.run }),
+    reading: state.reading,
+    frame: state.frame,
+    scene: state.scene,
+  };
 }
 
 function describeAge(now: number, at: number): string {
@@ -249,10 +302,18 @@ export function describeStatus(status: UnityStatus): string {
     ? [head, "No scene reading has arrived yet. Call start_readings before get_scene_state."]
     : [
         head,
-        `Readings are running: reading ${status.reading} on frame ${status.frame} `
+        `${status.staleness?.reason === "stopped" ? "Readings are stopped" : "Readings are running"}: `
+        + `reading ${status.reading} on frame ${status.frame} `
         + `arrived ${describeAge(status.now, status.lastReadingAt)}.`,
         `Scene: ${status.scene}.`,
       ];
+
+  if (status.lastReadingAt !== undefined && status.staleness !== undefined) {
+    lines.push(
+      `This reading is stale (${status.staleness.reason} ${describeAge(status.now, status.staleness.at)}): `
+      + stalenessMessage(status.staleness),
+    );
+  }
 
   // 마지막으로 읽지 못한 frame 이 있으면(그리고 그 뒤로 정상 reading 이 하나도 안 왔으면 —
   // `PulseStore` 가 성공할 때마다 이 값을 스스로 지운다) 두 분기 모두에 덧붙인다. reading 이
@@ -411,6 +472,7 @@ function stateResponse(
   }
 
   const record = state as unknown as Record<string, unknown>;
+  const header = readingHeader(store, state);
   const matches = (candidate: string): boolean =>
     selector === undefined || candidate.includes(selector);
   const filterObjects = (value: unknown): unknown[] => {
@@ -452,9 +514,7 @@ function stateResponse(
     // 사라지고, 양이 적어 뺄 이유도 없다. `changed` 는 반대다 — 분주한 씬에서 길고, 마디마다
     // 붙는 `lastChangedReading` 이 같은 물음에 tree 모양으로 답한다.
     return text(JSON.stringify(withRedactionNote({
-      reading: record.reading,
-      frame: record.frame,
-      scene: record.scene,
+      ...header,
       ...(root === undefined ? {} : { root }),
       ...staticsSection(state.statics, scoped, staticsQuery),
       gone: filterGone(record.gone),
@@ -466,9 +526,7 @@ function stateResponse(
   }
 
   const response = withRedactionNote({
-    reading: record.reading,
-    frame: record.frame,
-    scene: record.scene,
+    ...header,
     ...(scoped
       ? changedFor(state.changed, (includeInactive ? [...active, ...deactive] : active) as PulseObject[], scene)
       : { changed: state.changed }),
@@ -489,23 +547,128 @@ function stateResponse(
   return text(JSON.stringify(response, null, 2));
 }
 
-interface CapturePayload {
-  mimeType: string;
-  width: number;
-  height: number;
-  targetId?: number;
-  clipped: boolean;
-  data: string;
-}
+const captureAreaSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number().nonnegative(),
+  height: z.number().nonnegative(),
+}).strict();
 
+/// Unity 가 `capture_screen` 에 돌려주는 값.
+///
+/// 좌표 metadata(`screen` 이하)는 optional 이다. 0.2.x package 는 그것을 싣지 않고, 그 package 를 쓰는 사람도
+/// 새 server 에서 이미지는 계속 받아야 한다. 반대로 이 schema 이전의 server 는 `.strict()` 라 새 package 의
+/// 캡처를 거절한다 — package 가 자신과 맞는 server 버전을 고정해 두는 이유 중 하나다.
 const capturePayloadSchema = z.object({
   mimeType: z.enum(["image/png", "image/jpeg"]),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   targetId: z.number().int().optional(),
   clipped: z.boolean(),
+  screen: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).strict().optional(),
+  region: captureAreaSchema.optional(),
+  requestedRegion: captureAreaSchema.optional(),
+  scale: z.object({ x: z.number().positive(), y: z.number().positive() }).strict().optional(),
+  frame: z.number().int().optional(),
+  scene: z.string().optional(),
   data: z.string().min(1).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
 }).strict();
+
+type CapturePayload = z.infer<typeof capturePayloadSchema>;
+
+/// 스크린샷과 함께 싣는 설명. 이미지 픽셀을 `move_mouse` 좌표로 되돌리는 데 필요한 것과, 그 이미지가 어느
+/// 순간의 것인지.
+export interface CaptureDescription {
+  image: { width: number; height: number; mimeType: string };
+  clipped: boolean;
+  targetId?: number;
+  screen?: CapturePayload["screen"];
+  region?: CapturePayload["region"];
+  requestedRegion?: CapturePayload["requestedRegion"];
+  scale?: CapturePayload["scale"];
+  toScreen?: string;
+  frame?: number;
+  scene?: string;
+  missing?: string;
+  reading?: {
+    reading: number;
+    frame: number;
+    scene: string;
+    relation: string;
+    sameScene?: boolean;
+  };
+}
+
+/// reading 과 캡처 사이가 이만큼 벌어지면 reading 의 rect 가 이 이미지와 맞는다고 말하지 않는다.
+///
+/// reading 은 초당 한 번 찍힌다(`Pulse.DefaultInterval`). 60fps 에서 두 박자쯤이다 — 그보다 멀면 그 사이 무엇이든
+/// 움직였을 수 있다. 같은 이름의 장면을 다시 불렀거나 Play Mode 를 다시 시작해 frame 이 되돌아간 경우도 여기서 걸린다.
+const READING_FRAME_TOLERANCE = 120;
+
+/// 캡처 결과와, 지금 든 reading 을 함께 설명한다.
+///
+/// reading 은 캡처와 같은 순간의 것이 아니다. 그래서 frame 의 선후와 scene 일치를 말하고, scene 이 다르면
+/// 그 reading 의 id 를 이 화면에 쓰지 말라고 한다 — reading 이 멈춘 동안 스크린샷만 새 장면을 보였던 것이
+/// #69/#71 에서 관찰된 장면이다.
+export function describeCapture(
+  capture: CapturePayload,
+  state: { reading: number; frame: number; scene: string } | undefined,
+): CaptureDescription {
+  const description: CaptureDescription = {
+    image: { width: capture.width, height: capture.height, mimeType: capture.mimeType },
+    clipped: capture.clipped,
+    ...(capture.targetId === undefined ? {} : { targetId: capture.targetId }),
+  };
+
+  if (capture.screen === undefined || capture.region === undefined || capture.scale === undefined) {
+    return {
+      ...description,
+      missing: "This Unity package does not report the capture's screen size, region, scale, frame, or scene. "
+        + "Update the package to convert image pixels to move_mouse coordinates.",
+    };
+  }
+
+  Object.assign(description, {
+    screen: capture.screen,
+    region: capture.region,
+    ...(capture.requestedRegion === undefined ? {} : { requestedRegion: capture.requestedRegion }),
+    scale: capture.scale,
+    toScreen: "screenX = region.x + imageX / scale.x; screenY = region.y + imageY / scale.y "
+      + "(top-left origin, the space move_mouse and scene rects use)"
+      + (capture.clipped
+        ? ". The image holds only region, the on-screen part of requestedRegion; the rest was off screen and is not in the image"
+        : ""),
+    ...(capture.frame === undefined ? {} : { frame: capture.frame }),
+    ...(capture.scene === undefined ? {} : { scene: capture.scene }),
+  });
+
+  if (state === undefined || capture.frame === undefined) {
+    return description;
+  }
+
+  const gap = capture.frame - state.frame;
+  const sameScene = capture.scene === undefined ? undefined : capture.scene === state.scene;
+  const order = gap >= 0
+    ? `The held reading ${state.reading} was taken ${gap} frames before this image.`
+    : `The held reading ${state.reading} was taken ${-gap} frames after this image.`;
+  const relation = sameScene === false
+    ? `The held reading ${state.reading} is from scene "${state.scene}", but this image shows "${capture.scene}". `
+      + "Do not use that reading's ids or rects for what this image shows; read the scene again."
+    : Math.abs(gap) > READING_FRAME_TOLERANCE
+      ? `${order} Its rects and values describe frame ${state.frame}, not this image; `
+        + "read the scene again before aiming at anything in this image."
+      : `${order} Its rects and values describe frame ${state.frame}.`;
+  return {
+    ...description,
+    reading: {
+      reading: state.reading,
+      frame: state.frame,
+      scene: state.scene,
+      relation,
+      ...(sameScene === undefined ? {} : { sameScene }),
+    },
+  };
+}
 
 function findCapture(results: ActionResult[]): CapturePayload | undefined {
   const successful = results.find((result) => result.success);
@@ -539,6 +702,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       scene: state?.scene as string | undefined,
       lastReadingAt: store.getLastReadingAt(),
       lastUnreadableFrame: store.getLastUnreadableFrame(),
+      staleness: store.getStaleness(),
       now: Date.now(),
     }));
   });
@@ -595,9 +759,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
       }
       return text(JSON.stringify(withRedactionNote({
-        reading: state.reading,
-        frame: state.frame,
-        scene: state.scene,
+        ...readingHeader(store, state),
         elements: visibleElements(state, { selector, includeHidden }),
       }), null, 2));
     } catch (error) {
@@ -646,9 +808,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
       }
       return text(JSON.stringify(withRedactionNote({
-        reading: state.reading,
-        frame: state.frame,
-        scene: state.scene,
+        ...readingHeader(store, state),
         ...searchTargets(state, {
           name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit,
         }),
@@ -662,7 +822,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("capture_screen", {
-    description: "Capture the whole game screen or one target as a PNG.",
+    description: "Capture the whole game screen (JPEG, longest edge 1024 by default) or one target (PNG, cropped with padding). Alongside the image it returns the Unity Screen.width/height that input uses, the captured region in top-left screen pixels, the image-per-screen-pixel scale, and a toScreen formula to turn an image pixel into move_mouse coordinates; plus the Unity frame and scene the image was taken on, and how the held scene reading relates to it (frames before/after, same scene or not). For a target crop, region includes the padding and is larger than the element. Never assume the screen size from the image size.",
     inputSchema: {
       targetId: targetIdSchema().optional(),
       maxEdge: maxEdgeSchema().optional(),
@@ -683,9 +843,15 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       if (capture === undefined) {
         return { ...text("Screenshot failed: Unity returned an invalid capture payload."), isError: true };
       }
+      // 첫 줄은 예전 모양 그대로 둔다. 그 뒤에 좌표 변환과 reading 관계를 JSON 으로 싣는다.
+      const description = describeCapture(capture, store.getState());
       return { content: [
         { type: "image", data: capture.data, mimeType: capture.mimeType },
-        { type: "text", text: `${capture.width}x${capture.height}; clipped=${capture.clipped}` },
+        {
+          type: "text",
+          text: `${capture.width}x${capture.height}; clipped=${capture.clipped}\n`
+            + JSON.stringify(description, null, 2),
+        },
       ] };
     } catch (error) {
       return { ...text(failureText("Screenshot failed", error)), isError: true };
@@ -706,6 +872,11 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     description: "Drag from one Unity object to another by instance id: press the left mouse button on sourceId, glide the pointer to targetId, and release there. Both objects are checked before the button is pressed.",
     inputSchema: { sourceId: targetIdSchema(), targetId: targetIdSchema() },
   }, async ({ sourceId, targetId }) => dispatchOne(connection, "pointer_drag", [sourceId, targetId]));
+
+  server.registerTool("pointer_hover", {
+    description: "Rest the virtual pointer on a Unity object by instance id without pressing any button, so hover handlers run through the game's own input path: uGUI OnPointerEnter/OnPointerExit and collider OnMouseEnter/OnMouseOver. The pointer stays there until the next pointer input moves it. Reports the top-left-origin game screen x/y it used (the same space as move_mouse) and the object actually under the pointer after it arrived. Fails without moving when the target is destroyed (\"no live object has id\"), inactive (\"not active in the scene\"), off screen, or covered (naming what covers it), and fails if the target moved away, was deactivated, or was covered by the time the pointer arrived; in that case the pointer stays where it landed and whatever is under it has already received hover. Read tooltips or highlights afterwards with get_scene_state or capture_screen.",
+    inputSchema: { targetId: targetIdSchema() },
+  }, async ({ targetId }) => dispatchOne(connection, "pointer_hover", [targetId]));
 
   server.registerTool("enter_text", {
     description: "Enter text into a Unity target by instance id.",
@@ -780,15 +951,18 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       + `${WAIT_DEFAULT_TIMEOUT_MS}, maximum ${WAIT_MAX_TIMEOUT_MS}), even when nothing changes and`,
       "Unity therefore sends no pulse at all. Read the returned met, disconnected, and unmet fields —",
       "a successful action result never guarantees this condition held.",
+      "Reading and frame numbers restart when Unity starts a new reading run; pass the run from the same",
+      "response as sinceRun, and any reading of a different run counts as newer. A stale state never meets a condition.",
     ].join(" "),
     inputSchema: {
+      sinceRun: z.string().min(1).optional(),
       sinceReading: z.number().int().nonnegative().optional(),
       sinceFrame: z.number().int().nonnegative().optional(),
       scene: z.string().min(1).optional(),
       memberEquals: z.array(memberEqualsSchema()).min(1).optional(),
       timeoutMilliseconds: z.number().int().positive().max(WAIT_MAX_TIMEOUT_MS).optional(),
     },
-  }, async ({ sinceReading, sinceFrame, scene, memberEquals, timeoutMilliseconds }, extra) => {
+  }, async ({ sinceRun, sinceReading, sinceFrame, scene, memberEquals, timeoutMilliseconds }, extra) => {
     if (sinceReading === undefined && sinceFrame === undefined && scene === undefined && memberEquals === undefined) {
       return {
         ...text("wait_for_condition requires at least one of sinceReading, sinceFrame, scene, or memberEquals."),
@@ -801,6 +975,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       return { ...text(failureText("Unity is unreachable", error)), isError: true };
     }
     const outcome = await waitForCondition(store, connection, {
+      sinceRun,
       sinceReading,
       sinceFrame,
       scene,

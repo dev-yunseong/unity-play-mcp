@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using UnityPlayMcp.Diagnostics;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace UnityPlayMcp.Capture
 {
@@ -103,11 +104,20 @@ namespace UnityPlayMcp.Capture
                     yield break;
                 }
 
+                // 좌표 변환에 필요한 값은 추정하지 않고 여기서 잰다. 이미지 크기만 보고 원본 크기를 되짚으면 maxEdge 로 줄인
+                // 비율과 crop 의 원점을 알 방법이 없다 (#71). 프레임과 씬도 back buffer 를 읽은 바로 이 순간의 것이다.
+                var active = SceneManager.GetActiveScene();
                 completed(new CapturedImage
                 {
                     Bytes = bytes,
                     Width = size.x,
-                    Height = size.y
+                    Height = size.y,
+                    // blit 이 쓴 값 그대로다. 창이 최소화돼 Screen 이 0 이어도 region 이 screen 안에 들도록.
+                    ScreenWidth = screenWidth,
+                    ScreenHeight = screenHeight,
+                    Source = source,
+                    Frame = Time.frameCount,
+                    Scene = active.IsValid() ? active.name : null
                 });
             }
             finally
