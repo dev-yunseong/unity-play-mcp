@@ -86,6 +86,16 @@ Four common requests are registered as commands in your agent. In Claude Code, t
 | `run_steps` | Performs the player actions you describe, in order, and reports the first step that didn't match what you expected. | `steps`, `expectation` (optional) |
 | `track_value` | Watches how an object's values change over time, optionally while an action runs. | `selector`, `action` (optional) |
 
+### Playing by observing and acting
+
+For agents that play a game rather than test it, six tools form an observe, act and verify loop
+(`get_play_capabilities`, `observe`, `inspect_action`, `query_space`, `act_and_observe`,
+`watch_events`). They need no game-specific code, keep input acceptance apart from in-game
+results, and can be extended by an optional semantic provider. See
+[docs/observe-act-loop.md](docs/observe-act-loop.md). They require a Unity package and MCP server
+that speak the same play protocol version; on an older package they report
+`unsupported_capability` and the other tools keep working.
+
 ### Reading interval
 
 While an agent is watching the game, Unity Play MCP reads values every second and sends only what changed. If you need to catch values that change faster than that, shorten the interval under **Edit > Project Settings > Unity Play MCP > Reading interval (s)**.
