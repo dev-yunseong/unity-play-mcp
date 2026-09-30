@@ -247,6 +247,23 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
+        /// 포인터가 이미 <paramref name="point"/> 에 있을 때, 그 자리에서 대상에 닿는 것이 여전히 대상인지.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="TryAim"/> 과 같은 경로(uGUI 또는 collider)로 묻는다. 겨눈 뒤 커서가 옮겨 가는 사이 게임이 대상을 옮기거나
+        /// 다른 것으로 덮을 수 있다 — 움직이는 카드 위의 hover 가 그 경우다. 겨눌 때의 답을 그대로 보고하면 실제로는 다른 것
+        /// 위에 떠 있는 포인터를 대상 위에 있다고 말하게 된다.
+        /// </remarks>
+        /// <param name="hit">그 자리에서 실제로 맞은 오브젝트. 아무것도 없으면 null.</param>
+        public static bool StillReaches(
+            GameObject target, Vector2 point, PointerEventDispatcher graphics, out GameObject hit)
+        {
+            var throughGraphics = AnswersAsGraphic(target);
+            hit = throughGraphics ? graphics.GraphicUnder(point) : ColliderUnder(point);
+            return Reaches(target, hit, throughGraphics);
+        }
+
+        /// <summary>
         /// 대상이 uGUI raycast 로 답하는지. <c>Canvas</c> 아래의 <c>RectTransform</c> 이면 그렇다.
         /// </summary>
         private static bool AnswersAsGraphic(GameObject target)

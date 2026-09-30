@@ -95,6 +95,10 @@ namespace UnityPlayMcp
                     yield return pointerActions.Drag(actionId, parameters, completed);
                     yield break;
 
+                case "pointer_hover":
+                    yield return pointerActions.Hover(actionId, parameters, completed);
+                    yield break;
+
                 case "enter_text":
                     yield return ExecuteEnterText(actionId, parameters, completed);
                     yield break;

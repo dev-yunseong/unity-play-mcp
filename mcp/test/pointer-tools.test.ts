@@ -72,6 +72,15 @@ test("pointer_drag sends the source before the target", async () => {
   assert.deepEqual(sent[0].params, [-4102, -2277]);
 });
 
+test("pointer_hover sends the target id as the only positional argument", async () => {
+  const sent = await sentBy("pointer_hover", { targetId: -3518 });
+
+  // 한 action 뿐이다. hover 는 누르지 않으므로 mouse_down 이 함께 나가면 카드가 선택된다.
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].method, "pointer_hover");
+  assert.deepEqual(sent[0].params, [-3518]);
+});
+
 test("click still goes to button_click, untouched by the new pointer tools", async () => {
   const sent = await sentBy("click", { targetId: 42 });
 
