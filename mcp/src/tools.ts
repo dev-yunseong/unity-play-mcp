@@ -25,7 +25,7 @@ import {
 import { busyText, defaultInputGate, isMutatingMethod } from "./play-operations.js";
 import { REDACTED_TEXT } from "./secrets.js";
 import { searchTargets } from "./search.js";
-import { foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
+import { describeRoot, foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { registerPlayTools } from "./play-tools.js";
 import { visibleElements } from "./visible.js";
@@ -273,9 +273,36 @@ function describeResults(results: ActionResult[]): string {
   return JSON.stringify(results, null, 2);
 }
 
+/// 배치 결과에서 `capture_screen` 의 이미지를 꺼내 image block 으로 만든다.
+///
+/// 캡처가 없는 배치는 결과를 그대로 돌려준다. 캡처 결과는 `data` 를 빼고 `capture_screen` 도구와 같은
+/// 설명으로 바꾸며, 몇 번째 image block 인지 적는다. 형식이 맞지 않는 payload 는 건드리지 않는다.
+function liftCaptureImages(
+  requests: readonly ActionRequest[],
+  results: ActionResult[],
+  store: PulseStore | undefined,
+): { results: ActionResult[]; images: ToolContent[] } {
+  const images: ToolContent[] = [];
+  const lifted = results.map((result, index) => {
+    if (!result.success || requests[index]?.method !== "capture_screen") return result;
+    const parsed = capturePayloadSchema.safeParse(result.returnValue);
+    if (!parsed.success) return result;
+    images.push({ type: "image", data: parsed.data.data, mimeType: parsed.data.mimeType });
+    return {
+      ...result,
+      returnValue: {
+        ...describeCaptureFor(parsed.data, store),
+        imageBlock: images.length,
+      },
+    };
+  });
+  return { results: images.length === 0 ? results : lifted, images };
+}
+
 export async function dispatchActions(
   connection: Pick<UnityConnection, "sendActions">,
   actions: ReadonlyArray<{ method: string; params: unknown[] }>,
+  store?: PulseStore,
 ): Promise<ToolResponse> {
   // 진행 중인 act_and_observe 의 입력 사이에 끼어들지 않는다. 입력이 아닌 도구(capture, readings)는 통과한다.
   const holder = defaultInputGate.activeOperationId;
@@ -290,7 +317,9 @@ export async function dispatchActions(
   }));
 
   try {
-    const results = await connection.sendActions(requests);
+    const sent = await connection.sendActions(requests);
+    // 배치 안의 캡처는 base64 문자열이 아니라 `capture_screen` 도구와 같은 image block 으로 돌려준다 (#89, #92).
+    const { results, images } = liftCaptureImages(requests, sent, store);
     const failed = results.filter((result) => !result.success);
     return {
       content: [{
@@ -298,7 +327,7 @@ export async function dispatchActions(
         text: failed.length === 0
           ? `Action batch completed.\n${describeResults(results)}`
           : `${failed.length} of ${results.length} actions failed.\n${describeResults(results)}`,
-      }],
+      }, ...images],
       ...(failed.length > 0 ? { isError: true } : {}),
     };
   } catch (error) {
@@ -601,23 +630,36 @@ function stateResponse(
 
   // `root` 와 `depth` 가 없으면 기존 호출과 호환되도록 평평한 응답을 준다.
   if (root !== undefined || depth !== undefined) {
-    const considered = includeInactive ? [...active, ...deactive] : active;
+    const considered = (includeInactive ? [...active, ...deactive] : active) as PulseObject[];
+    // `depth` 를 주면 계층만 훑는 요약이다. 멤버 값은 root 나 selector 로 좁혀 `depth` 없이 요청한다.
+    const summaryOnly = depth !== undefined;
     const tree = foldIntoTree(
-      considered as PulseObject[],
+      considered,
       latestReadingOf(store, scene),
       root,
       depth ?? UNLIMITED_DEPTH,
+      !summaryOnly,
     );
+    const located = root === undefined ? undefined : describeRoot(considered, root);
     // `statics` 는 tree 로 표현되지 않지만 양이 적어 그대로 싣는다. `changed` 는 길어질 수 있고
     // node 의 `lastChangedReading` 이 같은 정보를 주므로 뺀다.
     return text(JSON.stringify(withRedactionNote({
       ...header,
       ...(root === undefined ? {} : { root }),
+      ...(located === undefined || located.found
+        ? {}
+        : {
+            rootNotFound: `No object matches root "${root}" in scene ${scene}. `
+              + "root is matched by exact name, level by level; start from one of topLevelObjects and ask again.",
+            topLevelObjects: located.topLevel,
+          }),
       ...staticsSection(state.statics, scoped, staticsQuery),
       gone: filterGone(record.gone),
       tree,
       ...(includeHistory
-        ? { history: historyOf(store, objectsShownIn(tree), scene) }
+        ? summaryOnly
+          ? { historyOmitted: "depth returns a summary without member values; call without depth to get history." }
+          : { history: historyOf(store, objectsShownIn(tree), scene) }
         : {}),
     }), null, 2));
   }
@@ -765,6 +807,18 @@ export function describeCapture(
   };
 }
 
+/// 캡처 설명에 낡은 reading 표시까지 붙인다. 낡은 reading 은 frame 이 가까워도 이 화면의 상태가
+/// 아니므로 `readingHeader` 와 같은 `stale` 을 싣는다 (#69).
+function describeCaptureFor(capture: CapturePayload, store: PulseStore | undefined): CaptureDescription {
+  const state = store?.getState() ?? undefined;
+  const description = describeCapture(capture, state);
+  const stale = store === undefined || state === undefined ? undefined : readingHeader(store, state).stale;
+  if (description.reading !== undefined && stale !== undefined) {
+    description.reading = { ...description.reading, stale };
+  }
+  return description;
+}
+
 function findCapture(results: ActionResult[]): CapturePayload | undefined {
   const successful = results.find((result) => result.success);
   if (successful === undefined) return undefined;
@@ -803,7 +857,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. Setting depth returns a summary at every level (name, path, object count, lastChangedReading, hasObject) without member values; to see member values, narrow with root or selector and leave depth out. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
@@ -945,14 +999,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
         return { ...text("Screenshot failed: Unity returned an invalid capture payload."), isError: true };
       }
       // 첫 줄은 기존 형식을 유지하고, 그 뒤에 좌표 변환과 reading 관계를 JSON 으로 싣는다.
-      const state = store.getState();
-      const description = describeCapture(capture, state);
-      // 낡은 reading 은 frame 이 가까워도 이 화면의 상태가 아니므로 `readingHeader` 와 같은 `stale` 을
-      // 싣는다 (#69).
-      const stale = state === undefined ? undefined : readingHeader(store, state).stale;
-      if (description.reading !== undefined && stale !== undefined) {
-        description.reading = { ...description.reading, stale };
-      }
+      const description = describeCaptureFor(capture, store);
       return { content: [
         { type: "image", data: capture.data, mimeType: capture.mimeType },
         {
@@ -967,14 +1014,15 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   const TARGET_HELP = "Aim with exactly one of targetId (instance id from get_scene_state), selector (the exact selector from get_scene_state or search_targets, e.g. \"Canvas[0]/Panel[1]/Button[0]\"), or x and y (game screen pixels from the top left, the same space as move_mouse). "
-    + "id and selector aim at the center of the last reading's rect and fail without moving when the target is inactive, off screen, covered, or the reading is stale.";
+    + "id and selector aim at the center of the last reading's rect and fail without moving when the target is inactive, off screen, covered, or the reading is stale. "
+    + "An id is valid only until the scene reloads or the object is destroyed or recreated; on \"Unknown target id\" or \"no object with id\", read again with get_visible_elements or get_scene_state for a new id.";
 
   // click, hover, drag 는 같은 일을 한다: 대상을 점으로 풀어 가상 마우스로 보낸다. 각 handler 는 action 하나를 만들어
   // `perform_actions` 와 같은 `expandActions` 로 보낸다.
   const runAction = async (action: PerformAction) => {
     const expanded = expandActions([action], store);
     if (!expanded.ok) return { ...text(expanded.error), isError: true };
-    return dispatchActions(connection, expanded.wire);
+    return dispatchActions(connection, expanded.wire, store);
   };
   const refIssue = (issue: string | undefined) => issue === undefined ? undefined : { ...text(issue), isError: true };
 
@@ -1055,12 +1103,15 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
 
   server.registerTool("perform_actions", {
     description: "Send a raw action sequence to Unity in one frame-aligned batch. Each action carries a method and that method's own named arguments, such as {\"method\":\"key_down\",\"key\":\"Space\"}. "
-      + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect.",
+      + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect. "
+      + "An action that fails (for example an id that is no longer valid) does not stop the actions after it; every action reports its own success. "
+      + "Ids from get_scene_state or get_visible_elements stop being valid when the scene reloads or the object is destroyed or recreated, including inside one batch (a card that is used and replaced gets a new id); read again for new ids. "
+      + "A capture_screen action returns its screenshot as an image content block, like the capture_screen tool, and its result entry carries the same description with imageBlock (the 1-based image position) instead of the base64 data.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
   }, async ({ actions }) => {
     const expanded = expandActions(actions, store);
     if (!expanded.ok) return { ...text(expanded.error), isError: true };
-    return dispatchActions(connection, expanded.wire);
+    return dispatchActions(connection, expanded.wire, store);
   });
 
   server.registerTool("wait_for_condition", {

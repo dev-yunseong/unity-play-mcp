@@ -196,7 +196,7 @@ test("a secret member on an object is hidden in state, history, tree, visible el
 
   const responses = [
     await call("get_scene_state", { includeHistory: true }),
-    await call("get_scene_state", { root: "Login", depth: 3 }),
+    await call("get_scene_state", { root: "Login" }),
     await call("get_visible_elements", { includeHidden: true }),
     await call("wait_for_condition", {
       memberEquals: [{ selector: "Login[0]/Form[0]", on: "Game.LoginForm", member: "password", equals: "x" }],
@@ -302,4 +302,23 @@ test("a scoped query without includeInactive drops the changed entries of inacti
     await call("get_scene_state", { selector: "LowerBar", includeInactive: true }),
   ) as { changed: string[] };
   assert.deepEqual(withInactive.changed, ["Lobby/UI[0]/LowerBar[0]/Hidden[0]|0UnityEngine.UI.Text::text"]);
+});
+
+test("a root that names nothing says so and lists the real top-level names", async () => {
+  const store = new PulseStore();
+  store.fold(lobby([], [object(4, "Login[0]/Form[0]", "Game.LoginForm", [{ member: "user", value: "u" }])]));
+  const call = sceneStateTool(store);
+
+  const missing = JSON.parse(await call("get_scene_state", { root: "Canvas", depth: 1 })) as {
+    rootNotFound?: string; topLevelObjects?: string[]; tree: unknown[];
+  };
+  assert.match(missing.rootNotFound ?? "", /Canvas/);
+  assert.ok(missing.topLevelObjects?.includes("Login"));
+  assert.deepEqual(missing.tree, []);
+
+  const present = JSON.parse(await call("get_scene_state", { root: "Login", depth: 1 })) as {
+    rootNotFound?: string; tree: Array<{ object?: unknown; hasObject?: boolean }>;
+  };
+  assert.equal(present.rootNotFound, undefined);
+  assert.equal(present.tree.some((node) => node.object !== undefined), false);
 });

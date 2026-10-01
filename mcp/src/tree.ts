@@ -5,6 +5,8 @@ export interface TreeNode {
   segment: string;
   path: string;
   object?: PulseObject;
+  /// 멤버 값을 싣지 않은 요약 모양(`members: false`)에서, 이 node 에 객체가 있다는 표시.
+  hasObject?: true;
   children?: TreeNode[];
   collapsed?: true;
   /// 이 node 를 root 로 하는 subtree 의 객체 수. 자기 자신도 포함한다.
@@ -125,13 +127,16 @@ function summarize(node: Building, latestOf: LatestReading): Summary {
 }
 
 /// `remaining` 단계까지 펼치고 더 깊은 node 는 접는다.
-function render(node: Building, remaining: number, latestOf: LatestReading): TreeNode {
+///
+/// `members` 가 false 이면 모든 단계에서 `object`(멤버 값) 대신 `hasObject` 만 싣는다. 단계마다
+/// 모양이 달라지지 않게 하려는 것이다.
+function render(node: Building, remaining: number, latestOf: LatestReading, members: boolean): TreeNode {
   const { objects, latest } = summarize(node, latestOf);
   const rendered: TreeNode = {
     segment: node.segment,
     path: node.path,
     objects,
-    ...(node.object === undefined ? {} : { object: node.object }),
+    ...(node.object === undefined ? {} : members ? { object: node.object } : { hasObject: true as const }),
     ...(latest === undefined ? {} : { lastChangedReading: latest }),
   };
 
@@ -143,7 +148,7 @@ function render(node: Building, remaining: number, latestOf: LatestReading): Tre
     return rendered;
   }
   rendered.children = [...node.children.values()]
-    .map((child) => render(child, remaining - 1, latestOf));
+    .map((child) => render(child, remaining - 1, latestOf, members));
   return rendered;
 }
 
@@ -182,17 +187,34 @@ export const UNLIMITED_DEPTH = Number.MAX_SAFE_INTEGER;
 
 /// 객체들로 hierarchy 를 만들어 `root` 아래를 `depth` 단계까지 돌려준다.
 ///
-/// `root` 에 맞는 node 가 없으면 빈 배열을 돌려준다.
+/// `root` 에 맞는 node 가 없으면 빈 배열을 돌려준다. 없는 root 와 자식 없는 root 를 가르려면
+/// `describeRoot` 를 쓴다.
+///
+/// `members` 를 false 로 주면 node 마다 이름, 경로, 하위 객체 수, `lastChangedReading` 만 싣는다.
 export function foldIntoTree(
   objects: readonly PulseObject[],
   latestOf: LatestReading,
   root?: string,
   depth: number = UNLIMITED_DEPTH,
+  members: boolean = true,
 ): TreeNode[] {
   const built = build(objects);
   const start = root === undefined ? built : descend(built, root);
   if (start === undefined) {
     return [];
   }
-  return [...start.children.values()].map((child) => render(child, depth - 1, latestOf));
+  return [...start.children.values()].map((child) => render(child, depth - 1, latestOf, members));
+}
+
+/// `root` 가 씬에 있는지와, 씬의 최상위 객체 이름들.
+///
+/// `foldIntoTree` 의 빈 배열만으로는 "root 는 맞는데 아래가 비었다" 와 "root 이름이 틀렸다" 를
+/// 가를 수 없어서 따로 묻는다. 이름은 sibling index 를 뗀 표시 이름이고 중복은 한 번만 적는다.
+export function describeRoot(
+  objects: readonly PulseObject[],
+  root: string,
+): { found: boolean; topLevel: string[] } {
+  const built = build(objects);
+  const topLevel = [...new Set([...built.children.values()].map((child) => child.segment))];
+  return { found: descend(built, root) !== undefined, topLevel };
 }

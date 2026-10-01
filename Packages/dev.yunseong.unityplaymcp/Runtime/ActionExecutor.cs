@@ -149,7 +149,7 @@ namespace UnityPlayMcp
 
             if (!targetLookup.TryGetTarget(targetId, out var target))
             {
-                completed(ActionResultDto.Failure(actionId, "Unknown target id: " + targetId));
+                completed(ActionResultDto.Failure(actionId, UnknownTarget(targetId)));
                 yield break;
             }
 
@@ -464,7 +464,7 @@ namespace UnityPlayMcp
                 var targetId = request.TargetId.Value;
                 if (!targetLookup.TryGetTarget(targetId, out var target))
                 {
-                    completed(ActionResultDto.Failure(actionId, "Unknown target id: " + targetId));
+                    completed(ActionResultDto.Failure(actionId, UnknownTarget(targetId)));
                     yield break;
                 }
 
@@ -506,6 +506,17 @@ namespace UnityPlayMcp
                 Scene = image.Scene,
                 Data = Convert.ToBase64String(image.Bytes)
             }));
+        }
+
+        /// <summary>
+        /// 없는 id 를 거부하는 오류. id 는 씬을 다시 불러오거나 대상이 파괴·재생성되면 무효가 되므로,
+        /// 호출한 쪽이 재시도하지 않고 다시 읽도록 안내한다.
+        /// </summary>
+        private static string UnknownTarget(int targetId)
+        {
+            return "Unknown target id: " + targetId
+                + ". Ids stop being valid when the scene reloads or the object is destroyed or recreated; "
+                + "read again with get_visible_elements or get_scene_state to get a new id.";
         }
 
         private static string NotInteractable(int targetId)
