@@ -109,7 +109,7 @@ test("a full get_scene_state never carries the token, and says a value was hidde
   store.fold(lobby([TOKEN_STATIC]));
   const call = sceneStateTool(store);
 
-  const response = await call("get_scene_state");
+  const response = await call("get_scene_state", { includeStatics: true });
 
   assert.doesNotMatch(response, new RegExp(FAKE_JWT.split(".")[0]));
   const parsed = JSON.parse(response) as { redaction?: string; statics: PulseStatic[] };
@@ -121,22 +121,51 @@ test("a token under an innocent static name is hidden by its shape", async () =>
   const store = new PulseStore();
   store.fold(lobby([{ declaring: "Global.SceneContext", member: "Current", type: "System.String", value: FAKE_JWT }]));
 
-  const response = await sceneStateTool(store)("get_scene_state");
+  const response = await sceneStateTool(store)("get_scene_state", { includeStatics: true });
 
   assert.doesNotMatch(response, new RegExp(FAKE_JWT.split(".")[1]));
   assert.match(response, /"because": "value"/);
 });
 
-test("a scene without a token carries statics as before and no redaction note", async () => {
+test("a scene without a token carries statics when asked and no redaction note", async () => {
   const store = new PulseStore();
   store.fold(lobby([{ declaring: "Global.Stage", member: "Number", type: "System.Int32", value: 3 }]));
 
-  const parsed = JSON.parse(await sceneStateTool(store)("get_scene_state")) as {
+  const parsed = JSON.parse(await sceneStateTool(store)("get_scene_state", { includeStatics: true })) as {
     redaction?: string; statics: PulseStatic[];
   };
 
   assert.equal(parsed.redaction, undefined);
   assert.deepEqual(parsed.statics.map(({ value }) => value), [3]);
+});
+
+test("an unscoped query leaves statics out by default and says how many", async () => {
+  const store = new PulseStore();
+  store.fold(lobby([TOKEN_STATIC, { declaring: "Global.Stage", member: "Number", type: "System.Int32", value: 3 }]));
+
+  const parsed = JSON.parse(await sceneStateTool(store)("get_scene_state")) as {
+    statics?: unknown; staticsOmitted?: { count: number; reason: string };
+  };
+
+  assert.equal(parsed.statics, undefined);
+  assert.equal(parsed.staticsOmitted?.count, 2);
+  assert.match(parsed.staticsOmitted?.reason ?? "", /includeStatics/);
+});
+
+test("statics with a null value are counted, not listed", async () => {
+  const store = new PulseStore();
+  store.fold(lobby([
+    { declaring: "Global.Stage", member: "Number", type: "System.Int32", value: 3 },
+    { declaring: "Global.Stage", member: "Boss", type: "System.Object", value: null },
+    { declaring: "Global.Stage", member: "Next", type: "System.Object", value: null },
+  ]));
+
+  const parsed = JSON.parse(await sceneStateTool(store)("get_scene_state", { includeStatics: true })) as {
+    statics: PulseStatic[]; staticsNull?: { count: number };
+  };
+
+  assert.deepEqual(parsed.statics.map(({ member }) => member), ["Number"]);
+  assert.equal(parsed.staticsNull?.count, 2);
 });
 
 test("a root-scoped query leaves statics out and says how many it left out", async () => {
