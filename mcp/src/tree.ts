@@ -4,6 +4,8 @@ import type { PulseObject } from "./pulse.js";
 export interface TreeNode {
   segment: string;
   path: string;
+  /// 이 node 의 selector(형제 index 포함). `get_scene_state` 의 `expand` 에 그대로 쓸 수 있다.
+  selector: string;
   object?: PulseObject;
   /// 멤버 값을 싣지 않은 요약 모양(`members: false`)에서, 이 node 에 객체가 있다는 표시.
   hasObject?: true;
@@ -26,6 +28,7 @@ export type LatestReading = (object: PulseObject) => number | undefined;
 interface Building {
   segment: string;
   path: string;
+  selector: string;
   object?: PulseObject;
   children: Map<string, Building>;
 }
@@ -35,8 +38,8 @@ interface Summary {
   latest?: number;
 }
 
-function emptyNode(segment: string, path: string): Building {
-  return { segment, path, children: new Map() };
+function emptyNode(segment: string, path: string, selector = ""): Building {
+  return { segment, path, selector, children: new Map() };
 }
 
 /// 잘린 계층을 나타내는 접두사. `ScenePath.cs` 가 `path` 와 `selector` 에 똑같이 붙인다
@@ -84,12 +87,14 @@ function build(objects: readonly PulseObject[]): Building {
     const segments = selectorSegments(selector);
     let node = root;
     let walked = "";
+    let walkedSelector = "";
     for (const segment of segments) {
       const name = nameOf(segment);
       walked = walked === "" ? name : `${walked}/${name}`;
+      walkedSelector = walkedSelector === "" ? segment : `${walkedSelector}/${segment}`;
       let next = node.children.get(segment);
       if (next === undefined) {
-        next = emptyNode(name, walked);
+        next = emptyNode(name, walked, walkedSelector);
         node.children.set(segment, next);
       }
       node = next;
@@ -151,6 +156,7 @@ function render(
   const rendered: TreeNode = {
     segment: node.segment,
     path: node.path,
+    selector: node.selector,
     objects,
     ...(node.object === undefined ? {} : showMembers ? { object: node.object } : { hasObject: true as const }),
     ...(latest === undefined ? {} : { lastChangedReading: latest }),
@@ -191,12 +197,14 @@ function descend(root: Building, path: string): Building | undefined {
   return node;
 }
 
-/// `path` 가 가리키는 node 와 그 조상(root 제외)을 순서대로. 없으면 `undefined`.
-function chainTo(root: Building, path: string): Building[] | undefined {
+/// `selector` 가 가리키는 node 와 그 조상(root 제외)을 순서대로. 없으면 `undefined`.
+///
+/// `Map` 키가 형제 index 를 포함한 segment 이므로 같은 이름의 형제도 구분된다.
+function chainTo(root: Building, selector: string): Building[] | undefined {
   const chain: Building[] = [];
   let node = root;
-  for (const segment of path.split("/").filter((one) => one.length > 0)) {
-    const next = [...node.children.values()].find((child) => child.segment === segment);
+  for (const segment of selectorSegments(selector)) {
+    const next = node.children.get(segment);
     if (next === undefined) {
       return undefined;
     }
@@ -250,7 +258,7 @@ export function foldIntoTree(
   return [...start.children.values()].map((child) => render(child, depth - 1, latestOf, members, expansion));
 }
 
-/// `expand` 에서 씬에 없는 경로. 조용히 무시하면 접힌 것과 없는 것이 같아 보인다.
+/// `expand` 에서 씬에 없는 selector. 조용히 무시하면 접힌 것과 없는 것이 같아 보인다.
 export function missingExpandPaths(objects: readonly PulseObject[], expand: readonly string[]): string[] {
   const built = build(objects);
   return expand.filter((path) => (chainTo(built, path)?.length ?? 0) === 0);
