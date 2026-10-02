@@ -30,7 +30,7 @@ const point = (folded: FoldedPulseState | undefined, target: TargetRef, stale?: 
   resolvePoint(target, folded, stale, "click");
 
 function storeOf(folded: FoldedPulseState): PulseStore {
-  return { getState: () => folded, getStaleness: () => undefined } as unknown as PulseStore;
+  return { getState: () => folded, getStaleness: () => undefined, getReadingAgeMs: () => undefined } as unknown as PulseStore;
 }
 
 test("a coordinate target needs no reading and passes the point through", () => {

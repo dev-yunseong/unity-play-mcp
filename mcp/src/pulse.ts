@@ -610,6 +610,11 @@ export class PulseStore {
     this.interruption = { reason, at: this.now() };
   }
 
+  /// 현재 상태를 만든 마지막 reading 이 도착한 지 몇 ms 지났는지. reading 이 없으면 undefined.
+  getReadingAgeMs(): number | undefined {
+    return this.lastReadingAt === undefined ? undefined : Math.max(0, this.now() - this.lastReadingAt);
+  }
+
   /// 상태가 낡았으면 그 이유와 시각을 돌려준다.
   getStaleness(): Staleness | undefined {
     if (this.interruption === undefined) {

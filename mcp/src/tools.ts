@@ -179,7 +179,10 @@ export function expandActions(
 
 function readingOf(store: PulseStore) {
   const staleness = store.getStaleness();
-  return { state: store.getState(), staleNote: staleness === undefined ? undefined : stalenessMessage(staleness) };
+  const ageMs = store.getReadingAgeMs();
+  const quiet = staleness === undefined && ageMs !== undefined && ageMs >= QUIET_READING_MS;
+  return {
+    ...(quiet ? { quiet: { ageMs, message: quietReadingMessage(ageMs) } } : {}), state: store.getState(), staleNote: staleness === undefined ? undefined : stalenessMessage(staleness) };
 }
 
 function expandAction(action: PerformAction, store: PulseStore): Resolution<WireAction[]> {
@@ -384,6 +387,17 @@ function stalenessMessage(staleness: Staleness): string {
   }
 }
 
+/// 이 시간 동안 reading 이 오지 않으면 header 와 status 가 알린다.
+export const QUIET_READING_MS = 30_000;
+
+/// Unity 는 값이 바뀌지 않으면 reading 을 보내지 않으므로 오래 안 온 것만으로 멈춘 것은 아니다. 두 경우를
+/// 가를 수 없으니 둘 다 적고, 가르는 방법(화면 확인)과 복구 방법을 알려 준다 (#93).
+export function quietReadingMessage(ageMs: number): string {
+  return `No new reading has arrived for ${Math.round(ageMs / 1000)}s. Unity sends no reading while nothing it watches `
+    + "changes, so the scene may simply be unchanged; or the reading stream may have stalled. "
+    + "Compare with capture_screen: if the screen is moving but this state is not, call stop_readings and then start_readings.";
+}
+
 function isoTime(at: number | undefined): string | undefined {
   return at === undefined ? undefined : new Date(at).toISOString();
 }
@@ -394,7 +408,10 @@ function isoTime(at: number | undefined): string | undefined {
 /// 쓸모 있으므로 숨기지 않는다.
 export function readingHeader(store: PulseStore, state: FoldedPulseState): Record<string, unknown> {
   const staleness = store.getStaleness();
+  const ageMs = store.getReadingAgeMs();
+  const quiet = staleness === undefined && ageMs !== undefined && ageMs >= QUIET_READING_MS;
   return {
+    ...(quiet ? { quiet: { ageMs, message: quietReadingMessage(ageMs) } } : {}),
     ...(staleness === undefined
       ? {}
       : {
@@ -439,6 +456,11 @@ export function describeStatus(status: UnityStatus): string {
         + `arrived ${describeAge(status.now, status.lastReadingAt)}.`,
         `Scene: ${status.scene}.`,
       ];
+
+  if (status.lastReadingAt !== undefined && status.staleness === undefined
+    && status.now - status.lastReadingAt >= QUIET_READING_MS) {
+    lines.push(quietReadingMessage(status.now - status.lastReadingAt));
+  }
 
   if (status.lastReadingAt !== undefined && status.staleness !== undefined) {
     lines.push(

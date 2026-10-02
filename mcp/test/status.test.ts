@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { UnityUnreachableError } from "../src/connection.js";
 import { PulseStore, type PulseFrame } from "../src/pulse.js";
-import { describeStatus, failureText } from "../src/tools.js";
+import { describeStatus, failureText, readingHeader } from "../src/tools.js";
 
 const ENDPOINT = "ws://127.0.0.1:17311/ws";
 
@@ -162,4 +162,41 @@ test("the store remembers when a reading arrived, even one that changed nothing"
   clock = 6_000;
   store.fold(frame);
   assert.equal(store.getLastReadingAt(), 6_000);
+});
+
+/// Unity 는 변화가 없으면 reading 을 보내지 않으므로 오래 안 온 것을 멈춘 것으로 단정하지 않고 둘 다 알린다 (#93).
+test("status says no reading has arrived for a while and does not call it a stall", () => {
+  const described = describeStatus({
+    connected: true, endpoint: ENDPOINT, reading: 250, frame: 253484, scene: "Game", lastReadingAt: 1_000, now: 134_000,
+  });
+
+  assert.match(described, /No new reading has arrived for 133s/);
+  assert.match(described, /may simply be unchanged/);
+  assert.match(described, /stop_readings and then start_readings/);
+});
+
+test("status stays quiet about age while readings are recent", () => {
+  const described = describeStatus({
+    connected: true, endpoint: ENDPOINT, reading: 1, frame: 2, scene: "Main", lastReadingAt: 1_000, now: 20_000,
+  });
+
+  assert.doesNotMatch(described, /No new reading/);
+});
+
+test("a read tool's header carries a quiet notice only once the last reading is old", () => {
+  const clock = { t: 1_000 };
+  const store = new PulseStore(() => clock.t);
+  store.fold({
+    type: "PULSE", id: 1, schema: 2, reading: 1, frame: 10, scene: "Main", statics: [], active: [], deactive: [],
+    whole: true, watching: 1, unresolved: 0, unwatchable: 0, gone: [], changed: [],
+  } as unknown as PulseFrame);
+  const state = store.getState()!;
+
+  clock.t = 10_000;
+  assert.equal(readingHeader(store, state).quiet, undefined);
+
+  clock.t = 61_000;
+  const quiet = readingHeader(store, state).quiet as { ageMs: number; message: string };
+  assert.equal(quiet.ageMs, 60_000);
+  assert.match(quiet.message, /No new reading has arrived for 60s/);
 });
