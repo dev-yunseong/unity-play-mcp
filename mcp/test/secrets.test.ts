@@ -351,3 +351,17 @@ test("a root that names nothing says so and lists the real top-level names", asy
   assert.equal(present.rootNotFound, undefined);
   assert.equal(present.tree.some((node) => node.object !== undefined), false);
 });
+
+test("get_scene_state expand opens a node with member values and reports unknown paths", async () => {
+  const store = new PulseStore();
+  store.fold(lobby([]));
+
+  const parsed = JSON.parse(await sceneStateTool(store)("get_scene_state", { expand: ["UI/LowerBar/Gold", "UI/Nowhere"] })) as {
+    tree: Array<{ collapsed?: boolean; children?: Array<{ path: string; collapsed?: boolean; children?: Array<{ path: string; object?: unknown }> }> }>;
+    expandNotFound?: string[];
+  };
+
+  assert.deepEqual(parsed.expandNotFound, ["UI/Nowhere"]);
+  const gold = parsed.tree[0]?.children?.find(({ path }) => path === "UI/LowerBar")?.children?.find(({ path }) => path === "UI/LowerBar/Gold");
+  assert.notEqual(gold?.object, undefined);
+});

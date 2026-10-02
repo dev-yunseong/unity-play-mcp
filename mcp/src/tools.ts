@@ -25,7 +25,7 @@ import {
 import { busyText, defaultInputGate, isMutatingMethod } from "./play-operations.js";
 import { REDACTED_TEXT } from "./secrets.js";
 import { searchTargets } from "./search.js";
-import { describeRoot, foldIntoTree, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
+import { describeRoot, foldIntoTree, missingExpandPaths, UNLIMITED_DEPTH, type TreeNode } from "./tree.js";
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { registerPlayTools } from "./play-tools.js";
 import { visibleElements } from "./visible.js";
@@ -619,6 +619,7 @@ function stateResponse(
   root?: string,
   depth?: number,
   staticsQuery: StaticsQuery = {},
+  expand?: readonly string[],
 ): ToolResponse {
   const state = store.getState();
   if (state === undefined || state === null) {
@@ -654,17 +655,20 @@ function stateResponse(
   const scoped = selector !== undefined || root !== undefined;
 
   // `root` 와 `depth` 가 없으면 기존 호출과 호환되도록 평평한 응답을 준다.
-  if (root !== undefined || depth !== undefined) {
+  if (root !== undefined || depth !== undefined || expand !== undefined) {
     const considered = (includeInactive ? [...active, ...deactive] : active) as PulseObject[];
     // `depth` 를 주면 계층만 훑는 요약이다. 멤버 값은 root 나 selector 로 좁혀 `depth` 없이 요청한다.
-    const summaryOnly = depth !== undefined;
+    // `expand` 를 주면 `depth` 는 접는 기본 깊이(1)이고, 지정한 node 만 멤버 값을 싣는다 (#105).
+    const summaryOnly = depth !== undefined || expand !== undefined;
     const tree = foldIntoTree(
       considered,
       latestReadingOf(store, scene),
       root,
-      depth ?? UNLIMITED_DEPTH,
+      depth ?? (expand === undefined ? UNLIMITED_DEPTH : 1),
       !summaryOnly,
+      expand ?? [],
     );
+    const expandMissing = expand === undefined ? [] : missingExpandPaths(considered, expand);
     const located = root === undefined ? undefined : describeRoot(considered, root);
     // `statics` 는 tree 로 표현되지 않지만 양이 적어 그대로 싣는다. `changed` 는 길어질 수 있고
     // node 의 `lastChangedReading` 이 같은 정보를 주므로 뺀다.
@@ -681,8 +685,14 @@ function stateResponse(
       ...staticsSection(state.statics, staticsQuery),
       gone: filterGone(record.gone),
       tree,
+      ...(expandMissing.length === 0
+        ? {}
+        : {
+            expandNotFound: expandMissing,
+            expandNotFoundNote: "No object matches these expand paths (exact names, level by level from the scene's top level, not from root).",
+          }),
       ...(includeHistory
-        ? summaryOnly
+        ? summaryOnly && expand === undefined
           ? { historyOmitted: "depth returns a summary without member values; call without depth to get history." }
           : { history: historyOf(store, objectsShownIn(tree), scene) }
         : {}),
@@ -882,21 +892,22 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. Setting depth returns a summary at every level (name, path, object count, lastChangedReading, hasObject) without member values; to see member values, narrow with root or selector and leave depth out. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. Statics are left out by default (staticsOmitted says how many); set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Statics whose value is null are not listed one by one; staticsNull gives their count. A query scoped with selector or root keeps only the changed entries of the objects it shows. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. expand opens chosen nodes like the Unity Hierarchy: pass exact paths from the scene's top level (e.g. [\"UI/LowerBar\"]); each listed node shows its member values and its children, its ancestors open, and every other node stays collapsed with an object count and lastChangedReading. Without depth, expand collapses everything else at the first level; paths that match nothing are listed in expandNotFound. Setting depth returns a summary at every level (name, path, object count, lastChangedReading, hasObject) without member values; to see member values, narrow with root or selector and leave depth out. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. Statics are left out by default (staticsOmitted says how many); set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Statics whose value is null are not listed one by one; staticsNull gives their count. A query scoped with selector or root keeps only the changed entries of the objects it shows. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
       includeHistory: z.boolean().optional(),
       root: z.string().min(1).optional(),
       depth: z.number().int().positive().optional(),
+      expand: z.array(z.string().min(1)).min(1).optional(),
       includeStatics: z.boolean().optional(),
       staticsDeclaring: z.string().min(1).optional(),
     },
-  }, async ({ selector, includeInactive, includeHistory, root, depth, includeStatics, staticsDeclaring }) => {
+  }, async ({ selector, includeInactive, includeHistory, root, depth, expand, includeStatics, staticsDeclaring }) => {
     try {
       await connection.ensureConnected();
       return stateResponse(
-        store, selector, includeInactive, includeHistory, root, depth, { includeStatics, staticsDeclaring });
+        store, selector, includeInactive, includeHistory, root, depth, { includeStatics, staticsDeclaring }, expand);
     } catch (error) {
       return {
         ...text(failureText("Scene state is unavailable", error)),
