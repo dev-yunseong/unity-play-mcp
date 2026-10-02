@@ -524,7 +524,7 @@ function latestReadingOf(store: PulseStore, scene: string) {
 
 /// `get_scene_state` 가 static 을 어떻게 실을지.
 export interface StaticsQuery {
-  /// 안 주면 범위를 좁히지 않은 조회에만 싣는다.
+  /// true 면 싣는다. 안 주면 `staticsDeclaring` 이 있을 때만 싣는다.
   includeStatics?: boolean;
   /// 선언 타입 이름에 이 문자열이 든 static 만 싣는다(대소문자 구분). 주면 `includeStatics` 없이도
   /// 싣는다.
@@ -533,28 +533,31 @@ export interface StaticsQuery {
 
 /// 응답에 실을 static 과, 싣지 않았다면 그 사실.
 ///
-/// `root`/`selector` 로 좁힌 조회에서는 객체에 속하지 않는 static 을 기본으로 빼고, 뺐다는 것과
-/// 개수를 적는다. 없는 것과 뺀 것이 같아 보이면 안 된다 (#72). 값은 `PulseStore` 가 이미 가렸다.
+/// 범위를 좁혔든 아니든 기본으로는 객체에 속하지 않는 static 을 빼고, 뺐다는 것과 개수를 적는다.
+/// 없는 것과 뺀 것이 같아 보이면 안 된다 (#72, #100). 값은 `PulseStore` 가 이미 가렸다.
+/// 실을 때도 값이 `null` 인 static 은 하나씩 싣지 않고 `staticsNull` 에 개수만 적는다.
 function staticsSection(
   statics: readonly PulseStatic[],
-  scoped: boolean,
   query: StaticsQuery,
 ): Record<string, unknown> {
-  const wanted = query.includeStatics ?? (!scoped || query.staticsDeclaring !== undefined);
+  const wanted = query.includeStatics ?? query.staticsDeclaring !== undefined;
   if (!wanted) {
     return {
       staticsOmitted: {
         count: statics.length,
-        reason: "A scoped query leaves out the statics this reading carries. "
+        reason: "get_scene_state leaves statics out by default. "
           + "Set includeStatics, or staticsDeclaring to pick them by declaring type.",
       },
     };
   }
   const declaring = query.staticsDeclaring;
+  const picked = declaring === undefined
+    ? statics
+    : statics.filter((declared) => declared.declaring.includes(declaring));
+  const valued = picked.filter((declared) => declared.value !== null);
   return {
-    statics: declaring === undefined
-      ? statics
-      : statics.filter((declared) => declared.declaring.includes(declaring)),
+    statics: valued,
+    ...(valued.length === picked.length ? {} : { staticsNull: { count: picked.length - valued.length } }),
   };
 }
 
@@ -653,7 +656,7 @@ function stateResponse(
               + "root is matched by exact name, level by level; start from one of topLevelObjects and ask again.",
             topLevelObjects: located.topLevel,
           }),
-      ...staticsSection(state.statics, scoped, staticsQuery),
+      ...staticsSection(state.statics, staticsQuery),
       gone: filterGone(record.gone),
       tree,
       ...(includeHistory
@@ -669,7 +672,7 @@ function stateResponse(
     ...(scoped
       ? changedFor(state.changed, (includeInactive ? [...active, ...deactive] : active) as PulseObject[], scene)
       : { changed: state.changed }),
-    ...staticsSection(state.statics, scoped, staticsQuery),
+    ...staticsSection(state.statics, staticsQuery),
     active,
     ...(includeInactive ? { deactive } : {}),
     gone: filterGone(record.gone),
@@ -857,7 +860,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("get_scene_state", {
-    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. Setting depth returns a summary at every level (name, path, object count, lastChangedReading, hasObject) without member values; to see member values, narrow with root or selector and leave depth out. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. A query scoped with selector or root leaves out statics (staticsOmitted says how many) and keeps only the changed entries of the objects it shows; set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
+    description: "Read the latest folded Unity scene state. selector narrows to objects whose full selector path contains that substring, matched case-sensitively; it never does a whole-value match. For narrowing by name, displayed text, component, or whether an object is actionable, and for a compact result instead of this tool's full changed/statics payload, call search_targets instead. Set includeHistory to see how each member's value moved over its last readings. Set root or depth to get the scene as a hierarchy instead of a flat list; a collapsed node reports how many objects sit beneath it and the reading its subtree last moved on. Setting depth returns a summary at every level (name, path, object count, lastChangedReading, hasObject) without member values; to see member values, narrow with root or selector and leave depth out. A root that matches nothing answers with rootNotFound and topLevelObjects (the scene's real top-level names), unlike a matching root with no children, which answers with an empty tree. Statics are left out by default (staticsOmitted says how many); set includeStatics, or staticsDeclaring to pick statics whose declaring type contains that substring. Statics whose value is null are not listed one by one; staticsNull gives their count. A query scoped with selector or root keeps only the changed entries of the objects it shows. Values that look like credentials, by name or by shape, are always replaced with {\"$redacted\":true,\"because\":...,\"length\":...}; null and empty strings are never hidden.",
     inputSchema: {
       selector: z.string().min(1).optional(),
       includeInactive: z.boolean().optional(),
