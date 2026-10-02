@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { PulseObject } from "../src/pulse.js";
-import { describeRoot, foldIntoTree, type TreeNode } from "../src/tree.js";
+import { describeRoot, foldIntoTree, missingExpandPaths, UNLIMITED_DEPTH, type TreeNode } from "../src/tree.js";
 
 function object(selector: string, path: string): PulseObject {
   return { id: 1, path, selector, by: [] };
@@ -193,4 +193,66 @@ test("describeRoot tells a missing root from an empty one and lists the top leve
   assert.deepEqual(describeRoot(objects, "Canvas"), { found: false, topLevel: ["UI", "Main Camera"] });
   assert.equal(describeRoot(objects, "Main Camera").found, true);
   assert.equal(describeRoot(objects, "UI/Card").found, true);
+});
+
+const SCENE = [
+  object("UI[0]/LowerBar[0]/Gold[0]", "UI/LowerBar/Gold"),
+  object("UI[0]/LowerBar[0]/Gem[1]", "UI/LowerBar/Gem"),
+  object("UI[0]/TopBar[1]/Timer[0]", "UI/TopBar/Timer"),
+  object("Field[1]/Unit[0]", "Field/Unit"),
+];
+
+test("expand opens the chosen node and its ancestors and leaves the rest collapsed", () => {
+  const tree = foldIntoTree(SCENE, noHistory, undefined, 1, false, ["UI[0]/LowerBar[0]"]);
+
+  assert.equal(find(tree, "UI")?.collapsed, undefined);
+  const lowerBar = find(tree, "UI/LowerBar");
+  assert.deepEqual(pathsOf(lowerBar?.children ?? []), ["UI/LowerBar/Gold", "UI/LowerBar/Gem"]);
+  assert.equal(find(tree, "UI/TopBar")?.collapsed, true);
+  assert.equal(find(tree, "UI/TopBar")?.objects, 1);
+  assert.equal(find(tree, "Field")?.collapsed, true);
+});
+
+test("only an expanded node carries member values", () => {
+  const tree = foldIntoTree(SCENE, noHistory, undefined, 1, false, ["UI[0]/LowerBar[0]/Gold[0]"]);
+
+  assert.notEqual(find(tree, "UI/LowerBar/Gold")?.object, undefined);
+  assert.equal(find(tree, "UI/LowerBar/Gold")?.hasObject, undefined);
+  assert.equal(find(tree, "UI/LowerBar/Gem")?.object, undefined);
+  assert.equal(find(tree, "UI/LowerBar/Gem")?.hasObject, true);
+});
+
+test("expand works alongside a deeper depth", () => {
+  const tree = foldIntoTree(SCENE, noHistory, undefined, 2, false, ["Field[1]"]);
+
+  assert.equal(find(tree, "UI/LowerBar")?.collapsed, true);
+  assert.deepEqual(pathsOf(find(tree, "Field")?.children ?? []), ["Field/Unit"]);
+});
+
+test("expand paths that match nothing are reported", () => {
+  assert.deepEqual(missingExpandPaths(SCENE, ["UI[0]/LowerBar[0]", "UI[0]/Nowhere[0]", "Nope[0]", "UI/LowerBar"]), ["UI[0]/Nowhere[0]", "Nope[0]", "UI/LowerBar"]);
+  const tree = foldIntoTree(SCENE, noHistory, undefined, 1, false, ["UI[0]/Nowhere[0]"]);
+  assert.equal(find(tree, "UI")?.collapsed, true);
+});
+
+test("without expand the tree is unchanged", () => {
+  const tree = foldIntoTree(SCENE, noHistory, undefined, UNLIMITED_DEPTH);
+  assert.equal(find(tree, "UI/LowerBar/Gold")?.collapsed, undefined);
+});
+
+test("expand tells same-named siblings apart by their sibling index", () => {
+  const twins = [
+    object("Row[0]/Cell[0]", "Row/Cell"),
+    object("Row[1]/Cell[0]", "Row/Cell"),
+  ];
+  const tree = foldIntoTree(twins, noHistory, undefined, 1, false, ["Row[1]"]);
+
+  assert.equal(tree.find(({ selector }) => selector === "Row[0]")?.collapsed, true);
+  assert.equal(tree.find(({ selector }) => selector === "Row[1]")?.collapsed, undefined);
+});
+
+test("every node carries its selector", () => {
+  const tree = foldIntoTree(SCENE, noHistory);
+  assert.equal(find(tree, "UI/LowerBar/Gem")?.selector, "UI[0]/LowerBar[0]/Gem[1]");
+  assert.equal(find(tree, "UI/LowerBar")?.selector, "UI[0]/LowerBar[0]");
 });
