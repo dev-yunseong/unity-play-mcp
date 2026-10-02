@@ -229,3 +229,24 @@ test("player scope is the default and is sent to Unity", async () => {
   const request = unity.calls.find((call) => call.method === "play_observe")?.params[0] as { scope: string };
   assert.equal(request.scope, "player");
 });
+
+const MOVED = { position: { x: 1, y: 2, z: 3 }, scale: { x: 1, y: 1, z: 1 }, eulerAngles: { x: 0, y: 0, z: 0 }, layer: 5 };
+
+test("an entity's transform is left out unless include asks for it, but changes still see it", async () => {
+  let call = 0;
+  const { observer } = setup(() => {
+    call++;
+    return observation({ entities: [entity(1, { transform: call === 1 ? MOVED : { ...MOVED, position: { x: 9, y: 2, z: 3 } } })] });
+  });
+
+  const first = await observer.observe({});
+  assert.ok(first.ok);
+  assert.equal((first.body.entities as Array<{ transform?: unknown }>)[0]?.transform, undefined);
+
+  const second = await observer.observe({ sinceObservationId: first.body.observationId as string });
+  const changes = second.body.changes as { changed: Array<{ fields: string[] }> };
+  assert.deepEqual(changes.changed[0]?.fields, ["transform"], "the difference is reported though transform is not shown");
+
+  const shown = await observer.observe({ include: ["entities", "transform"] });
+  assert.deepEqual((shown.body.entities as Array<{ transform?: unknown }>)[0]?.transform, { ...MOVED, position: { x: 9, y: 2, z: 3 } });
+});

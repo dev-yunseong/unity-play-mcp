@@ -446,6 +446,8 @@ function shape(entity: PlayEntity, include: Set<string>): PlayEntity {
   const shaped: PlayEntity = { ...entity };
   if (!include.has("facts")) shaped.facts = [];
   if (!include.has("actions")) shaped.actions = [];
+  // 출력에서만 뺀다. 변화 감지(fingerprint, differingFields)는 snapshot 의 transform 을 그대로 비교한다 (#101).
+  if (!include.has("transform")) delete shaped.transform;
   return shaped;
 }
 
