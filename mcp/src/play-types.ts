@@ -132,7 +132,7 @@ export const filterSchema = () => z.object({
 
 export type PlayFilter = z.infer<ReturnType<typeof filterSchema>>;
 
-export const includeSchema = () => z.array(z.enum(["entities", "actions", "facts", "changes", "image"])).min(1);
+export const includeSchema = () => z.array(z.enum(["entities", "actions", "facts", "changes", "image", "transform"])).min(1);
 
 export type PlayInclude = "entities" | "actions" | "facts" | "changes" | "image";
 
