@@ -163,11 +163,10 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// <c>RecordFrameTime</c> 은 transport 상태와 무관하게 매 프레임 돌아야 한다. transport 처리 안쪽으로
-        /// 옮기면 client 가 없는 세션의 frame time 이 비게 된다.
+        /// client 가 없으면 성능 측정도 쉬어야 한다.
         /// </remarks>
         [UnityTest]
-        public IEnumerator KeepsRecordingFrameTimesWithNoClientConnected()
+        public IEnumerator DoesNotRecordFrameTimesWithNoClientConnected()
         {
             var manager = CreateHost();
             yield return null;
@@ -183,7 +182,7 @@ namespace UnityPlayMcp.Tests
                 recorded = FrameTimes(manager).TrySummarize(1f / 60f, out _);
             }
 
-            Assert.That(recorded, Is.True, "client 가 없어도 프레임타임은 쌓여야 한다.");
+            Assert.That(recorded, Is.False, "client 가 없으면 성능 측정 비용을 내지 않는다.");
         }
 
         /// <remarks>
@@ -206,10 +205,10 @@ namespace UnityPlayMcp.Tests
         }
 
         /// <remarks>
-        /// <c>RecordFrameTime</c> 이 던져도 그 프레임의 입력 진행과 요청 처리는 끝나 있어야 한다 (#57).
+        /// idle 상태에서는 recorder 없이도 transport 요청을 확인해야 한다.
         /// </remarks>
         [UnityTest]
-        public IEnumerator KeepsHandlingRequestsWhenFrameTimeRecordingThrows()
+        public IEnumerator KeepsCheckingTransportWithoutAnIdleRecorder()
         {
             var manager = CreateHost();
             yield return null;
@@ -218,18 +217,17 @@ namespace UnityPlayMcp.Tests
             Set(manager, "transportWasConnected", false);
             Set(manager, "frameTimeRecorder", null);
 
-            // 성능 보고도 recorder 를 읽으므로 미뤄서, 이번 프레임에 던지는 곳을 RecordFrameTime 하나로 고정한다.
+            // 다음 성능 보고 시각과 무관하게 idle 상태에서는 측정하지 않는다.
             Set(manager, "nextPerformanceReportTime", Time.unscaledTime + 60f);
 
-            // 예외는 삼키지 않아 log 에 남아야 한다.
-            LogAssert.Expect(LogType.Exception, new Regex("NullReferenceException"));
+            // client 가 없으므로 recorder 가 없어도 호출하지 않는다.
             yield return null;
 
             // 다음 프레임이 또 던지지 않게 바로 되돌린다.
             Set(manager, "frameTimeRecorder", new FrameTimeRecorder());
 
             Assert.That(NoticedTheTransport(manager), Is.True,
-                "성능 수집이 던져도 그 프레임의 요청 처리는 이미 지나갔어야 한다.");
+                "idle 상태에서도 요청을 확인해야 한다.");
         }
 
         /// <remarks>

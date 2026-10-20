@@ -37,9 +37,7 @@ namespace UnityPlayMcp.Tests.Input
                 var controller = host.AddComponent<KeyboardStatusController>();
 
                 // edit mode 에서는 AddComponent 가 OnEnable 을 부르지 않는다. GUI 가 거기서 만들어지므로 직접 부른다.
-                typeof(KeyboardStatusController)
-                    .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .Invoke(controller, null);
+                controller.SetVisible(true);
                 var panel = host.transform
                     .Find("Unity Play MCP Keyboard Status Canvas/Keyboard Status Panel");
 

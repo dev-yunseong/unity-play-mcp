@@ -71,6 +71,12 @@ Changing the scope does not move or delete an entry you already added. To remove
 
 ## Using it
 
+Agent cursor and keyboard status overlays start hidden. Use `set_overlay { "visible": true }` to show them or `false` to hide them; a batch accepts `{ "method": "set_overlay", "visible": false }`. Virtual input works while hidden.
+
+Overlay resources are created on first display, then reused with their Canvas and UI Update loops disabled while hidden. Scene discovery and performance sampling run only while an MCP client is connected. The last disconnect cancels pending input, stops readings, and hides the overlays; reconnecting keeps them hidden.
+
+Idle cost is not zero: the localhost listener, per-frame request checks, and virtual input processing remain. The listener keeps `Application.runInBackground` enabled so background requests can be processed, which can also incur the game's own background execution cost. Automatic host creation is limited to the Editor and Development Builds.
+
 With Play Mode running, just ask the agent in plain language. Unity opens a local connection on `127.0.0.1:17311`, and the MCP server on the same computer connects to it.
 
 To check the connection, ask "Is Unity running?" The agent reports whether it can reach the game and when it last received data. If you ask for anything else while Unity is not in Play Mode, the agent tells you to start Play Mode.

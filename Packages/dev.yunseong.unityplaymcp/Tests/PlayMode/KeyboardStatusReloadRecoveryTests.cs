@@ -141,7 +141,9 @@ namespace UnityPlayMcp.Tests
         private KeyboardStatusController CreateController()
         {
             controllerObject = new GameObject("keyboard status reload test");
-            return controllerObject.AddComponent<KeyboardStatusController>();
+            var controller = controllerObject.AddComponent<KeyboardStatusController>();
+            controller.SetVisible(true);
+            return controller;
         }
 
         /// <summary>panel 이 그리고 있는 문자열을 모두 합친다.</summary>

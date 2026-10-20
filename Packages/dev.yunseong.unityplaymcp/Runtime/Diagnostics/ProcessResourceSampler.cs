@@ -65,6 +65,12 @@ namespace UnityPlayMcp.Diagnostics
 #endif
         }
 
+        /// <summary>재연결 전 idle 구간을 다음 CPU 집계에 포함하지 않는다.</summary>
+        public void ResetBaseline()
+        {
+            hasPreviousReading = false;
+        }
+
         /// <param name="elapsedSeconds">직전 성공한 샘플 이후의 실제 경과 시간. CPU 비율의 분모다.</param>
         /// <param name="processorCount">
         /// <c>SystemInfo.processorCount</c>. CPU 시간을 코어 수로 나눠 100% 를 넘지 않게 한다.

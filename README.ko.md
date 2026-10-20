@@ -71,6 +71,12 @@ scope를 바꿔도 이미 추가한 항목은 옮겨지거나 지워지지 않�
 
 ## 사용하기
 
+패키지를 설치해 두어도 agent cursor와 keyboard status UI는 기본으로 숨겨져 있습니다. Agent에게 표시를 요청하면 `set_overlay { "visible": true }`로 켜고, `false`로 끕니다. `perform_actions`에서도 `{ "method": "set_overlay", "visible": false }`를 사용할 수 있습니다. 숨겨도 가상 입력은 동작합니다.
+
+UI는 처음 표시할 때 생성하고, 숨기면 Canvas와 표시용 Update를 비활성화해 재사용합니다. 씬 discovery와 성능 수집은 MCP client가 연결된 동안만 실행하며, 마지막 client가 끊기면 진행 중 입력, readings, UI를 정리합니다. 재연결해도 UI는 숨김 상태입니다.
+
+미사용 시 비용이 완전히 0인 것은 아닙니다. 요청을 받을 localhost listener와 매 프레임 요청 확인, virtual input 처리는 남습니다. 백그라운드에서도 요청을 처리하려고 listener가 열린 동안 `Application.runInBackground`를 켜므로 게임 자체의 백그라운드 실행 비용도 발생할 수 있습니다. 자동 host 생성은 Editor와 Development Build에 한정됩니다.
+
 Play Mode를 시작한 상태에서 agent에게 평소 말투로 요청하면 됩니다. Unity가 `127.0.0.1:17311`에 local 연결을 열고, 같은 컴퓨터의 MCP server가 여기에 접속합니다.
 
 Unity가 연결되어 있는지 궁금하면 "Unity 켜져 있어?"라고 물어보세요. agent가 연결 상태와 마지막으로 받은 데이터 시각을 알려 줍니다. Play Mode가 아닐 때 다른 요청을 하면 Play Mode를 시작하라고 안내합니다.

@@ -136,7 +136,25 @@ namespace UnityPlayMcp.Tests
         private CursorController CreateController()
         {
             controllerObject = new GameObject("cursor reload test");
-            return controllerObject.AddComponent<CursorController>();
+            var controller = controllerObject.AddComponent<CursorController>();
+            controller.SetVisible(true);
+            return controller;
+        }
+
+        [UnityTest]
+        public IEnumerator ReleasesAssetsWhenDestroyedAfterAHiddenReload()
+        {
+            var controller = CreateController();
+            var sprite = controllerObject.transform.Find(CursorPath).GetComponent<Image>().sprite;
+            var texture = sprite.texture;
+            controller.SetVisible(false);
+            AssemblyReloadSimulation.Rehearse(controller);
+            Assert.That(controller.enabled, Is.False);
+            Object.Destroy(controllerObject);
+            yield return null;
+            yield return null;
+            Assert.That(sprite == null, Is.True);
+            Assert.That(texture == null, Is.True);
         }
 
         private int CanvasCount()

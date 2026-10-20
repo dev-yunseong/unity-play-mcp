@@ -17,6 +17,7 @@ namespace UnityPlayMcp
         private readonly CursorController cursorController;
         private readonly PointerEventDispatcher pointerEvents;
         private readonly IScreenCapturer capturer;
+        private readonly Action<bool> setOverlay;
 
         /// <summary>
         /// 세션 요청에 따라 live reading 을 켜고 끈다.
@@ -41,8 +42,10 @@ namespace UnityPlayMcp
             CursorController cursorController,
             PointerEventDispatcher pointerEvents,
             IScreenCapturer capturer = null,
-            IReadingChannel readings = null)
+            IReadingChannel readings = null,
+            Action<bool> setOverlay = null)
         {
+            this.setOverlay = setOverlay;
             this.readings = readings;
             this.targetLookup = targetLookup;
             this.cursorController = cursorController;
@@ -71,6 +74,23 @@ namespace UnityPlayMcp
         {
             switch (method)
             {
+                case "set_overlay":
+                    if (parameters == null || parameters.Count != 1 || !(parameters[0] is bool))
+                    {
+                        completed(ActionResultDto.Failure(actionId, "set_overlay requires params [visible: boolean]."));
+                    }
+                    else if (setOverlay == null)
+                    {
+                        completed(ActionResultDto.Failure(actionId, "Overlay control is unavailable."));
+                    }
+                    else
+                    {
+                        var visible = (bool)parameters[0];
+                        setOverlay(visible);
+                        completed(ActionResultDto.Success(actionId, visible));
+                    }
+                    yield break;
+
                 case "enter_text":
                     yield return ExecuteEnterText(actionId, parameters, completed);
                     yield break;

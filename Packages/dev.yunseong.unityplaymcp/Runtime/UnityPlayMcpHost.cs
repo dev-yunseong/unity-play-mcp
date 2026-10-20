@@ -42,6 +42,8 @@ namespace UnityPlayMcp
 
         /// <summary>지난 프레임까지 본 client 연결 수다. 새 client 가 붙은 프레임을 찾는 데 쓴다.</summary>
         private int clientsSeen;
+        private int idleGenerationSeen;
+        private bool clientSessionActive;
 
         /// <summary>server 가 열린 동안 바꿔 두었다가 되돌릴 host game 의 원래 설정이다.</summary>
         private bool hostRunInBackground;
@@ -186,7 +188,8 @@ namespace UnityPlayMcp
                 cursorController,
                 pointerEvents,
                 new ScreenCapturer(),
-                this);
+                this,
+                SetOverlay);
             playApi = new PlayApi(new ScreenCapturer());
             frameTimeRecorder = new FrameTimeRecorder();
             frameTimingSampler = new FrameTimingSampler();
@@ -279,7 +282,7 @@ namespace UnityPlayMcp
 
                 // 성능 수집은 마지막에 한다. 여기서 던져도 입력 처리와 요청 처리는 막히지 않는다 (#57).
                 // 예외는 삼키지 않고 로그에 남긴다. 이번 프레임 샘플은 다음 보고 창에 실린다.
-                RecordFrameTime();
+                if (clientSessionActive) RecordFrameTime();
             }
         }
 
@@ -315,6 +318,22 @@ namespace UnityPlayMcp
 
             transportWasConnected = connected;
 
+            var generation = webSocketTransport.IdleGeneration;
+            if (generation != idleGenerationSeen)
+            {
+                EndClientSession();
+                idleGenerationSeen = generation;
+            }
+
+            if (webSocketTransport.ActiveClients > 0)
+            {
+                if (!clientSessionActive) BeginClientSession();
+            }
+            else if (clientSessionActive)
+            {
+                EndClientSession();
+            }
+
             // socket 은 client 가 없어도 보내기에 실패하지 않으므로 Pulse 는 누락을 모른다. 새 client 에게
             // 전량 reading 을 요청하지 않으면 재연결한 MCP server 가 그 사이 변화를 받지 못한다 (#69).
             var opened = webSocketTransport.ClientsOpened;
@@ -325,11 +344,45 @@ namespace UnityPlayMcp
             }
 
             clientsSeen = opened;
+            reportedDeviceContext = false;
 
             if (Reading)
             {
                 Affordances.Scan.AffordanceBootstrap.RequestWholeReading();
             }
+        }
+
+        private void BeginClientSession()
+        {
+            frameTimeRecorder = new FrameTimeRecorder();
+            frameTimingSampler = new FrameTimingSampler();
+            processResourceSampler?.ResetBaseline();
+            lastPerformanceSampleTime = Time.unscaledTime;
+            nextPerformanceReportTime = lastPerformanceSampleTime + PerformanceReportIntervalSeconds;
+            reportedDeviceContext = false;
+            clientSessionActive = true;
+            BeginDiscovery();
+        }
+
+        private void EndClientSession()
+        {
+            // coroutine 이 입력을 다시 누르기 전에 중단한다.
+            StopAllCoroutines();
+            actionRequests.Clear();
+            processingActions = false;
+            actionExecutor.RestoreTimeScale();
+            ReleaseAgentInput();
+            EndDiscovery();
+            SetOverlay(false);
+            playApi = new PlayApi(new ScreenCapturer());
+            clientSessionActive = false;
+            reportedDeviceContext = false;
+        }
+
+        public void SetOverlay(bool visible)
+        {
+            cursorController.SetVisible(visible);
+            GetComponent<KeyboardStatusController>().SetVisible(visible);
         }
 
         public void StartTransport()
@@ -351,7 +404,6 @@ namespace UnityPlayMcp
             }
 
             webSocketTransport.Start();
-            BeginDiscovery();
             Debug.Log("[Unity Play MCP] WebSocket server started at ws://127.0.0.1:17311/ws.");
         }
 
@@ -424,11 +476,7 @@ namespace UnityPlayMcp
                 return;
             }
 
-            // Ahead of the ownership checks: a run ending mid-drag must not leave a button held.
-            ReleaseAgentInput();
-
-            // 연결 없이 reading 이 계속 돌면 씬 로드마다 scan 하고 파일이 커진다.
-            EndDiscovery();
+            EndClientSession();
 
             if (webSocketTransport == null)
             {
@@ -439,6 +487,7 @@ namespace UnityPlayMcp
             webSocketTransport.Dispose();
             webSocketTransport = null;
             clientsSeen = 0;
+            idleGenerationSeen = 0;
 
             // The connection is gone, so the host game gets its setting back.
             Application.runInBackground = hostRunInBackground;
@@ -564,7 +613,7 @@ namespace UnityPlayMcp
         }
 
         /// <summary>
-        /// 연결 상태와 무관하게 매 프레임 기록한다. 연결이 끊긴 구간의 성능도 남아야 한다.
+        /// client session 이 활성화된 프레임만 기록한다.
         /// </summary>
         private void RecordFrameTime()
         {
@@ -585,7 +634,7 @@ namespace UnityPlayMcp
         /// </summary>
         private void SendPerformanceReport()
         {
-            if (!webSocketTransport.IsConnected)
+            if (!clientSessionActive)
             {
                 // 재연결한 서버는 이 세션의 device context 를 모르므로 다음 연결에서 다시 보낸다.
                 reportedDeviceContext = false;

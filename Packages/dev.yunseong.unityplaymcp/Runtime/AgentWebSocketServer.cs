@@ -32,6 +32,17 @@ namespace UnityPlayMcp
             new Dictionary<string, Action<string>>();
         private WebSocketServer server;
         private int clientsOpened;
+        private int idleGeneration;
+
+        public int ActiveClients
+        {
+            get { lock (sendByConnectionId) { return sendByConnectionId.Count; } }
+        }
+
+        public int IdleGeneration
+        {
+            get { return System.Threading.Volatile.Read(ref idleGeneration); }
+        }
 
         public AgentWebSocketServer(string bindAddress, int port)
         {
@@ -63,7 +74,14 @@ namespace UnityPlayMcp
 
         public bool TryDequeueMessage(out AgentMessage message)
         {
-            return incomingMessages.TryDequeue(out message);
+            while (incomingMessages.TryDequeue(out message))
+            {
+                lock (sendByConnectionId)
+                {
+                    if (sendByConnectionId.ContainsKey(message.ClientId)) return true;
+                }
+            }
+            return false;
         }
 
         public void Send(string text)
@@ -111,7 +129,10 @@ namespace UnityPlayMcp
                 {
                     lock (sendByConnectionId)
                     {
-                        sendByConnectionId.Remove(connectionId);
+                        if (sendByConnectionId.Remove(connectionId) && sendByConnectionId.Count == 0)
+                        {
+                            System.Threading.Interlocked.Increment(ref idleGeneration);
+                        }
                     }
                 },
                 (text, reply, clientId) => incomingMessages.Enqueue(new AgentMessage(text, reply, clientId)));

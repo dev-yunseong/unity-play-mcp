@@ -28,6 +28,8 @@ namespace UnityPlayMcp.Tests
             public bool IsConnected { get { return true; } }
 
             public int ClientsOpened { get; set; }
+            public int ActiveClients => 1;
+            public int IdleGeneration => 0;
 
             public void Start() { }
 

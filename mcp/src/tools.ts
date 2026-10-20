@@ -104,6 +104,7 @@ export const performActionSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("key_up"), key: keySchema() }).strict(),
   z.object({ method: z.literal("set_axis"), name: inputNameSchema(), value: z.number() }).strict(),
   z.object({ method: z.literal("set_button"), name: inputNameSchema(), pressed: z.boolean() }).strict(),
+  z.object({ method: z.literal("set_overlay"), visible: z.boolean() }).strict(),
   z.object({ method: z.literal("pause_time") }).strict(),
   z.object({ method: z.literal("resume_time") }).strict(),
   z.object({ method: z.literal("reset_game"), clearPlayerPrefs: z.boolean() }).strict(),
@@ -256,6 +257,8 @@ export function toWireAction(action: Exclude<PerformAction, { method: "click" | 
       return { method: action.method, params: [action.name, action.value] };
     case "set_button":
       return { method: action.method, params: [action.name, action.pressed] };
+    case "set_overlay":
+      return { method: action.method, params: [action.visible] };
     case "reset_game":
       return { method: action.method, params: [{ clearPlayerPrefs: action.clearPlayerPrefs }] };
     case "capture_screen":
@@ -1122,6 +1125,11 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     description: "Set a virtual Unity input button state.",
     inputSchema: { name: inputNameSchema(), pressed: z.boolean() },
   }, async ({ name, pressed }) => dispatchOne(connection, "set_button", [name, pressed]));
+
+  server.registerTool("set_overlay", {
+    description: "Show or hide the agent cursor and keyboard status overlays. Hidden by default. Hiding stops UI updates; input and connected-session collection continue. Success returns the applied visibility.",
+    inputSchema: { visible: z.boolean() },
+  }, async ({ visible }) => dispatchOne(connection, "set_overlay", [visible]));
 
   const noInput = {};
   server.registerTool("pause_game", { description: "Pause Unity game time.", inputSchema: noInput },
