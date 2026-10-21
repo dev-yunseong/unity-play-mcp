@@ -11,6 +11,7 @@ import { PulseStore } from "./pulse.js";
 import { registerTools } from "./tools.js";
 
 const pulseStore = new PulseStore();
+const cliVersion = packageVersion();
 const connection = new UnityConnection({
   url: process.env.UNITY_PLAY_MCP_URL ?? "ws://127.0.0.1:17311/ws",
   timeoutMilliseconds: parseTimeout(process.env.UNITY_PLAY_MCP_TIMEOUT_MS),
@@ -19,11 +20,11 @@ const connection = new UnityConnection({
   report: (message, error) => console.error(message, error ?? ""),
 });
 const server = new McpServer(
-  { name: "unity-play-mcp", version: packageVersion() },
+  { name: "unity-play-mcp", version: cliVersion },
   { instructions: serverInstructions },
 );
 
-registerTools(server, connection, pulseStore);
+registerTools(server, connection, pulseStore, cliVersion);
 registerPrompts(server);
 await server.connect(new StdioServerTransport());
 

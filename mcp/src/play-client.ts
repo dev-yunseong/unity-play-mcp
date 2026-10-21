@@ -30,6 +30,7 @@ export class PlayCallError extends Error {
 export interface PlayCapabilities {
   protocolVersion: number;
   runtimeVersion?: string;
+  requiredServerVersion?: string;
   sessionId: string;
   tools: string[];
   inputPaths: string[];
@@ -130,6 +131,7 @@ export class PlayClient {
       observationPolicies: Array.isArray(raw.observationPolicies)
         ? (raw.observationPolicies as PlayScope[]) : ["player", "debug"],
       ...(typeof raw.runtimeVersion === "string" ? { runtimeVersion: raw.runtimeVersion } : {}),
+      ...(typeof raw.requiredServerVersion === "string" ? { requiredServerVersion: raw.requiredServerVersion } : {}),
       ...(isRecord(raw.limits) ? { limits: raw.limits } : {}),
     };
   }

@@ -216,6 +216,7 @@ namespace UnityPlayMcp.Play
             {
                 ProtocolVersion = ProtocolVersion,
                 RuntimeVersion = PackageVersion.Value,
+                RequiredServerVersion = CompatibleMcpServerVersion.Value,
                 SessionId = SessionId,
                 Tools = new List<string>
                 {

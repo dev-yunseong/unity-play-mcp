@@ -1,6 +1,6 @@
 name: Bump release version
 
-# 네 파일(Unity package.json, PackageVersion.cs, mcp/package.json, mcp-server-version.txt)의
+# 다섯 파일(Unity package.json, PackageVersion.cs, mcp/package.json, mcp-server-version.txt, CompatibleMcpServerVersion.cs)의
 # version 을 한 번의 dispatch 로 갱신한다. draft pull request 만 열고 develop 에 직접 push 하지
 # 않는다. GitHub Release 와 tag 는 사람이 만든다 (publish-mcp.yml 참고).
 on:
@@ -15,7 +15,7 @@ on:
       mcp_version:
         description: >
           mcp/package.json 과 mcp-server-version.txt 에 반영할 새 version. 비우면 MCP server
-          쪽 두 파일은 건드리지 않는다. unity_version 과 기본값을 공유하지 않는다 — 두
+          쪽 세 파일은 건드리지 않는다. unity_version 과 기본값을 공유하지 않는다 — 두
           release 주기는 이 저장소에서 실제로 독립적으로 움직인다 (예: PR #46 은 MCP server
           쪽만 올렸다).
         required: false
@@ -98,6 +98,7 @@ jobs:
           fi
           if git diff --quiet -- \
             mcp/package.json \
+            Packages/dev.yunseong.unityplaymcp/Runtime/Affordance/Scan/CompatibleMcpServerVersion.cs \
             Packages/dev.yunseong.unityplaymcp/Editor/McpConfig/mcp-server-version.txt; then
             echo "mcp_changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -189,6 +190,7 @@ jobs:
           if [ "$MCP_CHANGED" = "true" ]; then
             add_paths+=(
               mcp/package.json
+              Packages/dev.yunseong.unityplaymcp/Runtime/Affordance/Scan/CompatibleMcpServerVersion.cs
               Packages/dev.yunseong.unityplaymcp/Editor/McpConfig/mcp-server-version.txt
             )
           fi

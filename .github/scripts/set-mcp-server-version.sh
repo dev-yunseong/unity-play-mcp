@@ -23,21 +23,28 @@ fi
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 manifest="$root/mcp/package.json"
 server_version_file="$root/Packages/dev.yunseong.unityplaymcp/Editor/McpConfig/mcp-server-version.txt"
+runtime_version_file="$root/Packages/dev.yunseong.unityplaymcp/Runtime/Affordance/Scan/CompatibleMcpServerVersion.cs"
 
-for file in "$manifest" "$server_version_file"; do
+for file in "$manifest" "$server_version_file" "$runtime_version_file"; do
   test -f "$file" || { echo "missing: $file" >&2; exit 1; }
 done
 
 # package.json 은 JSON 으로 다시 쓴다. 정규식으로 고치면 같은 모양의 다른 key 까지 잡는다.
 node --input-type=module -e '
   import { readFileSync, writeFileSync } from "node:fs";
-  const [file, version] = process.argv.slice(1);
+  const [file, runtimeFile, version] = process.argv.slice(1);
+  const runtimeText = readFileSync(runtimeFile, "utf8");
+  const constant = /internal const string Value = "[^"]*";/g;
+  if ([...runtimeText.matchAll(constant)].length !== 1) {
+    throw new Error("expected one compatible CLI version constant");
+  }
   const text = readFileSync(file, "utf8");
   const trailingNewline = text.endsWith("\n");
   const manifest = JSON.parse(text);
   manifest.version = version;
   writeFileSync(file, JSON.stringify(manifest, null, 2) + (trailingNewline ? "\n" : ""));
-' "$manifest" "$version"
+  writeFileSync(runtimeFile, runtimeText.replace(constant, `internal const string Value = "${version}";`));
+' "$manifest" "$runtime_version_file" "$version"
 
 # mcp-server-version.txt 는 값 하나만 담으므로 trailing newline 하나와 함께 통째로 덮어쓴다.
 printf '%s\n' "$version" > "$server_version_file"
@@ -45,5 +52,6 @@ printf '%s\n' "$version" > "$server_version_file"
 echo "MCP server version set to $version"
 echo "  $manifest"
 echo "  $server_version_file"
+echo "  $runtime_version_file"
 echo
 echo "Release the same version as npm package unity-play-mcp@$version; publish-mcp.yml checks that mcp/package.json and mcp-server-version.txt match."
