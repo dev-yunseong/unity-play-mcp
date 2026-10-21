@@ -23,7 +23,7 @@ Unity already supports [null, options]. The MCP layer rejected maxEdge without t
 - **Commands to run:** npx tsc; node --test dist/test/*.test.js; pinned Unity EditMode tests.
 - **Expected output:** default [] and crop wire unchanged; full-screen options encoded [null,{maxEdge:256}]; 1920x1080 downscales to256x144 without upscaling smaller images.
 - tsc passed, targeted79/79 and full MCP387/387 passed. git diff --check passed. Independent critic PASS.
-- Unity regression execution awaits shared isolated Editor. Real framebuffer capture is not exercised by these stub/geometry tests.
+- Unity EditMode 322/322 passed, including the new reader/downscale regression. Real framebuffer capture is not exercised by these stub/geometry tests.
 
 ## Risks & Rollback
 - **Risks:** no renderer behavior change; tests validate protocol and geometry, not GPU readback.
