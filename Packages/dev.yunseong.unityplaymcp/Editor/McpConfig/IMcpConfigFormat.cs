@@ -12,6 +12,12 @@ namespace UnityPlayMcp.McpConfig.Editor
         /// <summary>이 이름의 server 가 이미 적혀 있는지.</summary>
         bool Contains(string text, string serverName);
 
+        /// <summary>실행 command/args를 읽는다. 없으면 null, 모호하면 예외다.</summary>
+        McpServerEntry ReadEntry(string text, string serverName);
+
+        /// <summary>기존 server의 args만 변경하고 다른 옵션을 보존한다.</summary>
+        string UpdateArguments(string text, string serverName, System.Collections.Generic.IReadOnlyList<string> arguments);
+
         /// <summary>이 이름의 server 를 적는다. 이미 있으면 갈아 끼운다.</summary>
         string Add(string text, string serverName, McpServerEntry entry);
 

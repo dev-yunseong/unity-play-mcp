@@ -70,6 +70,8 @@ jobs:
           test -n "$server_version"
           test "$release_version" = "$unity_version"
           test "$mcp_version" = "$server_version"
+          runtime_version="$(sed -n 's/.*internal const string Value = "\([^"]*\)";.*/\1/p' Packages/dev.yunseong.unityplaymcp/Runtime/Affordance/Scan/CompatibleMcpServerVersion.cs | tr -d '\r')"
+          test "$runtime_version" = "$server_version"
 
       - name: Detect MCP changes since the previous published release
         id: mcp_changes

@@ -56,5 +56,22 @@ namespace UnityPlayMcp.McpConfig.Editor
 
             McpConfigFileStore.Write(agent.ConfigPath, agent.Format.Remove(text, serverName));
         }
+
+        internal static McpServerEntry ReadEntry(McpAgent agent, string serverName)
+        {
+            return agent.Format.ReadEntry(McpConfigFileStore.Read(agent.ConfigPath), serverName);
+        }
+
+        internal static void UpdateCli(McpAgent agent, string serverName, string expectedCurrentVersion, string requiredVersion)
+        {
+            var text = McpConfigFileStore.Read(agent.ConfigPath);
+            var current = McpCliVersion.ConfiguredVersion(agent.Format.ReadEntry(text, serverName));
+            if (current == null || current != expectedCurrentVersion)
+                throw new InvalidOperationException("The launch configuration changed or is custom. Refresh and review it before updating.");
+            if (current == requiredVersion) return;
+            var replacement = McpCliVersion.Pinned(requiredVersion);
+            var updated = agent.Format.UpdateArguments(text, serverName, replacement.Arguments);
+            McpConfigFileStore.Write(agent.ConfigPath, updated);
+        }
     }
 }
