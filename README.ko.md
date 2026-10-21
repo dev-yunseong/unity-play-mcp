@@ -73,7 +73,7 @@ scope를 바꿔도 이미 추가한 항목은 옮겨지거나 지워지지 않�
 
 패키지를 설치해 두어도 agent cursor와 keyboard status UI는 기본으로 숨겨져 있습니다. Agent에게 표시를 요청하면 `set_overlay { "visible": true }`로 켜고, `false`로 끕니다. `perform_actions`에서도 `{ "method": "set_overlay", "visible": false }`를 사용할 수 있습니다. 숨겨도 가상 입력은 동작합니다.
 
-UI는 처음 표시할 때 생성하고, 숨기면 Canvas와 표시용 Update를 비활성화해 재사용합니다. 씬 discovery와 성능 수집은 MCP client가 연결된 동안만 실행하며, 마지막 client가 끊기면 진행 중 입력, readings, UI를 정리합니다. 재연결해도 UI는 숨김 상태입니다.
+UI는 처음 표시할 때 생성하고, 숨기면 Canvas와 표시용 Update를 비활성화해 재사용합니다. 연결만으로 수집을 시작하지 않습니다. 요청 또는 실행 중 작업이 끝난 뒤 15초 동안 요청이 없으면 UI, 씬 discovery, live readings와 성능 수집을 멈추고 연결은 유지합니다. 상태 조회는 성능 수집만, 장면·대상 조회는 필요한 장면 수집을 재개하고 새 reading을 기다립니다. 단순 입력과 전체 화면 캡처는 수집이나 UI를 켜지 않습니다. UI는 `set_overlay { visible: true }`로 다시 켭니다. 긴 작업과 진행 중인 조건 대기는 중간에 끊지 않습니다. 마지막 client가 끊기면 진행 중 입력도 정리하며 재연결 후에도 UI는 숨김 상태입니다.
 
 미사용 시 비용이 완전히 0인 것은 아닙니다. 요청을 받을 localhost listener와 매 프레임 요청 확인, virtual input 처리는 남습니다. 백그라운드에서도 요청을 처리하려고 listener가 열린 동안 `Application.runInBackground`를 켜므로 게임 자체의 백그라운드 실행 비용도 발생할 수 있습니다. 자동 host 생성은 Editor와 Development Build에 한정됩니다.
 

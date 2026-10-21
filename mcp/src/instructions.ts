@@ -6,7 +6,7 @@ export const serverInstructions = [
   "Call get_unity_status first. If Unity is not running, ask the user to enter Play Mode instead of retrying.",
   "",
   "Reading the scene:",
-  "- Call start_readings once before the first get_scene_state.",
+  "- Scene queries resume readings after 15s idle.",
   "- Readings arrive about once a second. After an action, compare reading numbers or call wait_for_condition for a scene or member value.",
   "- A result with stale holds an old reading; do not act on its ids. Call start_readings and read again.",
   "- Narrow large scenes with selector, or use root and depth for a hierarchy.",
@@ -26,7 +26,7 @@ export const serverInstructions = [
   "- Missing data is unknown, never success. watch_events waits once for a change.",
   "",
   "Seeing the result:",
-  "- set_overlay toggles the normally hidden input UI.",
+  "- set_overlay shows input UI; 15s idle hides it.",
   "- capture_screen shows player-visible layout; scene state only reports values.",
   "- pause_game freezes time, resume_game continues, and reset_game starts over.",
 ].join("\n");

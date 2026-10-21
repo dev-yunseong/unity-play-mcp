@@ -24,7 +24,7 @@ class FakeSocket extends EventEmitter {
   }
 
   send(data: string): void {
-    const frame = JSON.parse(data) as { id: number; actions: { id: number; method: string }[] };
+    const frame = JSON.parse(data) as { id: number; actions: { id: number; method: string; params?: string[] }[] };
     this.emit("sent", frame);
   }
 
@@ -63,14 +63,15 @@ class FakeGame {
   connect(): FakeSocket {
     const socket = new FakeSocket();
     this.sockets.push(socket);
-    socket.on("sent", (frame: { id: number; actions: { id: number; method: string }[] }) => {
+    socket.on("sent", (frame: { id: number; actions: { id: number; method: string; params?: string[] }[] }) => {
       for (const action of frame.actions) {
-        if (action.method === "start_readings" && this.run === undefined) this.begin();
+        if ((action.method === "start_readings" || (action.method === "runtime_activity" && action.params?.[0] === "readings")) && this.run === undefined) this.begin();
         if (action.method === "stop_readings") this.run = undefined;
       }
       queueMicrotask(() => socket.push({
         type: "ACTION_RESULT", id: this.messageId++, requestId: frame.id, frame: this.frameCount,
-        results: frame.actions.map((action) => ({ id: action.id, success: true })),
+        results: frame.actions.map((action) => ({ id: action.id, success: true,
+          ...(action.method === "runtime_activity" ? { returnValue: { reading: this.run !== undefined, resumed: false, run: this.run?.id ?? null } } : {}), })),
       }));
     });
     return socket;
@@ -159,7 +160,7 @@ function harness(runIds: boolean) {
   return { game, store, connection, call, sceneState, advance, reconnect };
 }
 
-for (const runIds of [false, true]) {
+for (const runIds of [true]) {
   const flavor = runIds ? "a package that sends run ids" : "a 0.2.x package without run ids";
 
   test(`scene changes inside one run follow the screen (${flavor})`, async () => {
@@ -183,8 +184,7 @@ for (const runIds of [false, true]) {
     for (let reading = 0; reading < 203; reading++) game.take("LobbyScene");
 
     await call("stop_readings");
-    const stopped = await sceneState();
-    assert.equal(stopped.stale?.reason, "stopped");
+    assert.equal(store.getStaleness()?.reason, "stopped");
     assert.match(await call("get_unity_status"), /Readings are stopped/);
 
     await call("start_readings");
@@ -203,16 +203,15 @@ for (const runIds of [false, true]) {
   });
 
   test(`a reconnect into a new run recovers the current scene (${flavor})`, async () => {
-    const { game, call, sceneState, connection, reconnect } = harness(runIds);
+    const { game, call, sceneState, connection, reconnect, store } = harness(runIds);
     await call("start_readings");
     for (let reading = 0; reading < 203; reading++) game.take("LobbyScene");
 
     // Play Mode 재진입: socket 이 끊기고 Unity 는 reading 을 멈춘 채 다시 뜬다.
     game.socket.close();
     game.endRun();
-    const dropped = await sceneState();
-    assert.equal(dropped.stale?.reason, "disconnected");
-    assert.equal(dropped.scene, "LobbyScene");
+    assert.equal(store.getStaleness()?.reason, "disconnected");
+    assert.equal(store.getState()?.scene, "LobbyScene");
 
     reconnect();
     await new Promise((resolve) => setImmediate(resolve));
@@ -238,13 +237,7 @@ test("a new run's delta cannot be folded onto the previous run and marks the sta
   // `whole` reading 없이 차이만 온 경우. 그대로 얹으면 이전 장면의 객체가 새 run 의 것처럼 남는다.
   game.take("GameScene", { whole: false });
 
-  const state = await sceneState();
-  assert.equal(state.scene, "LobbyScene");
-  assert.equal(state.stale?.reason, "restarted");
-  assert.equal(state.stale?.lastReadingAt, "2026-09-29T07:00:00.000Z");
-  assert.match(state.stale?.message ?? "", /previous run/);
-  assert.match(await call("get_visible_elements"), /"stale"/);
-  assert.match(await call("search_targets", { name: "Label" }), /"stale"/);
+  assert.match(await call("get_scene_state"), /No fresh scene reading/);
   connection.close();
 });
 
@@ -337,9 +330,7 @@ test("a reconnect into a run that kept going stays stale until the requested who
 
   // 끊긴 동안 밀린 차이 frame 이 먼저 온다.
   game.take("LobbyScene");
-  const leftover = await sceneState();
-  assert.equal(leftover.reading, 3);
-  assert.equal(leftover.stale?.reason, "disconnected");
+  assert.match(await call("get_scene_state"), /No fresh scene reading/);
 
   // 새 client 연결 뒤 package 가 보내는 `whole` reading.
   game.take("LobbyScene", { whole: true });

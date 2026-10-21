@@ -73,7 +73,7 @@ Changing the scope does not move or delete an entry you already added. To remove
 
 Agent cursor and keyboard status overlays start hidden. Use `set_overlay { "visible": true }` to show them or `false` to hide them; a batch accepts `{ "method": "set_overlay", "visible": false }`. Virtual input works while hidden.
 
-Overlay resources are created on first display, then reused with their Canvas and UI Update loops disabled while hidden. Scene discovery and performance sampling run only while an MCP client is connected. The last disconnect cancels pending input, stops readings, and hides the overlays; reconnecting keeps them hidden.
+Overlay resources are created on first display, then reused with their Canvas and UI Update loops disabled while hidden. Connecting alone starts no collection. After 15 seconds without a request or active work, overlays, discovery, live readings, and performance sampling stop while the connection stays open. Status requests resume performance only; scene and target queries resume needed readings and wait for fresh data. Raw input and full-screen capture do not enable collection or overlays. Show overlays again explicitly with `set_overlay { "visible": true }`. Running operations and active condition waits stay awake until completion. The last disconnect also cancels pending input; reconnecting keeps overlays hidden.
 
 Idle cost is not zero: the localhost listener, per-frame request checks, and virtual input processing remain. The listener keeps `Application.runInBackground` enabled so background requests can be processed, which can also incur the game's own background execution cost. Automatic host creation is limited to the Editor and Development Builds.
 

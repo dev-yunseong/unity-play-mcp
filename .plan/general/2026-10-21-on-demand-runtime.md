@@ -2,7 +2,7 @@
 
 - Date: 2026-10-21
 - GitHub Issue: https://github.com/dev-yunseong/unity-play-mcp/issues/107
-- Status: Implemented and validated
+- Status: Implemented and validated; 15초 유휴 확장은 2026-10-21-idle-runtime-suspension.md 참고
 
 ## Goal
 
@@ -22,7 +22,7 @@ localhost listener와 요청 확인은 유지한다.
 
 ## Approach (Checklist)
 - [x] **Step 0: Recon** — host, overlay controllers, transport, MCP action schema 확인.
-- [x] **Step 1: Implementation** — overlay resource를 첫 표시까지 생성하지 않고 숨기면 Update를 멈춘다. cursor 위치를 UI와 분리한다. `set_overlay`를 ActionExecutor와 MCP의 tool/batch 공통 contract에 추가한다. active client 수를 transport에서 제공하고 host는 첫 연결에 discovery/성능 수집을 시작하며 마지막 disconnect에 readings, discovery, UI, input을 정리한다. listener 시작만으로 discovery를 실행하지 않는다. reconnect의 집계 창을 초기화한다.
+- [x] **Step 1: Implementation** — overlay resource를 첫 표시까지 생성하지 않고 숨기면 Update를 멈춘다. cursor 위치를 UI와 분리한다. `set_overlay`를 ActionExecutor와 MCP의 tool/batch 공통 contract에 추가한다. active client 수를 transport에서 제공하고 host는 요청에 필요한 discovery/성능 수집만 시작하며 마지막 disconnect에 readings, discovery, UI, input을 정리한다. listener 시작만으로 discovery를 실행하지 않는다. reconnect의 집계 창을 초기화한다.
 - [x] **Step 2: Tests** — 기본 hidden, 반복 show/hide, hidden movement/drag, reload, disconnect/reconnect를 Unity tests로 검증한다. MCP schema/dispatch/batch tests를 실행한다.
 - [x] **Step 3: Rollout / Rollback** — README에 기본 UI 숨김과 표시 명령, listener의 잔여 비용을 기록한다. draft PR로 전달한다.
 

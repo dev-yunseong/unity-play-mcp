@@ -96,7 +96,8 @@ namespace UnityPlayMcp.Tests
             transport.ActiveClients = 2;
             transport.ClientsOpened = 2;
             yield return null;
-            Assert.That(AffordanceBootstrap.Following, Is.True);
+            Assert.That(AffordanceBootstrap.Following, Is.False);
+            host.StartReadings();
             host.SetOverlay(true);
             var firstRecorder = Field("frameTimeRecorder").GetValue(host);
             transport.ActiveClients = 1;
@@ -108,10 +109,11 @@ namespace UnityPlayMcp.Tests
             transport.ClientsOpened++;
             yield return null;
             Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
-            Assert.That(Field("frameTimeRecorder").GetValue(host), Is.Not.SameAs(firstRecorder));
-            Assert.That(AffordanceBootstrap.Following, Is.True);
+            Assert.That(AffordanceBootstrap.Following, Is.False);
+            Assert.That((bool)Field("collectingPerformance").GetValue(host), Is.False);
 
             host.StartReadings();
+            Assert.That(Field("frameTimeRecorder").GetValue(host), Is.Not.SameAs(firstRecorder));
             transport.ActiveClients = 0;
             transport.IdleGeneration++;
             yield return null;
@@ -150,6 +152,121 @@ namespace UnityPlayMcp.Tests
             Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
         }
 
+        [UnityTest]
+        public IEnumerator FifteenSecondsSuspendsWithAConnectedClientAndPausedTime()
+        {
+            var host = CreateHost();
+            host.SmoothCursorMovement = false;
+            yield return null;
+            var transport = ReplaceTransport(host);
+            transport.ActiveClients = 1;
+            transport.ClientsOpened = 1;
+            yield return null;
+            host.StartReadings();
+            host.SetOverlay(true);
+            Time.timeScale = 0;
+            var last = (double)Field("lastRequestTime").GetValue(host);
+            host.SuspendIfIdle(last + 14.999d);
+            Assert.That(host.Reading, Is.True);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.True);
+            host.SuspendIfIdle(last + 15d);
+            Assert.That(host.Reading || AffordanceBootstrap.Following, Is.False);
+            Assert.That((bool)Field("collectingPerformance").GetValue(host), Is.False);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
+            yield return null;
+            Assert.That(host.TransportOpen, Is.True);
+            Assert.That(host.Reading || AffordanceBootstrap.Following, Is.False);
+
+            Send(transport, "runtime_activity", "\"status\"");
+            yield return null;
+            yield return null;
+            Assert.That((bool)Field("collectingPerformance").GetValue(host), Is.True);
+            Assert.That(host.Reading || AffordanceBootstrap.Following, Is.False);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
+
+            Send(transport, "runtime_activity", "\"readings\"");
+            yield return null;
+            yield return null;
+            Assert.That(host.Reading && AffordanceBootstrap.Following, Is.True);
+            var run = AffordanceBootstrap.CurrentRun;
+            Send(transport, "runtime_activity", "\"status\"");
+            yield return null;
+            yield return null;
+            Assert.That(AffordanceBootstrap.CurrentRun, Is.EqualTo(run));
+            host.SuspendIfIdle((double)Field("lastRequestTime").GetValue(host) + 15d);
+            Send(transport, "move_mouse", "50,60");
+            yield return new WaitForSecondsRealtime(0.5f);
+            Assert.That(host.Reading || AffordanceBootstrap.Following, Is.False);
+            Assert.That((bool)Field("collectingPerformance").GetValue(host), Is.False);
+            Send(transport, "set_overlay", "true");
+            yield return null;
+            yield return null;
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.True);
+            Assert.That(host.Reading, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator BusyActionsDeferIdleAndEmptyMessagesDoNotRenewIt()
+        {
+            var host = CreateHost();
+            yield return null;
+            var transport = ReplaceTransport(host);
+            transport.ActiveClients = 1;
+            yield return null;
+            host.SetOverlay(true);
+            Field("lastRequestTime").SetValue(host, Time.realtimeSinceStartupAsDouble - 20d);
+            Send(transport, "wait_frames", "10");
+            yield return null;
+            Assert.That((bool)Field("processingActions").GetValue(host), Is.True);
+            host.SuspendIfIdle(Time.realtimeSinceStartupAsDouble + 20d);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.True);
+            for (var i = 0; i < 15; i++) yield return null;
+            var last = (double)Field("lastRequestTime").GetValue(host);
+            host.SuspendIfIdle(last + 14.999d);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.True);
+            transport.Messages.Enqueue(new AgentMessage("{\"type\":\"ACTION\",\"actions\":[]}", _ => { }, "test"));
+            yield return null;
+            yield return null;
+            Assert.That((double)Field("lastRequestTime").GetValue(host), Is.EqualTo(last));
+            foreach (var invalid in new[] { "{", "{\"type\":\"PING\"}",
+                "{\"type\":\"ACTION\",\"actions\":[null]}", "{\"type\":\"ACTION\",\"actions\":null}" })
+                transport.Messages.Enqueue(new AgentMessage(invalid, _ => { }, "test"));
+            yield return null;
+            Assert.That((double)Field("lastRequestTime").GetValue(host), Is.EqualTo(last));
+            host.SuspendIfIdle(last + 15d);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator OperationLeaseProtectsCollectionUntilItFinishes()
+        {
+            var host = CreateHost();
+            yield return null;
+            var transport = ReplaceTransport(host);
+            transport.ActiveClients = 1;
+            yield return null;
+            host.StartReadings();
+            host.SetOverlay(true);
+            Send(transport, "play_begin", "\"idle-op\",\"hash\",30000");
+            yield return null;
+            yield return null;
+            Assert.That((bool)Field("processingActions").GetValue(host), Is.False);
+            host.SuspendIfIdle(Time.realtimeSinceStartupAsDouble + 20d);
+            Assert.That(host.Reading, Is.True);
+            Send(transport, "play_end", "\"idle-op\"");
+            yield return null;
+            yield return null;
+            host.SuspendIfIdle((double)Field("lastRequestTime").GetValue(host) + 15d);
+            Assert.That(host.Reading, Is.False);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
+        }
+
+        private static void Send(Transport transport, string method, string parameters)
+        {
+            transport.Messages.Enqueue(new AgentMessage(
+                "{\"type\":\"ACTION\",\"id\":1,\"actions\":[{\"id\":1,\"method\":\"" + method +
+                "\",\"params\":[" + parameters + "]}]}", _ => { }, "test"));
+        }
         private UnityPlayMcpHost CreateHost()
         {
             hostObject = new GameObject("on demand runtime");

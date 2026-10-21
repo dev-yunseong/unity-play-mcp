@@ -79,6 +79,8 @@ namespace UnityPlayMcp.Play
             return operations.TryCheckInput(clientId, Now(), out busyOperationId);
         }
 
+        internal bool HasActiveOperation => operations.HolderOperationId(Now()) != null;
+
         public static string BusyMessage(string operationId)
         {
             return "busy:" + operationId + " another operation owns the input; nothing was sent";

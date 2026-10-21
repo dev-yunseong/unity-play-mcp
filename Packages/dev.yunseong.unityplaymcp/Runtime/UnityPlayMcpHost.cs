@@ -14,6 +14,7 @@ namespace UnityPlayMcp
     public sealed class UnityPlayMcpHost : MonoBehaviour, IReadingChannel
     {
         private const float PerformanceReportIntervalSeconds = 1f;
+        internal const double IdleTimeoutSeconds = 15d;
         private const string BindAddress = "127.0.0.1";
         private const int WebSocketPort = 17311;
 
@@ -44,6 +45,9 @@ namespace UnityPlayMcp
         private int clientsSeen;
         private int idleGenerationSeen;
         private bool clientSessionActive;
+        private bool collectingPerformance;
+        private double lastRequestTime;
+        private bool idleSuspended;
 
         /// <summary>server 가 열린 동안 바꿔 두었다가 되돌릴 host game 의 원래 설정이다.</summary>
         private bool hostRunInBackground;
@@ -282,7 +286,7 @@ namespace UnityPlayMcp
 
                 // 성능 수집은 마지막에 한다. 여기서 던져도 입력 처리와 요청 처리는 막히지 않는다 (#57).
                 // 예외는 삼키지 않고 로그에 남긴다. 이번 프레임 샘플은 다음 보고 창에 실린다.
-                if (clientSessionActive) RecordFrameTime();
+                if (collectingPerformance) RecordFrameTime();
             }
         }
 
@@ -307,6 +311,7 @@ namespace UnityPlayMcp
 
             using (ProfilerMarkers.HostPerformanceReport.Auto())
             {
+                SuspendIfIdle(Time.realtimeSinceStartupAsDouble);
                 SendPerformanceReport();
             }
         }
@@ -354,14 +359,37 @@ namespace UnityPlayMcp
 
         private void BeginClientSession()
         {
+            clientSessionActive = true;
+            idleSuspended = false;
+            lastRequestTime = Time.realtimeSinceStartupAsDouble;
+        }
+
+        private void BeginPerformanceCollection()
+        {
+            if (collectingPerformance) return;
             frameTimeRecorder = new FrameTimeRecorder();
             frameTimingSampler = new FrameTimingSampler();
             processResourceSampler?.ResetBaseline();
             lastPerformanceSampleTime = Time.unscaledTime;
             nextPerformanceReportTime = lastPerformanceSampleTime + PerformanceReportIntervalSeconds;
             reportedDeviceContext = false;
-            clientSessionActive = true;
-            BeginDiscovery();
+            collectingPerformance = true;
+        }
+
+        /// <summary>진행 중 작업은 끝낸 뒤부터 유휴 시간을 센다. 연결과 operation 기록은 보존한다.</summary>
+        internal void SuspendIfIdle(double now)
+        {
+            if (idleSuspended) return;
+            if (processingActions || actionRequests.Count > 0 || playApi.HasActiveOperation)
+            {
+                lastRequestTime = now;
+                return;
+            }
+            if (now - lastRequestTime < IdleTimeoutSeconds) return;
+            EndDiscovery();
+            SetOverlay(false);
+            collectingPerformance = false;
+            idleSuspended = true;
         }
 
         private void EndClientSession()
@@ -376,11 +404,13 @@ namespace UnityPlayMcp
             SetOverlay(false);
             playApi = new PlayApi(new ScreenCapturer());
             clientSessionActive = false;
+            collectingPerformance = false;
             reportedDeviceContext = false;
         }
 
         public void SetOverlay(bool visible)
         {
+            if (visible) NoteRequest();
             cursorController.SetVisible(visible);
             GetComponent<KeyboardStatusController>().SetVisible(visible);
         }
@@ -437,6 +467,9 @@ namespace UnityPlayMcp
         /// </remarks>
         public bool StartReadings()
         {
+            NoteRequest();
+            BeginPerformanceCollection();
+            BeginDiscovery();
             if (Affordances.Scan.AffordanceBootstrap.Watching)
             {
                 // 다시 요청하는 쪽은 상태가 낡았다고 의심하는 경우가 많으므로 전량 reading 을 요청한다 (#69).
@@ -516,6 +549,11 @@ namespace UnityPlayMcp
 
                 if (request.Type == "ACTION")
                 {
+                    if (!HasActivity(request))
+                    {
+                        SendError(message, "ACTION needs a nonempty method and params array.");
+                        return;
+                    }
                     EnqueueAction(request, message.ClientId);
                     return;
                 }
@@ -530,6 +568,7 @@ namespace UnityPlayMcp
 
         private void EnqueueAction(AgentRequestDto request, string clientId)
         {
+            if (HasActivity(request)) NoteRequest();
             actionRequests.Enqueue(new QueuedAction { Request = request, ClientId = clientId });
             if (!processingActions)
             {
@@ -566,6 +605,12 @@ namespace UnityPlayMcp
                 if (action == null)
                 {
                     results.Add(ActionResultDto.Failure(0, "Action item must be an object."));
+                    continue;
+                }
+
+                if (action.Method == "runtime_activity")
+                {
+                    results.Add(RuntimeActivity(action.Id, action.Parameters));
                     continue;
                 }
 
@@ -610,6 +655,43 @@ namespace UnityPlayMcp
             {
                 webSocketTransport.Send(jsonCodec.Serialize(response));
             }
+            if (HasActivity(request)) NoteRequest();
+        }
+
+        private void NoteRequest()
+        {
+            lastRequestTime = Time.realtimeSinceStartupAsDouble;
+            idleSuspended = false;
+        }
+
+        private static bool HasActivity(AgentRequestDto request)
+        {
+            return request.Actions != null && request.Actions.Exists(action =>
+                action != null && !string.IsNullOrWhiteSpace(action.Method) && action.Parameters != null);
+        }
+
+        private sealed class RuntimeActivityDto
+        {
+            [Newtonsoft.Json.JsonProperty("reading")] public bool Reading { get; set; }
+            [Newtonsoft.Json.JsonProperty("resumed")] public bool Resumed { get; set; }
+            [Newtonsoft.Json.JsonProperty("run")] public string Run { get; set; }
+        }
+
+        private ActionResultDto RuntimeActivity(int id, List<object> parameters)
+        {
+            if (parameters == null || parameters.Count != 1 || !(parameters[0] is string intent)
+                || (intent != "status" && intent != "readings"))
+                return ActionResultDto.Failure(id, "runtime_activity requires [status|readings].");
+            BeginPerformanceCollection();
+            var resumed = intent == "readings" && !Reading;
+            if (resumed && !StartReadings())
+                return ActionResultDto.Failure(id, "Could not resume readings.");
+            return ActionResultDto.Success(id, new RuntimeActivityDto
+            {
+                Reading = Reading,
+                Resumed = resumed,
+                Run = Affordances.Scan.AffordanceBootstrap.CurrentRun
+            });
         }
 
         /// <summary>
@@ -634,7 +716,7 @@ namespace UnityPlayMcp
         /// </summary>
         private void SendPerformanceReport()
         {
-            if (!clientSessionActive)
+            if (!collectingPerformance)
             {
                 // 재연결한 서버는 이 세션의 device context 를 모르므로 다음 연결에서 다시 보낸다.
                 reportedDeviceContext = false;
