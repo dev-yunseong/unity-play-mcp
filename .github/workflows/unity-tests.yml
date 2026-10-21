@@ -1,6 +1,12 @@
 name: Unity Tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full commit SHA that must match the selected branch
+        required: true
+        type: string
   pull_request:
   push:
     branches:
@@ -99,6 +105,17 @@ jobs:
           # samples/WordVenture is not needed; the tests run against a throwaway
           # project assembled from Packages/dev.yunseong.unityplaymcp.
           submodules: false
+
+      - name: Verify dispatched commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]] || [ "$(git rev-parse HEAD)" != "$EXPECTED_SHA" ]; then
+            echo "::error::Dispatched branch HEAD does not match expected_sha; refusing to test a different commit."
+            exit 1
+          fi
 
       # No project in the tree declares the package as a testable, so build one.
       # game-ci's `packageMode` is not used: its manifest omits built-in modules the
