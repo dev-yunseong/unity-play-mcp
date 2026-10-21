@@ -68,10 +68,10 @@ namespace UnityPlayMcp
 
         /// <summary>False on a duplicate that Awake destroyed before it built anything.</summary>
         /// <remarks>
-        /// 일부러 serialize 하지 않는다. assembly reload 뒤 false 가 되어 <see cref="OnEnable"/> 이 함께 사라진
+        /// private bool 도 hot reload 때 복원되므로 명시적으로 제외한다. reload 뒤 false 가 되어 <see cref="OnEnable"/> 이 사라진
         /// <see cref="frameTimeRecorder"/> 등을 다시 만든다.
         /// </remarks>
-        private bool ownsRuntime;
+        [NonSerialized] private bool ownsRuntime;
 
         /// <summary>Separates the first connection, which is Start's, from a later re-enable.</summary>
         /// <remarks>

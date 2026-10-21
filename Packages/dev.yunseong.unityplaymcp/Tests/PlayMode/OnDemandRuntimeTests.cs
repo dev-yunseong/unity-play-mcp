@@ -206,6 +206,38 @@ namespace UnityPlayMcp.Tests
         }
 
         [UnityTest]
+        public IEnumerator ReloadedRuntimeAnswersRequestsAndSuspendsAgain()
+        {
+            var host = CreateHost();
+            yield return null;
+            host.StartReadings();
+            host.SetOverlay(true);
+
+            AssemblyReloadSimulation.Rehearse(host);
+            yield return null;
+            var transport = ReplaceTransport(host);
+            transport.ActiveClients = 1;
+            transport.ClientsOpened = 1;
+            Send(transport, "runtime_activity", "\"readings\"");
+            yield return null;
+            yield return null;
+            Assert.That(host.Reading && AffordanceBootstrap.Following, Is.True);
+            Send(transport, "set_overlay", "true");
+            yield return null;
+            yield return null;
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.True);
+
+            host.SuspendIfIdle((double)Field("lastRequestTime").GetValue(host) + 15d);
+            Assert.That(host.Reading || AffordanceBootstrap.Following, Is.False);
+            Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
+            Send(transport, "runtime_activity", "\"status\"");
+            yield return null;
+            yield return null;
+            Assert.That((bool)Field("collectingPerformance").GetValue(host), Is.True);
+            Assert.That(host.Reading || AffordanceBootstrap.Following, Is.False);
+        }
+
+        [UnityTest]
         public IEnumerator BusyActionsDeferIdleAndEmptyMessagesDoNotRenewIt()
         {
             var host = CreateHost();
