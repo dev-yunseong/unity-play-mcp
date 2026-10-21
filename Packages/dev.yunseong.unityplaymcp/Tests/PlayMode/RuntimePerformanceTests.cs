@@ -22,10 +22,11 @@ namespace UnityPlayMcp.Tests
         {
             public string state;
             public int samples;
+            public int discardedTailSamples;
             public double hostUpdateMeanNanoseconds;
             public long hostUpdateP50Nanoseconds;
             public long hostUpdateP95Nanoseconds;
-            public double mainThreadGcMeanBytes;
+            public double wholeFrameGcMeanBytes;
         }
 
         [Serializable]
@@ -36,7 +37,8 @@ namespace UnityPlayMcp.Tests
             public string processor;
             public int warmupFrames = WarmupFrames;
             public int requestedFrames = SampleFrames;
-            public string gcScope = "Entire main thread including Editor/test overhead, not SDK-only";
+            public string gcScope = "Unity GC Allocated In Frame counter, including Editor/test work; not SDK-only or thread-isolated";
+            public string gcUnit = "Bytes";
             public string cpuScope = "UnityPlayMcp.Host.Update only; excludes separate UI/reading callbacks and transport threads";
             public List<Sample> states = new List<Sample>();
         }
@@ -58,6 +60,7 @@ namespace UnityPlayMcp.Tests
         [UnityTest, Explicit("Opt-in benchmark; select RuntimePerformanceTests explicitly"), Category("RuntimeBenchmark")]
         public IEnumerator ReportsUnconnectedActiveAndIdleCosts()
         {
+            File.Delete(Path.Combine(Application.dataPath, "../runtime-performance.json"));
             foreach (var old in UnityEngine.Object.FindObjectsOfType<UnityPlayMcpHost>(true))
                 UnityEngine.Object.DestroyImmediate(old.gameObject);
             hostObject = new GameObject("runtime benchmark");
@@ -67,6 +70,7 @@ namespace UnityPlayMcp.Tests
             Field("webSocketTransport").SetValue(host, transport);
             yield return null;
             var report = new Report { unityVersion = Application.unityVersion, operatingSystem = SystemInfo.operatingSystem, processor = SystemInfo.processorType };
+            yield return CalibrateGcCounter();
             AssertState(host, false);
             yield return Measure("unconnected", report);
             AssertState(host, false);
@@ -97,28 +101,53 @@ namespace UnityPlayMcp.Tests
         private static IEnumerator Measure(string state, Report report)
         {
             for (var i = 0; i < WarmupFrames; i++) yield return null;
-            var options = ProfilerRecorderOptions.Default | ProfilerRecorderOptions.CollectOnlyOnCurrentThread;
+            // 고정된 120프레임 표본을 보존하려고 wraparound를 끈다.
+            var options = ProfilerRecorderOptions.SumAllSamplesInFrame | ProfilerRecorderOptions.CollectOnlyOnCurrentThread;
             using (var cpu = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "UnityPlayMcp.Host.Update", SampleFrames, options))
-            using (var gc = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", SampleFrames, options))
+            using (var gc = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame", SampleFrames, options))
             {
-                Assert.That(cpu.Valid && gc.Valid, Is.True, "Required profiling recorders unavailable");
+                Assert.That(cpu.Valid, Is.True, "Required CPU profiling recorder unavailable");
+                Assert.That(cpu.UnitType.ToString(), Is.EqualTo("TimeNanoseconds"));
+                Assert.That(gc.Valid, Is.True, "Required GC byte counter unavailable");
+                Assert.That(gc.UnitType.ToString(), Is.EqualTo("Bytes"));
                 for (var i = 0; i < SampleFrames; i++) yield return null;
                 cpu.Stop();
                 gc.Stop();
                 var cpuSamples = cpu.ToArray();
                 var gcSamples = gc.ToArray();
-                Assert.That(cpuSamples.Length, Is.GreaterThan(0), "No CPU samples; do not report missing data as zero");
-                Assert.That(gcSamples.Length, Is.GreaterThan(0), "No GC samples; do not report missing data as zero");
-                var values = new long[cpuSamples.Length];
+                // Stop 시점의 진행 중 프레임 표본 하나가 붙을 수 있으므로 앞의 완성된 120개만 쓴다.
+                Assert.That(cpuSamples.Length, Is.InRange(SampleFrames, SampleFrames + 1), "Incomplete or unexpected CPU window");
+                Assert.That(gcSamples.Length, Is.InRange(SampleFrames, SampleFrames + 1), "Incomplete or unexpected GC window");
+                Assert.That(gcSamples.Length, Is.EqualTo(cpuSamples.Length), "CPU and GC windows must align");
+                var values = new long[SampleFrames];
                 double cpuSum = 0, gcSum = 0;
-                for (var i = 0; i < values.Length; i++) { values[i] = cpuSamples[i].Value; cpuSum += values[i]; }
-                foreach (var sample in gcSamples) gcSum += sample.Value;
+                for (var i = 0; i < values.Length; i++) { values[i] = cpuSamples[i].Value; cpuSum += values[i]; gcSum += gcSamples[i].Value; }
                 Array.Sort(values);
                 report.states.Add(new Sample { state = state, samples = values.Length,
+                    discardedTailSamples = cpuSamples.Length - SampleFrames,
                     hostUpdateMeanNanoseconds = cpuSum / values.Length,
                     hostUpdateP50Nanoseconds = values[(int)Math.Ceiling(values.Length * .50) - 1],
                     hostUpdateP95Nanoseconds = values[(int)Math.Ceiling(values.Length * .95) - 1],
-                    mainThreadGcMeanBytes = gcSum / gcSamples.Length });
+                    wholeFrameGcMeanBytes = gcSum / SampleFrames });
+            }
+        }
+
+        private static IEnumerator CalibrateGcCounter()
+        {
+            // 지원되지 않는 byte counter가 0을 반환해 무할당으로 오해되는 것을 막는다.
+            using (var gc = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame", 8))
+            {
+                Assert.That(gc.Valid, Is.True, "GC byte counter unavailable");
+                Assert.That(gc.UnitType.ToString(), Is.EqualTo("Bytes"));
+                yield return null;
+                var allocation = new byte[4096];
+                yield return null;
+                yield return null;
+                GC.KeepAlive(allocation);
+                gc.Stop();
+                var observedAllocation = false;
+                foreach (var sample in gc.ToArray()) observedAllocation |= sample.Value >= 4096;
+                Assert.That(observedAllocation, Is.True, "GC byte counter did not observe a known 4096-byte allocation");
             }
         }
 

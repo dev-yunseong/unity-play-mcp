@@ -32,10 +32,11 @@ field reflection is isolated to test code and may need updating after runtime re
 
 ## Opt-in benchmark
 
-Port 17311 must also be free for this test: SDK auto-spawn opens the transport before
-the test starts. The benchmark's own host receives a controlled transport before Start.
-Do not run it alongside a
-playing game. A socket conflict is a failed run, not a usable measurement.
+Prefer a free port 17311: SDK auto-spawn attempts to open the transport before the
+test starts and can log a socket conflict. The benchmark's own host receives a
+controlled transport before Start, so its measurements are isolated from that
+socket. Require a passing NUnit result and fresh JSON; a failed run is not a
+usable measurement. Never stop another game just to free the port.
 
 ```sh
 /path/to/Unity -batchmode -nographics -runTests -testPlatform PlayMode \
@@ -47,20 +48,24 @@ playing game. A socket conflict is a failed run, not a usable measurement.
 
 Read `runtime-performance.json` together with the NUnit XML; a leftover JSON file
 alone does not prove the latest run passed. Each state has 30 warmup frames and 120
-requested sample frames. The JSON reports actual samples, CPU mean/p50/p95 in
-nanoseconds, main-thread GC bytes per recorded frame, and environment metadata.
+requested sample frames. Incomplete CPU windows fail; the JSON reports exactly 120 samples, CPU mean/p50/p95 in
+nanoseconds, whole-frame GC bytes per recorded frame, and environment metadata.
 No machine-dependent timing threshold is asserted. State assertions must pass;
-missing profiler data fails rather than becoming zero.
+missing profiler data fails rather than becoming zero. A final in-progress sample
+flushed by `Stop` is excluded and reported as `discardedTailSamples` (zero or one).
 
 The three states are unconnected, active readings/UI, and connected-but-idle after
 the 15-second boundary (the benchmark advances the idle check directly; the lifecycle
 probe covers real elapsed time). A controlled transport excludes network traffic and
 other clients. CPU covers **Host.Update only**, not the SDK's separate UI/reading
-callbacks or transport threads. GC covers the **whole main thread**, including test
+callbacks or transport threads. GC covers Unity's **whole-frame allocation counter**, including test
 and Editor work, not SDK-only allocations. These numbers are comparison evidence,
 not total SDK overhead and not a claim of zero cost. Compare repeated runs on the
 same machine/editor/project; use the Unity Profiler on a representative game for
 end-to-end costs before setting a performance budget.
 
 The benchmark uses Unity's [ProfilerRecorder](https://docs.unity.cn/2022.3/Documentation/ScriptReference/Unity.Profiling.ProfilerRecorder.StartNew.html)
-with per-frame summation and current-thread collection.
+with per-frame CPU summation and current-thread CPU collection. GC uses the memory
+`GC Allocated In Frame` counter. Its unit must be `Bytes`, and a known 4096-byte
+allocation must be observed before sampling. The `GC.Alloc` timing marker is not
+treated as a byte counter; GC is not thread-isolated.
