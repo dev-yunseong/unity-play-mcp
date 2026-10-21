@@ -105,3 +105,27 @@ test("every prompt renders a non-empty message through the server registration",
     assert.ok(result.messages[0].content.text.length > 0, `${entry.name} rendered nothing`);
   }
 });
+
+test("run_steps uses current observations, explicit effects and retry-safe inputs", () => {
+  const rendered = named("run_steps").render({ steps: "Play a card" });
+
+  assert.match(rendered, /freshness: "current"/);
+  assert.ok(rendered.indexOf("observe with") < rendered.indexOf("Perform one step with act_and_observe"));
+  assert.match(rendered, /basedOnObservationId/);
+  assert.match(rendered, /expect predicates/);
+  assert.match(rendered, /baseline/);
+  assert.match(rendered, /identical arguments and operationId/);
+  assert.match(rendered, /new id for a new input/);
+});
+
+test("run_steps stops on unconfirmed effects and retains a checked legacy fallback", () => {
+  const rendered = named("run_steps").render({ steps: "Press Start" });
+
+  assert.match(rendered, /unknown or not_observed/);
+  assert.match(rendered, /do not automatically send the input again/);
+  assert.match(rendered, /Stop at the first mismatch or unconfirmed result/);
+  assert.match(rendered, /unsupported_capability/);
+  assert.match(rendered, /wait_for_condition/);
+  assert.match(rendered, /reading number alone is not success/);
+  assert.match(rendered, /capture_screen/);
+});

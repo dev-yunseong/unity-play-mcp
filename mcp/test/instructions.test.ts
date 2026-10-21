@@ -56,3 +56,12 @@ test("instructions stay short enough to sit in every context", () => {
     `instructions are ${serverInstructions.length} characters; keep them under 2000`,
   );
 });
+
+test("live play instructions require current observations and checked effects", () => {
+  assert.match(serverInstructions, /observe with freshness: "current"/);
+  assert.match(serverInstructions, /basedOnObservationId/);
+  assert.match(serverInstructions, /expect predicates/);
+  assert.match(serverInstructions, /unknown, never success/);
+  assert.match(serverInstructions, /identical request with the same id/);
+  assert.match(serverInstructions, /unsupported_capability/);
+});
