@@ -43,11 +43,11 @@ namespace UnityPlayMcp
 
         /// <summary>이 domain 에서 GUI 를 만들었는지 여부다.</summary>
         /// <remarks>
-        /// 일부러 serialize 하지 않는다. reload 뒤 false 가 되어 <see cref="OnEnable"/> 이 사라진
-        /// <see cref="keyStatusText"/> 등과 비워진 <see cref="keyboardKeys"/> 를 다시 채운다.
+        /// private bool 도 hot reload 때 복원되므로 명시적으로 제외한다. reload 뒤 false 가 되어
+        /// <see cref="OnEnable"/> 이 overlay 와 비워진 <see cref="keyboardKeys"/> 를 다시 만든다.
         /// <c>UnityPlayMcpHost.ownsRuntime</c> 과 같은 방식이다.
         /// </remarks>
-        private bool builtOverlay;
+        [NonSerialized] private bool builtOverlay;
         [SerializeField, HideInInspector] private bool visible;
 
         public void SetVisible(bool value)

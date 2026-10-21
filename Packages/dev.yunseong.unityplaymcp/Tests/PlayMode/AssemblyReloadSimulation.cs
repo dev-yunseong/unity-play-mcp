@@ -104,17 +104,20 @@ namespace UnityPlayMcp.Tests
 
         /// <summary>Unity 가 이 field 를 serialize 해 reload 뒤 복원하는지 반환한다.</summary>
         /// <remarks>
-        /// attribute 없는 public field 도 serialize 되고, <c>[NonSerialized]</c> 는 public 이어도 제외된다.
-        /// 이를 어기면 simulation 이 실제 reload 보다 더 많이 지워 없는 결함을 잡는다.
+        /// asset 저장과 달리 hot reload 는 private field 도 복원한다. 여기서는 대상 component 가 쓰는
+        /// scalar, Unity object 참조와 Vector2 만 모델링한다. 임의의 managed object serializer 는 아니다.
+        /// readonly 와 <c>[NonSerialized]</c> 는 type 과 관계없이 제외된다.
         /// </remarks>
         private static bool Serialized(FieldInfo field)
         {
-            if (field.IsDefined(typeof(System.NonSerializedAttribute), false))
+            if (field.IsInitOnly || field.IsDefined(typeof(System.NonSerializedAttribute), false))
             {
                 return false;
             }
 
-            return field.IsPublic || field.IsDefined(typeof(SerializeField), false);
+            var type = field.FieldType;
+            return type.IsPrimitive || type.IsEnum || type == typeof(string) ||
+                typeof(Object).IsAssignableFrom(type) || type == typeof(Vector2);
         }
 
         /// <summary>
