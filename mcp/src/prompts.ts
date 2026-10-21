@@ -91,10 +91,12 @@ export const unityPrompts: readonly UnityPrompt[] = [
         steps ?? "",
         "",
         "How to run them:",
-        "1. Call start_readings, then get_scene_state, and find the instance id for each object a step names. Never guess an id.",
-        "2. Perform one step at a time. After each, read the state again and confirm the reading number moved before judging the result.",
-        "3. Call capture_screen at any step whose result is visual.",
-        "4. Stop at the first step whose result differs from what the step said it would do, and report that step with what you saw.",
+        '1. Call get_play_capabilities. Before each step, call observe with freshness: "current" and find the target refs and observationId. Never guess an id.',
+        "2. Express the expected effect as expect predicates using observed facts or inspect_action outcome predicates. For example, compare a known resource value with its baseline or check the expected scene with sceneIs. Do not invent unavailable facts or treat missing values as zero.",
+        "3. Perform one step with act_and_observe, basedOnObservationId from that observation, a new operationId, and expect. Retry a transport request only with its identical arguments and operationId; use a new id for a new input.",
+        "4. Check execution and outcome separately. Accepted input does not prove the intended effect. If outcome is unknown or not_observed, re-observe and report what remains unconfirmed; do not automatically send the input again.",
+        "5. On unsupported_capability, call start_readings then get_scene_state and use normal input tools. Verify the expected scene/member value with wait_for_condition; an increased reading number alone is not success.",
+        "6. Call capture_screen at any step whose result is visual. Stop at the first mismatch or unconfirmed result and report the expected effect and the evidence you observed.",
         ...(expectation === undefined
           ? []
           : ["", `The sequence should end with: ${expectation}`]),
