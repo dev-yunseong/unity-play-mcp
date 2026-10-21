@@ -38,12 +38,19 @@ type CallToolHandler = (
   extra: { signal: AbortSignal },
 ) => Promise<{ content: { type: string; text?: string; data?: string }[]; isError?: boolean }>;
 
-async function captureThroughTool(returnValue: unknown, store = new PulseStore()) {
+async function captureThroughTool(
+  returnValue: unknown,
+  store = new PulseStore(),
+  args: Record<string, unknown> = {},
+  sent: ActionRequest[] = [],
+  toolName = "capture_screen",
+) {
   const connection = {
     endpoint: "ws://127.0.0.1:17311/ws",
     isConnected: () => true,
     async ensureConnected(): Promise<void> {},
     async sendActions(actions: ActionRequest[]): Promise<ActionResult[]> {
+      sent.push(...actions);
       return actions.map((action) => ({ id: action.id, success: true, returnValue: returnValue as never }));
     },
   } as unknown as UnityConnection;
@@ -54,10 +61,44 @@ async function captureThroughTool(returnValue: unknown, store = new PulseStore()
   })._requestHandlers?.get("tools/call");
   assert.ok(handler !== undefined, "server.server._requestHandlers no longer carries tools/call");
   return handler(
-    { method: "tools/call", params: { name: "capture_screen", arguments: {} } },
+    { method: "tools/call", params: { name: toolName, arguments: args } },
     { signal: new AbortController().signal },
   );
 }
+
+for (const toolName of ["capture_screen", "perform_actions"]) {
+  test(`${toolName} sends whole-screen maxEdge without needing a scene reading`, async () => {
+    const sent: ActionRequest[] = [];
+    const args = toolName === "capture_screen"
+      ? { maxEdge: 256 }
+      : { actions: [{ method: "capture_screen", maxEdge: 256 }] };
+    const result = await captureThroughTool(fullScreen({
+      width: 256, height: 144, scale: { x: 256 / 1920, y: 144 / 1080 },
+    }), new PulseStore(), args, sent, toolName);
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(sent.map(({ method, params }) => ({ method, params })), [
+      { method: "capture_screen", params: [null, { maxEdge: 256 }] },
+    ]);
+    assert.ok(result.content.some((item) => item.type === "image" && item.data === IMAGE));
+  });
+
+  test(`${toolName} refuses whole-screen padding before sending input`, async () => {
+    const sent: ActionRequest[] = [];
+    const args = toolName === "capture_screen"
+      ? { maxEdge: 256, padding: 0 }
+      : { actions: [{ method: "capture_screen", maxEdge: 256, padding: 0 }] };
+    const result = await captureThroughTool(fullScreen(), new PulseStore(), args, sent, toolName);
+    assert.equal(result.isError, true);
+    assert.deepEqual(sent, []);
+  });
+}
+
+test("scaled whole-screen metadata still maps image pixels to full game coordinates", () => {
+  const description = describeCapture(fullScreen({
+    width: 256, height: 144, scale: { x: 256 / 1920, y: 144 / 1080 },
+  }), undefined);
+  assert.deepEqual(toScreen(description, 128, 72).map(Math.round), [960, 540]);
+});
 
 function reading(scene: string, readingNumber: number, frame: number): PulseFrame {
   return {

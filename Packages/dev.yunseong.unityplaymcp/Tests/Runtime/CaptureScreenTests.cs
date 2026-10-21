@@ -67,6 +67,20 @@ namespace UnityPlayMcp.Tests
         }
 
         [Test]
+        public void ReadParams_NullTargetScalesTheWholeScreenWithoutChangingCoordinates()
+        {
+            var options = new Dictionary<string, object> { { "maxEdge", 256L } };
+            Assert.That(CaptureRequestReader.TryRead(
+                new List<object> { null, options }, out var request, out var error), Is.True, error);
+            Assert.That(request.IsFullScreen, Is.True);
+            Assert.That(request.ContentType, Is.EqualTo("image/jpeg"));
+            Assert.That(request.Padding, Is.Zero);
+            Assert.That(request.MaxEdge, Is.EqualTo(256));
+            Assert.That(CaptureRect.Downscale(1920, 1080, request.MaxEdge), Is.EqualTo(new Vector2Int(256, 144)));
+            Assert.That(CaptureRect.Downscale(128, 72, request.MaxEdge), Is.EqualTo(new Vector2Int(128, 72)));
+        }
+
+        [Test]
         public void ReadParams_LetsOptionsOverrideTheDefaults()
         {
             var options = new Dictionary<string, object> { { "maxEdge", 256L }, { "padding", 4L } };
