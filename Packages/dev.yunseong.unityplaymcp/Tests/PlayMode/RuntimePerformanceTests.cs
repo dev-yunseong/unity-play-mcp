@@ -62,10 +62,10 @@ namespace UnityPlayMcp.Tests
                 UnityEngine.Object.DestroyImmediate(old.gameObject);
             hostObject = new GameObject("runtime benchmark");
             var host = hostObject.AddComponent<UnityPlayMcpHost>();
-            yield return null;
-            ((IAgentTransport)Field("webSocketTransport").GetValue(host)).Dispose();
             var transport = new Transport();
+            // Start가 실행되기 전에 넣어 benchmark host가 실제 socket을 열지 않게 한다.
             Field("webSocketTransport").SetValue(host, transport);
+            yield return null;
             var report = new Report { unityVersion = Application.unityVersion, operatingSystem = SystemInfo.operatingSystem, processor = SystemInfo.processorType };
             AssertState(host, false);
             yield return Measure("unconnected", report);

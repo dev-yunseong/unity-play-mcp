@@ -32,8 +32,9 @@ field reflection is isolated to test code and may need updating after runtime re
 
 ## Opt-in benchmark
 
-Port 17311 must also be free for this test: SDK startup opens the transport before
-the benchmark replaces it with a controlled transport. Do not run it alongside a
+Port 17311 must also be free for this test: SDK auto-spawn opens the transport before
+the test starts. The benchmark's own host receives a controlled transport before Start.
+Do not run it alongside a
 playing game. A socket conflict is a failed run, not a usable measurement.
 
 ```sh
