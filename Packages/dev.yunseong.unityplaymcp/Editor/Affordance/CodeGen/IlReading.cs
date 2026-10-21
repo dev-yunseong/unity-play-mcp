@@ -209,7 +209,7 @@ namespace UnityPlayMcp.Affordances.CodeGen
                         instruction.Operand as MethodReference, instruction, boundary, within, depth);
 
                 default:
-                    return Arithmetic(instruction, boundary, 0, within);
+                    return Arithmetic(instruction, boundary, depth, within);
             }
         }
 
@@ -353,7 +353,8 @@ namespace UnityPlayMcp.Affordances.CodeGen
 
             return Operator(instruction.OpCode.Code) != null || instruction.OpCode.Code == Code.Neg
                 ? Arithmetic(instruction, boundary, depth, within)
-                : Describe(instruction, boundary, within);
+                // 필드와 지역 변수의 저장식을 다시 따라갈 때도 누적 깊이를 유지한다.
+                : Describe(instruction, boundary, within, depth);
         }
 
         private static string Operator(Code code)
