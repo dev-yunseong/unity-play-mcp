@@ -146,13 +146,13 @@ function objectRefIssue(ref: TargetRef, what: string): string | undefined {
     : undefined;
 }
 
-/// `maxEdge` 와 `padding` 은 잘라낼 대상을 두고 하는 말이라 대상 없이는 뜻이 없다. 대상은 아예 없어도 된다(전체 화면).
+/// 전체 화면도 축소할 수 있지만 `padding` 은 잘라낼 대상이 있어야 한다.
 function captureScreenIssue(capture: CaptureScreenArguments): string | undefined {
   const hasTarget = capture.targetId !== undefined || capture.selector !== undefined;
   if (hasTarget) return objectRefIssue(capture, "capture_screen");
-  return capture.maxEdge === undefined && capture.padding === undefined
+  return capture.padding === undefined
     ? undefined
-    : "capture_screen requires targetId or selector when maxEdge or padding is set.";
+    : "capture_screen requires targetId or selector when padding is set.";
 }
 
 export type PerformAction = z.infer<typeof performActionSchema>;
@@ -230,13 +230,13 @@ interface CaptureScreenArguments {
   padding?: number;
 }
 
-/// `capture_screen` 이 Unity 로 보내는 `params`. `[]`, `[targetId]`, `[targetId, options]` 중 하나다.
+/// 전체 화면 옵션은 Unity 가 지원하는 null target 자리 뒤에 보낸다.
 function captureScreenParams(capture: CaptureScreenArguments): unknown[] {
-  if (capture.targetId === undefined) return [];
   const options = {
     ...(capture.maxEdge === undefined ? {} : { maxEdge: capture.maxEdge }),
     ...(capture.padding === undefined ? {} : { padding: capture.padding }),
   };
+  if (capture.targetId === undefined) return Object.keys(options).length === 0 ? [] : [null, options];
   return Object.keys(options).length === 0 ? [capture.targetId] : [capture.targetId, options];
 }
 
@@ -1025,7 +1025,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   });
 
   server.registerTool("capture_screen", {
-    description: "Capture the whole game screen (JPEG, longest edge 1024 by default) or one target given by targetId or selector (PNG, cropped with padding). Alongside the image it returns the Unity Screen.width/height that input uses, the captured region in top-left screen pixels, the image-per-screen-pixel scale, and a toScreen formula to turn an image pixel into move_mouse coordinates; plus the Unity frame and scene the image was taken on, and how the held scene reading relates to it (frames before/after, same scene or not). For a target crop, region includes the padding and is larger than the element. Never assume the screen size from the image size.",
+    description: "Capture the whole game screen (JPEG, longest edge 1024 by default) or one target given by targetId or selector (PNG, cropped with padding). maxEdge limits the longest image edge for either mode without upscaling; padding requires a target. Alongside the image it returns the Unity Screen.width/height that input uses, the captured region in top-left screen pixels, the image-per-screen-pixel scale, and a toScreen formula to turn an image pixel into move_mouse coordinates; plus the Unity frame and scene the image was taken on, and how the held scene reading relates to it (frames before/after, same scene or not). For a target crop, region includes the padding and is larger than the element. Never assume the screen size from the image size.",
     inputSchema: {
       ...objectRefShape(),
       maxEdge: maxEdgeSchema().optional(),

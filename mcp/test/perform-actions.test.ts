@@ -50,6 +50,11 @@ const wireCases: ReadonlyArray<{
   { name: "stop_readings", action: { method: "stop_readings" }, params: [] },
   { name: "capture_screen for the whole screen", action: { method: "capture_screen" }, params: [] },
   {
+    name: "capture_screen for a scaled whole screen",
+    action: { method: "capture_screen", maxEdge: 256 },
+    params: [null, { maxEdge: 256 }],
+  },
+  {
     name: "capture_screen for one target",
     action: { method: "capture_screen", targetId: 11 },
     params: [11],
@@ -116,7 +121,6 @@ const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "an enter_text with an id and a selector", action: { method: "enter_text", targetId: 1, selector: "A[0]", text: "a" } },
   { name: "an enter_text with no target", action: { method: "enter_text", text: "a" } },
   { name: "a capture_screen aimed by coordinates", action: { method: "capture_screen", x: 1, y: 2 } },
-  { name: "maxEdge with only a selector missing", action: { method: "capture_screen", maxEdge: 100 } },
   {
     name: "a click carrying a mouse button it does not take",
     action: { method: "click", targetId: 7, button: 0 },
@@ -136,7 +140,9 @@ const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [
   { name: "an empty button name", action: { method: "set_button", name: "", pressed: true } },
   { name: "a reset_game without clearPlayerPrefs", action: { method: "reset_game" } },
   { name: "a field the method does not take", action: { method: "pause_time", seconds: 1 } },
-  { name: "maxEdge without a targetId", action: { method: "capture_screen", maxEdge: 512 } },
+  { name: "whole screen maxEdge with padding", action: { method: "capture_screen", maxEdge: 512, padding: 0 } },
+  { name: "a zero whole screen maxEdge", action: { method: "capture_screen", maxEdge: 0 } },
+  { name: "a fractional whole screen maxEdge", action: { method: "capture_screen", maxEdge: 0.5 } },
   { name: "padding without a targetId", action: { method: "capture_screen", padding: 8 } },
   { name: "a zero maxEdge", action: { method: "capture_screen", targetId: 3, maxEdge: 0 } },
   { name: "a negative padding", action: { method: "capture_screen", targetId: 3, padding: -1 } },
