@@ -100,6 +100,7 @@ namespace UnityPlayMcp.Tests
 
             var body = Json(result);
             Assert.That((int)body["protocolVersion"], Is.EqualTo(PlayApi.ProtocolVersion));
+            Assert.That((string)body["requiredServerVersion"], Is.EqualTo(UnityPlayMcp.Affordances.Scan.CompatibleMcpServerVersion.Value));
             Assert.That((string)body["sessionId"], Is.EqualTo(api.SessionId));
             var tools = body["tools"].Select(token => (string)token).ToList();
             Assert.That(tools, Is.SupersetOf(new[] { "observe", "act_and_observe", "watch_events", "query_space" }));

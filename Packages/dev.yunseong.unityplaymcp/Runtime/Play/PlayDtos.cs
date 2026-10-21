@@ -275,6 +275,7 @@ namespace UnityPlayMcp.Play
     {
         [JsonProperty("protocolVersion")] public int ProtocolVersion { get; set; }
         [JsonProperty("runtimeVersion")] public string RuntimeVersion { get; set; }
+        [JsonProperty("requiredServerVersion")] public string RequiredServerVersion { get; set; }
         [JsonProperty("sessionId")] public string SessionId { get; set; }
         [JsonProperty("tools")] public List<string> Tools { get; set; }
         [JsonProperty("inputPaths")] public List<string> InputPaths { get; set; }

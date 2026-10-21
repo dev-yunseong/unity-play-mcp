@@ -41,6 +41,9 @@ namespace UnityPlayMcp.McpConfig.Editor
         private static float _readingInterval;
         private static string _rootsError;
         private static string _serverError;
+        private static string _requiredCliVersion;
+        private static string _sdkVersion;
+        private static readonly HashSet<string> RestartRequired = new HashSet<string>();
 
         [SettingsProvider]
         internal static SettingsProvider Create()
@@ -63,45 +66,34 @@ namespace UnityPlayMcp.McpConfig.Editor
 
             var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var packageRoot = McpServerLocator.PackageRoot();
+            _sdkVersion = UnityEditor.PackageManager.PackageInfo.FindForAssembly(
+                typeof(UnityPlayMcpSettingsProvider).Assembly)?.version ?? "Unknown";
 
             _serverEntry = null;
             _serverError = null;
+            _requiredCliVersion = null;
 
-            // local build 는 package metadata 없이도 쓸 수 있다. version file 은 npx 가 필요할 때만 읽는다.
-            _serverEntry = McpServerLocator.Resolve(packageRoot, _projectRoot, null, File.Exists);
+            if (!string.IsNullOrEmpty(packageRoot))
+            {
+                try
+                {
+                    var version = File.ReadAllText(Path.Combine(packageRoot, McpServerVersionFileFromPackageRoot)).Trim();
+                    if (!McpCliVersion.IsExact(version))
+                        throw new InvalidOperationException("The SDK compatible CLI version is invalid.");
+                    _requiredCliVersion = version;
+                }
+                catch (Exception exception)
+                {
+                    _serverError = "Could not read the SDK compatible CLI version: " + exception.Message;
+                }
+            }
+
+            // Add는 local build를 우선하지만 기존 pin 업데이트는 SDK가 지정한 npm version만 쓴다.
+            _serverEntry = McpServerLocator.Resolve(packageRoot, _projectRoot, _requiredCliVersion, File.Exists);
 
             if (_serverEntry == null && string.IsNullOrEmpty(packageRoot))
             {
                 _serverError = "Could not locate the Unity Play MCP package directory, so the compatible MCP server version is unknown.";
-            }
-            else if (_serverEntry == null)
-            {
-                var versionFile = Path.Combine(packageRoot, McpServerVersionFileFromPackageRoot);
-
-                if (!File.Exists(versionFile))
-                {
-                    _serverError = "The MCP server version file is missing: " + versionFile;
-                }
-                else
-                {
-                    try
-                    {
-                        var mcpServerVersion = File.ReadAllText(versionFile).Trim();
-
-                        if (mcpServerVersion.Length == 0)
-                        {
-                            _serverError = "The MCP server version file is empty: " + versionFile;
-                        }
-                        else
-                        {
-                            _serverEntry = McpServerLocator.Resolve(packageRoot, _projectRoot, mcpServerVersion, File.Exists);
-                        }
-                    }
-                    catch (Exception exception)
-                    {
-                        _serverError = "Could not read the MCP server version file: " + exception.Message;
-                    }
-                }
             }
 
             // agent 행을 그리지 못해도 간격은 보여야 하므로 아래 early return 앞에서 읽는다.
@@ -171,12 +163,15 @@ namespace UnityPlayMcp.McpConfig.Editor
                 try
                 {
                     row.Configured = McpAgentConfigurator.IsConfigured(row.Agent, ServerName);
+                    var entry = McpAgentConfigurator.ReadEntry(row.Agent, ServerName);
+                    row.CliVersion = McpCliVersion.ConfiguredVersion(entry);
                     row.Error = null;
                 }
                 catch (Exception exception)
                 {
                     // 읽을 수 없는 파일은 쓸 수도 없으므로 두 버튼을 모두 막는다.
                     row.Configured = false;
+                    row.CliVersion = null;
                     row.Error = exception.Message;
                 }
             }
@@ -190,6 +185,9 @@ namespace UnityPlayMcp.McpConfig.Editor
             }
 
             EditorGUILayout.LabelField("MCP server", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Installed SDK", _sdkVersion);
+            if (_requiredCliVersion != null)
+                EditorGUILayout.LabelField("SDK-compatible CLI", _requiredCliVersion);
 
             if (_serverError != null)
             {
@@ -292,13 +290,28 @@ namespace UnityPlayMcp.McpConfig.Editor
             EditorGUILayout.BeginHorizontal();
 
             EditorGUILayout.LabelField(row.Agent.DisplayName, GUILayout.Width(110f));
-            EditorGUILayout.LabelField(Status(row), GUILayout.Width(110f));
+            EditorGUILayout.LabelField(Status(row), GUILayout.Width(150f));
 
-            using (new EditorGUI.DisabledScope(_serverEntry == null || row.Error != null))
+            using (new EditorGUI.DisabledScope(_serverEntry == null || row.Error != null || row.Configured))
             {
                 if (GUILayout.Button("Add", GUILayout.Width(70f)))
                 {
                     Apply(row, add: true);
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(row.Error != null || row.CliVersion == null
+                || _requiredCliVersion == null || row.CliVersion == _requiredCliVersion))
+            {
+                if (GUILayout.Button("Update CLI", GUILayout.Width(90f)))
+                {
+                    try
+                    {
+                        McpAgentConfigurator.UpdateCli(row.Agent, ServerName, row.CliVersion, _requiredCliVersion);
+                        RestartRequired.Add(row.Agent.ConfigPath);
+                        ReadStatus();
+                    }
+                    catch (Exception exception) { row.Error = exception.Message; }
                 }
             }
 
@@ -314,6 +327,14 @@ namespace UnityPlayMcp.McpConfig.Editor
 
             EditorGUILayout.LabelField(" ", row.Agent.ConfigPath, EditorStyles.miniLabel);
 
+            if (row.CliVersion != null && _requiredCliVersion != null && row.CliVersion != _requiredCliVersion)
+                EditorGUILayout.HelpBox("Update required: configured CLI " + row.CliVersion + "; this SDK requires " +
+                    _requiredCliVersion + ". Update CLI changes the pin, which may select an older version. Restart the agent afterward.", MessageType.Warning);
+            else if (row.Configured && row.CliVersion == null)
+                EditorGUILayout.HelpBox("Local or custom launch: version is not verified here. Rebuild or update it manually. Run get_unity_status to check the running CLI.", MessageType.Info);
+            if (RestartRequired.Contains(row.Agent.ConfigPath))
+                EditorGUILayout.HelpBox("Configuration updated. If not already restarted, restart the agent so npx installs/runs the pinned CLI. A config change alone does not update a running process. If installation fails, check the agent log and network access. Verify with get_unity_status after restart.", MessageType.Info);
+
             if (row.Error != null)
             {
                 EditorGUILayout.HelpBox(row.Agent.ConfigPath + "\n" + row.Error, MessageType.Error);
@@ -327,7 +348,9 @@ namespace UnityPlayMcp.McpConfig.Editor
                 return "Unreadable";
             }
 
-            return row.Configured ? "Configured" : "Not configured";
+            if (!row.Configured) return "Not configured";
+            if (row.CliVersion == null || _requiredCliVersion == null) return "Version unverified";
+            return row.CliVersion == _requiredCliVersion ? "CLI pin matches" : "Update required";
         }
 
         private static void Apply(AgentRow row, bool add)
@@ -364,6 +387,7 @@ namespace UnityPlayMcp.McpConfig.Editor
             internal McpAgent Agent { get; }
 
             internal bool Configured { get; set; }
+            internal string CliVersion { get; set; }
 
             internal string Error { get; set; }
         }

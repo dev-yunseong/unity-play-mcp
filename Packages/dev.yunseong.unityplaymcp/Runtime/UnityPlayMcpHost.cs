@@ -385,7 +385,7 @@ namespace UnityPlayMcp
                 lastRequestTime = now;
                 return;
             }
-            if (now - lastRequestTime < IdleTimeoutSeconds) return;
+            if (now < lastRequestTime + IdleTimeoutSeconds) return;
             EndDiscovery();
             SetOverlay(false);
             collectingPerformance = false;

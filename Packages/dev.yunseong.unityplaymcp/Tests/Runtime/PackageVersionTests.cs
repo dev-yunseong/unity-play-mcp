@@ -12,6 +12,16 @@ namespace UnityPlayMcp.Tests
     public sealed class PackageVersionTests
     {
         [Test]
+        public void CompatibleCliMatchesTheEditorPin()
+        {
+            var package = PackageInfo.FindForAssembly(typeof(PackageVersion).Assembly);
+            Assert.That(package, Is.Not.Null);
+            var pin = System.IO.File.ReadAllText(System.IO.Path.Combine(
+                package.resolvedPath, "Editor/McpConfig/mcp-server-version.txt")).Trim();
+            Assert.AreEqual(pin, CompatibleMcpServerVersion.Value);
+        }
+
+        [Test]
         public void MatchesTheVersionInPackageJson()
         {
             var package = PackageInfo.FindForAssembly(typeof(PackageVersion).Assembly);

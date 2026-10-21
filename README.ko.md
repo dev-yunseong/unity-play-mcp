@@ -30,6 +30,12 @@ https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.un
 
 Unity package release마다 함께 검증한 MCP server 버전을 기록하고, 설정 페이지의 **Add**가 `npx -y unity-play-mcp@<그 버전>`을 씁니다. 이 짝을 유지하세요. 로컬 `mcp/dist` build나 이전 package가 추가한 항목을 쓰면 버전이 섞일 수 있습니다.
 
+`get_unity_status`는 실행 중인 CLI와 SDK가 요구하는 CLI 버전을 비교해 다르면 **Update required**를 안내합니다. SDK와 CLI 버전 번호 자체가 같아야 하는 것은 아닙니다. 호환 metadata가 없는 구형 SDK는 **unknown**으로 표시합니다.
+
+**Edit > Project Settings > Unity Play MCP**에서 agent 설정이 있는 scope를 고른 뒤 **Update CLI**를 누르면 환경변수와 다른 server 옵션을 보존하면서 호환 버전으로 고정합니다. 요구 버전이 더 오래된 경우에도 그 버전으로 맞춥니다. 이후 agent를 재시작하면 `npx`가 해당 버전을 설치·실행합니다. 설정의 pin이 맞아도 실행 중 프로세스는 아직 구버전일 수 있으므로 `get_unity_status`로 다시 확인하세요. 설치 실패 시 agent 로그와 네트워크 연결을 확인하세요.
+
+자동 수정은 생성기가 만든 `npx -y unity-play-mcp@<exact-version>` 형태만 지원합니다. 로컬 build, wrapper, 추가 인자, 범위·tag 버전은 수동으로 업데이트해야 합니다. 주석·중복 key가 있는 JSON이나 모호한 TOML은 덮어쓰지 않으며, SDK dependency 자체는 변경하지 않습니다.
+
 | Unity package | MCP server | 비고 |
 | --- | --- | --- |
 | `v0.4.0` | `0.4.0` | reading이 다시 시작되거나 연결이 끊긴 뒤에도 장면을 계속 따라가고, 오래된 reading에 `stale`을 표시합니다. id로 객체 위에 포인터 올리기, 스크린샷의 화면 좌표와 frame/scene, 인증 값처럼 보이는 값 가리기를 더합니다. 0.3.x 이하 server는 이 package의 스크린샷을 거절합니다. |

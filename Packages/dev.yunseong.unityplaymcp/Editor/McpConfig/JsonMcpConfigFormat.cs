@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -28,6 +29,33 @@ namespace UnityPlayMcp.McpConfig.Editor
             // 쓰기와 같은 기준으로 검사한다. 고칠 수 없는 파일이 "Not configured" 로 보이지 않게 한다.
             var servers = ServerList(Parse(text));
             return servers != null && servers[serverName] != null;
+        }
+
+        public McpServerEntry ReadEntry(string text, string serverName)
+        {
+            var token = ServerList(Parse(text))?[serverName];
+            if (token == null) return null;
+            if (!(token is JObject server) || server["command"]?.Type != JTokenType.String
+                || !(server["args"] is JArray args))
+                throw new InvalidOperationException("This server needs string command and string-array args. Update it manually.");
+            var arguments = new List<string>();
+            foreach (var argument in args)
+            {
+                if (argument.Type != JTokenType.String)
+                    throw new InvalidOperationException("This server has non-string args. Update it manually.");
+                arguments.Add((string)argument);
+            }
+            return new McpServerEntry((string)server["command"], arguments);
+        }
+
+        public string UpdateArguments(string text, string serverName, IReadOnlyList<string> arguments)
+        {
+            RefuseComments(text);
+            if (ReadEntry(text, serverName) == null)
+                throw new InvalidOperationException("The server entry was removed. Refresh before updating.");
+            var root = Parse(text);
+            ServerList(root)[serverName]["args"] = new JArray(arguments);
+            return Serialize(root, NewlineOf(text));
         }
 
         public string Add(string text, string serverName, McpServerEntry entry)
@@ -114,7 +142,7 @@ namespace UnityPlayMcp.McpConfig.Editor
                 return new JObject();
             }
 
-            return JObject.Parse(text);
+            return JObject.Parse(text, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
         }
 
         /// <summary>

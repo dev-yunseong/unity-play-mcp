@@ -30,6 +30,12 @@ To pin a version, replace `latest` at the end with a release tag such as `v0.4.0
 
 Each Unity package release records the MCP server version it was tested with, and **Add** on the settings page writes `npx -y unity-play-mcp@<that version>`. Keep that pair. A local `mcp/dist` build or an entry added by an older package can mix versions.
 
+`get_unity_status` compares the running CLI with the SDK-required CLI version and reports **Update required** when they differ. SDK and CLI version numbers need not be equal. Older SDKs without compatibility metadata report **unknown**.
+
+In **Edit > Project Settings > Unity Play MCP**, choose the scope containing your agent configuration and click **Update CLI** for a stale pin. This preserves environment variables and other server settings and pins the exact compatible version, even if it is older. Restart the agent afterward: `npx` installs/runs the pinned version on its next launch. A matching configured pin does not prove the running process has updated; verify with `get_unity_status`. If installation fails, check the agent log and network access.
+
+Automatic updates support the generated `npx -y unity-play-mcp@<exact-version>` form. Local builds, wrappers, custom arguments, version ranges, and tags require manual updates. JSON files with comments or duplicate keys and ambiguous TOML are not rewritten. The SDK dependency itself is not changed.
+
 | Unity package | MCP server | Notes |
 | --- | --- | --- |
 | `v0.4.0` | `0.4.0` | Keeps following the scene after readings restart or the connection drops, and marks an old reading `stale`. Adds hovering over an object by id, screen coordinates and the frame/scene on screenshots, and hides values that look like credentials. A 0.3.x or older server rejects this package's screenshots. |

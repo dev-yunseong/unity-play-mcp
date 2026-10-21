@@ -3,7 +3,7 @@
 /// tool 설명에 없는 tool 사이의 순서와 전제만 적는다. 모든 대화에 들어가므로 tool 설명을 반복하지 않는다.
 export const serverInstructions = [
   "Unity Play MCP controls a game in Play Mode in the local Unity editor.",
-  "Call get_unity_status first. If Unity is not running, ask the user to enter Play Mode instead of retrying.",
+  "Call get_unity_status first and resolve version warnings. If Unity is not running, ask for Play Mode.",
   "",
   "Reading the scene:",
   "- Scene queries resume readings after 15s idle.",

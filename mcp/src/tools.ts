@@ -30,6 +30,7 @@ import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { registerPlayTools } from "./play-tools.js";
 import { visibleElements } from "./visible.js";
 import { requestRuntimeActivity, keepReadingsActive } from "./runtime-activity.js";
+import { compareVersions, probeCompatibility } from "./compatibility.js";
 
 type ToolContent =
   | { type: "text"; text: string }
@@ -872,22 +873,27 @@ function findCapture(results: ActionResult[]): CapturePayload | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-export function registerTools(server: McpServer, connection: UnityConnection, store: PulseStore): void {
+export function registerTools(server: McpServer, connection: UnityConnection, store: PulseStore, cliVersion?: string): void {
   server.registerTool("get_unity_status", {
-    description: "Check whether the Unity game is running and reachable, and whether scene readings have started. Call this first, and whenever another tool reports that Unity is not running.",
+    description: "Check whether Unity is running, whether readings have started, and whether this CLI matches the SDK-required CLI version. Reports update instructions on mismatch or unknown compatibility for older SDKs. Call this first.",
     inputSchema: {},
   }, async () => {
     // 연결되지 않은 것은 이 tool 의 답이지 실패가 아니다. isError 를 붙이면 agent 가 조회 자체가
     // 실패했다고 읽는다.
+    let activityWarning: string | undefined;
     try {
       await requestRuntimeActivity(connection, store, nextActionId++, "status");
     } catch (error) {
       if (error instanceof UnityUnreachableError) {
         return text(describeStatus({ connected: false, endpoint: connection.endpoint, now: Date.now() }));
       }
-      return { ...text(failureText("Could not check Unity", error)), isError: true };
+      // 구형 SDK의 activity 미지원이 호환 버전 안내까지 가리지 않게 한다.
+      activityWarning = failureText("Runtime activity unavailable", error);
     }
 
+    const compatibility = cliVersion === undefined ? undefined
+      : connection.isConnected() ? await probeCompatibility(connection, cliVersion, nextActionId++)
+        : compareVersions(cliVersion, undefined);
     const state = store.getState() as unknown as Record<string, unknown> | undefined;
     return text(describeStatus({
       connected: connection.isConnected(),
@@ -899,7 +905,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       lastUnreadableFrame: store.getLastUnreadableFrame(),
       staleness: store.getStaleness(),
       now: Date.now(),
-    }));
+    }) + (compatibility === undefined ? "" : `\nCompatibility (${compatibility.status}): ${compatibility.message}`)
+      + (activityWarning === undefined ? "" : `\n${activityWarning}`));
   });
 
   server.registerTool("get_scene_state", {

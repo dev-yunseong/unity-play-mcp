@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 
 namespace UnityPlayMcp.McpConfig.Editor
 {
@@ -18,6 +20,112 @@ namespace UnityPlayMcp.McpConfig.Editor
         public bool Contains(string text, string serverName)
         {
             return TryFindBlock(ReadLines(text), serverName, out _, out _);
+        }
+
+        public McpServerEntry ReadEntry(string text, string serverName)
+        {
+            return ReadLaunch(text, serverName, out _, out _, out _);
+        }
+
+        public string UpdateArguments(string text, string serverName, IReadOnlyList<string> arguments)
+        {
+            if (ReadLaunch(text, serverName, out var line, out var prefix, out var suffix) == null)
+                throw new InvalidOperationException("The server entry was removed. Refresh before updating.");
+            var lines = ReadLines(text);
+            var quoted = new List<string>();
+            foreach (var argument in arguments) quoted.Add(Quote(argument));
+            lines[line] = prefix + "[" + string.Join(", ", quoted) + "]" + suffix;
+            return Join(lines, NewlineOf(text));
+        }
+
+        private const string QuotedValue = @"""(?:[^""\\\r\n]|\\[""\\bfnrt]|\\u[0-9a-fA-F]{4})*""";
+
+        /// <summary>생성기 형태만 읽는다. 전체 TOML을 재작성하지 않으며 모호한 입력은 거절한다.</summary>
+        private static McpServerEntry ReadLaunch(string text, string serverName, out int argsLine, out string argsPrefix, out string argsSuffix)
+        {
+            argsLine = -1;
+            argsPrefix = argsSuffix = null;
+            // 문서 앞의 여러 행 문자열 안에 있는 설정 예시를 실제 table로 오인하지 않는다.
+            if (text.Contains("\"\"\"") || text.Contains("'''"))
+                throw new InvalidOperationException("Multiline TOML values require a manual update.");
+            var lines = ReadLines(text);
+            if (!TryFindBlock(lines, serverName, out var start, out var end))
+            {
+                if (text.Contains(serverName))
+                    throw new InvalidOperationException("This TOML server uses an unsupported table form. Update it manually.");
+                return null;
+            }
+
+            var header = "[" + TableRoot + "." + serverName + "]";
+            var quotedHeader = "[" + TableRoot + ".\"" + serverName + "\"]";
+            var headerCount = 0;
+            foreach (var candidate in lines)
+            {
+                var trimmed = candidate.Trim();
+                if (trimmed.StartsWith(header, StringComparison.Ordinal) || trimmed.StartsWith(quotedHeader, StringComparison.Ordinal))
+                    headerCount++;
+            }
+            if (headerCount != 1)
+                throw new InvalidOperationException("Duplicate TOML server tables cannot be updated automatically.");
+
+            string command = null;
+            string[] arguments = null;
+            for (var index = start + 1; index < end; index++)
+            {
+                if (lines[index].Contains("\"\"\"") || lines[index].Contains("'''"))
+                    throw new InvalidOperationException("Multiline TOML values require a manual update.");
+                if (lines[index].TrimStart().StartsWith("[", StringComparison.Ordinal)) break;
+                var match = Regex.Match(lines[index], @"^(?<prefix>\s*(?<key>command|args)\s*=\s*)(?<value>.*)$");
+                if (!match.Success)
+                {
+                    var other = lines[index].Trim();
+                    if (other.Length == 0 || other.StartsWith("#", StringComparison.Ordinal)) continue;
+                    // quoted key나 여러 행 값 안의 가짜 args를 실제 실행 설정으로 읽지 않는다.
+                    if (!Regex.IsMatch(other, @"^[A-Za-z_][A-Za-z0-9_-]*\s*=\s*.+$") ||
+                        (other.Contains("[") && !other.Contains("]")) ||
+                        (other.Contains("{") && !other.Contains("}")))
+                        throw new InvalidOperationException("This TOML launch block needs a manual update.");
+                    continue;
+                }
+                var raw = match.Groups["value"].Value;
+                var comment = CommentStart(raw);
+                var value = (comment < 0 ? raw : raw.Substring(0, comment)).TrimEnd();
+                var key = match.Groups["key"].Value;
+                if (key == "command")
+                {
+                    if (command != null || !Regex.IsMatch(value, "^" + QuotedValue + "$"))
+                        throw new InvalidOperationException("Use one single-line, double-quoted TOML command, or update it manually.");
+                    command = JsonConvert.DeserializeObject<string>(value);
+                }
+                else
+                {
+                    var pattern = @"^\[\s*(?:" + QuotedValue + @"(?:\s*,\s*" + QuotedValue + @")*)?\s*\]$";
+                    if (arguments != null || !Regex.IsMatch(value, pattern))
+                        throw new InvalidOperationException("Use one single-line TOML args array of double-quoted strings, or update it manually.");
+                    arguments = JsonConvert.DeserializeObject<string[]>(value);
+                    argsLine = index;
+                    argsPrefix = match.Groups["prefix"].Value;
+                    argsSuffix = raw.Substring(value.Length);
+                }
+            }
+            if (command == null || arguments == null)
+                throw new InvalidOperationException("This TOML launch shape cannot be verified. Update it manually.");
+            return new McpServerEntry(command, arguments);
+        }
+
+        private static int CommentStart(string value)
+        {
+            var quoted = false;
+            var escaped = false;
+            for (var index = 0; index < value.Length; index++)
+            {
+                var c = value[index];
+                if (escaped) { escaped = false; continue; }
+                if (quoted && c == '\\') { escaped = true; continue; }
+                if (c == '"') quoted = !quoted;
+                if (!quoted && c == '#') return index;
+            }
+            return -1;
         }
 
         public string Add(string text, string serverName, McpServerEntry entry)
