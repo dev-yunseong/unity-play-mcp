@@ -46,6 +46,19 @@ namespace UnityPlayMcp.Tests.Diagnostics
         }
 
         [Test]
+        public void ResetBaseline_ExcludesTheIdleInterval()
+        {
+            var reader = new FakeProcessResourceReader();
+            var sampler = Started(reader);
+            reader.UseProcessorSeconds(30);
+            sampler.ResetBaseline();
+            Assert.IsFalse(sampler.TrySample(WindowSeconds, 1, out _));
+            reader.UseProcessorSeconds(0.25);
+            Assert.IsTrue(sampler.TrySample(WindowSeconds, 1, out var usage));
+            Assert.AreEqual(25f, usage.CpuPercent, 1e-3f);
+        }
+
+        [Test]
         public void Constructor_RejectsANullReader()
         {
             Assert.Throws<ArgumentNullException>(() => new ProcessResourceSampler(null));

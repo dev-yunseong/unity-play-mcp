@@ -48,6 +48,21 @@ namespace UnityPlayMcp
         /// <c>UnityPlayMcpHost.ownsRuntime</c> 과 같은 방식이다.
         /// </remarks>
         private bool builtOverlay;
+        [SerializeField, HideInInspector] private bool visible;
+
+        public void SetVisible(bool value)
+        {
+            visible = value;
+            enabled = value;
+            if (value)
+            {
+                OnEnable();
+            }
+            else if (canvasObject != null)
+            {
+                canvasObject.SetActive(false);
+            }
+        }
 
         /// <summary>
         /// 첫 활성화와 assembly reload 모두에서 GUI 를 만든다. 여러 번 불러도 status panel 은 하나다.
@@ -60,8 +75,16 @@ namespace UnityPlayMcp
         /// </remarks>
         private void OnEnable()
         {
+            if (!visible)
+            {
+                enabled = false;
+                return;
+            }
+
             if (builtOverlay)
             {
+                canvasObject.SetActive(true);
+                Update();
                 return;
             }
 
@@ -77,6 +100,11 @@ namespace UnityPlayMcp
             RefreshText();
 
             builtOverlay = true;
+        }
+
+        private void OnDisable()
+        {
+            if (canvasObject != null) canvasObject.SetActive(false);
         }
 
         /// <summary>reload 뒤에 남은 overlay 를 제거한다.</summary>

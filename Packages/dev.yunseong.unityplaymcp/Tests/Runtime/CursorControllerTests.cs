@@ -21,6 +21,27 @@ namespace UnityPlayMcp.Tests
         }
 
         [Test]
+        public void SetOverlayValidatesBooleanBeforeChangingVisibility()
+        {
+            var calls = new List<bool>();
+            var executor = new ActionExecutor(null, null, null, setOverlay: calls.Add);
+            ActionResultDto result = null;
+            foreach (var invalid in new[] { new List<object>(), new List<object> { "false" }, new List<object> { true, false } })
+            {
+                Drain(executor.Execute(1, "set_overlay", invalid, value => result = value));
+                Assert.That(result.IsSuccess, Is.False);
+                Assert.That(calls, Is.Empty);
+            }
+            foreach (var visible in new[] { true, false })
+            {
+                Drain(executor.Execute(1, "set_overlay", new List<object> { visible }, value => result = value));
+                Assert.That(result.IsSuccess, Is.True);
+                Assert.That(result.ReturnValue, Is.EqualTo(visible));
+            }
+            Assert.That(calls, Is.EqualTo(new[] { true, false }));
+        }
+
+        [Test]
         public void MoveTo_ShowsCursorAtTargetCenter()
         {
             var controller = CreateController();
@@ -143,9 +164,7 @@ namespace UnityPlayMcp.Tests
         {
             controllerObject = new GameObject("cursor controller");
             var controller = controllerObject.AddComponent<CursorController>();
-            typeof(CursorController)
-                .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(controller, null);
+            controller.SetVisible(true);
             return controller;
         }
 

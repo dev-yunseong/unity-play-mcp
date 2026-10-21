@@ -63,12 +63,15 @@ type ToolHandler = (request: {
   method: string; params: { name: string; arguments: object };
 }, extra: { signal: AbortSignal }) => Promise<{ isError?: boolean; content: { type: string; text?: string }[] }>;
 
-function statusTool(cliVersion: string, state: { connected: boolean; required: string; fail?: boolean }) {
+function statusTool(cliVersion: string, state: { connected: boolean; required: string; fail?: boolean; legacy?: boolean }) {
   const connection = {
     endpoint: "ws://localhost/test",
     async ensureConnected() { state.connected = true; },
     isConnected: () => state.connected,
     async sendActions(actions: ActionRequest[]) {
+      if (actions[0].method === "runtime_activity") return actions.map(({ id }) => state.legacy
+        ? { id, success: false, error: "Unsupported method" }
+        : { id, success: true, returnValue: { reading: false, resumed: false, run: null } });
       if (state.fail) { state.connected = false; throw new Error("disconnected"); }
       return actions.map(({ id }) => ({ id, success: true, returnValue: {
         runtimeVersion: "2.0.0", requiredServerVersion: state.required,
@@ -102,4 +105,11 @@ test("status rechecks connection after a failed probe without becoming a tool er
   assert.notEqual(response.isError, true);
   assert.match(response.content[0].text!, /Unity is not running/);
   assert.match(response.content[0].text!, /Compatibility \(unknown\)/);
+});
+
+test("an older SDK still reports compatibility when idle activity is unsupported", async () => {
+  const response = await statusTool("1.0.0", { connected: true, required: "2.0.0", legacy: true })();
+  assert.notEqual(response.isError, true);
+  assert.match(response.content[0].text!, /Compatibility \(mismatch\)/);
+  assert.match(response.content[0].text!, /Runtime activity unavailable/);
 });

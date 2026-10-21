@@ -24,8 +24,9 @@ namespace UnityPlayMcp
         [SerializeField, HideInInspector] private GameObject overlayCanvas;
 
         private RectTransform cursorTransform;
-        private Texture2D cursorTexture;
-        private Sprite cursorSprite;
+        // 숨김 상태로 reload 된 뒤 다시 표시하지 않고 파괴해도 asset 을 해제해야 한다.
+        [SerializeField, HideInInspector] private Texture2D cursorTexture;
+        [SerializeField, HideInInspector] private Sprite cursorSprite;
         private bool darkTheme;
 
         /// <summary>이 domain 에서 cursor 를 만들었는지 여부다.</summary>
@@ -34,6 +35,23 @@ namespace UnityPlayMcp
         /// <see cref="cursorTransform"/> 등을 다시 만든다. <c>UnityPlayMcpHost.ownsRuntime</c> 과 같은 방식이다.
         /// </remarks>
         private bool builtOverlay;
+        [SerializeField, HideInInspector] private bool visible;
+        [SerializeField, HideInInspector] private Vector2 position;
+        [SerializeField, HideInInspector] private bool hasPosition;
+
+        public void SetVisible(bool value)
+        {
+            visible = value;
+            enabled = value;
+            if (value)
+            {
+                OnEnable();
+            }
+            else if (overlayCanvas != null)
+            {
+                overlayCanvas.SetActive(false);
+            }
+        }
 
         public bool SmoothMovement
         {
@@ -52,8 +70,17 @@ namespace UnityPlayMcp
         /// </remarks>
         private void OnEnable()
         {
+            if (!visible)
+            {
+                enabled = false;
+                return;
+            }
+
             if (builtOverlay)
             {
+                overlayCanvas.SetActive(true);
+                PlaceCursor(position, null);
+                cursorTransform.gameObject.SetActive(hasPosition);
                 return;
             }
 
@@ -61,6 +88,13 @@ namespace UnityPlayMcp
             darkTheme = PlayerPrefs.GetInt(DarkThemePlayerPrefsKey, 1) != 0;
             CreateCursor();
             builtOverlay = true;
+            PlaceCursor(position, null);
+            cursorTransform.gameObject.SetActive(hasPosition);
+        }
+
+        private void OnDisable()
+        {
+            if (overlayCanvas != null) overlayCanvas.SetActive(false);
         }
 
         /// <summary>reload 뒤에 남은 overlay 를 제거한다.</summary>
@@ -138,13 +172,12 @@ namespace UnityPlayMcp
         /// </param>
         public IEnumerator MoveTo(Vector2 screenPosition, Action<Vector2> moved, bool glide = false)
         {
-            if (cursorTransform == null)
+            hasPosition = true;
+            if (visible && cursorTransform != null)
             {
-                yield break;
+                cursorTransform.gameObject.SetActive(true);
+                cursorTransform.SetAsLastSibling();
             }
-
-            cursorTransform.gameObject.SetActive(true);
-            cursorTransform.SetAsLastSibling();
 
             if ((!smoothMovement && !glide) || movementDurationSeconds <= 0f)
             {
@@ -152,7 +185,7 @@ namespace UnityPlayMcp
                 yield break;
             }
 
-            var startPosition = (Vector2)cursorTransform.position;
+            var startPosition = position;
             var elapsed = 0f;
             while (elapsed < movementDurationSeconds)
             {
@@ -167,7 +200,11 @@ namespace UnityPlayMcp
 
         private void PlaceCursor(Vector2 screenPosition, Action<Vector2> moved)
         {
-            cursorTransform.position = screenPosition;
+            position = screenPosition;
+            if (cursorTransform != null)
+            {
+                cursorTransform.position = screenPosition;
+            }
             if (moved != null)
             {
                 moved(screenPosition);

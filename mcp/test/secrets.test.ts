@@ -24,7 +24,7 @@ function object(id: number, selector: string, on: string, members: { member: str
 
 function lobby(statics: PulseStatic[], extra: PulseObject[] = []): PulseFrame {
   return {
-    type: "PULSE", id: 1, schema: 2, reading: 1, frame: 10, scene: "Lobby",
+    type: "PULSE", id: 1, schema: 2, run: "secret-test", reading: 1, frame: 10, scene: "Lobby",
     statics,
     active: [
       object(1, "UI[0]/LowerBar[0]/PlayButton[0]", "UnityEngine.UI.Text", [{ member: "text", value: "Play" }]),
@@ -51,6 +51,7 @@ function sceneStateTool(store: PulseStore) {
     endpoint: "ws://127.0.0.1:17311/ws",
     isConnected: () => true,
     async ensureConnected(): Promise<void> {},
+    async sendActions(actions: { id: number }[]) { return actions.map(({ id }) => ({ id, success: true, returnValue: { reading: true, resumed: false, run: store.getState()?.run ?? "secret-test" } })); },
     onDisconnect: () => () => undefined,
   } as unknown as UnityConnection;
   const server = new McpServer({ name: "unity-play-mcp-test", version: "0" });

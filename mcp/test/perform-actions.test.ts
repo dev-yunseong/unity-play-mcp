@@ -38,6 +38,8 @@ const wireCases: ReadonlyArray<{
     params: ["Jump", true],
   },
   { name: "pause_time", action: { method: "pause_time" }, params: [] },
+  { name: "set_overlay show", action: { method: "set_overlay", visible: true }, params: [true] },
+  { name: "set_overlay hide", action: { method: "set_overlay", visible: false }, params: [false] },
   { name: "resume_time", action: { method: "resume_time" }, params: [] },
   {
     name: "reset_game",
@@ -86,7 +88,17 @@ for (const { name, action, params } of wireCases) {
 
 test("every method the schema accepts is covered by a wire case", () => {
   const covered = new Set(wireCases.map(({ action }) => (action as { method: string }).method));
-  assert.equal(covered.size, 15);
+  assert.equal(covered.size, 16);
+});
+
+test("set_overlay requires a boolean, including when batched", () => {
+  for (const action of [
+    { method: "set_overlay" },
+    { method: "set_overlay", visible: "false" },
+    { method: "set_overlay", visible: 0 },
+  ]) {
+    assert.equal(performActionSchema.safeParse(action).success, false);
+  }
 });
 
 const rejectedCases: ReadonlyArray<{ name: string; action: unknown }> = [

@@ -29,7 +29,8 @@ import { describeRoot, foldIntoTree, missingExpandPaths, UNLIMITED_DEPTH, type T
 import { describeWaitOutcome, waitForCondition } from "./wait.js";
 import { registerPlayTools } from "./play-tools.js";
 import { visibleElements } from "./visible.js";
-import { probeCompatibility } from "./compatibility.js";
+import { requestRuntimeActivity, keepReadingsActive } from "./runtime-activity.js";
+import { compareVersions, probeCompatibility } from "./compatibility.js";
 
 type ToolContent =
   | { type: "text"; text: string }
@@ -105,6 +106,7 @@ export const performActionSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("key_up"), key: keySchema() }).strict(),
   z.object({ method: z.literal("set_axis"), name: inputNameSchema(), value: z.number() }).strict(),
   z.object({ method: z.literal("set_button"), name: inputNameSchema(), pressed: z.boolean() }).strict(),
+  z.object({ method: z.literal("set_overlay"), visible: z.boolean() }).strict(),
   z.object({ method: z.literal("pause_time") }).strict(),
   z.object({ method: z.literal("resume_time") }).strict(),
   z.object({ method: z.literal("reset_game"), clearPlayerPrefs: z.boolean() }).strict(),
@@ -257,6 +259,8 @@ export function toWireAction(action: Exclude<PerformAction, { method: "click" | 
       return { method: action.method, params: [action.name, action.value] };
     case "set_button":
       return { method: action.method, params: [action.name, action.pressed] };
+    case "set_overlay":
+      return { method: action.method, params: [action.visible] };
     case "reset_game":
       return { method: action.method, params: [{ clearPlayerPrefs: action.clearPlayerPrefs }] };
     case "capture_screen":
@@ -488,6 +492,13 @@ async function dispatchOne(
   params: unknown[],
 ): Promise<ToolResponse> {
   return dispatchActions(connection, [{ method, params }]);
+}
+
+function needsReadings(action: PerformAction): boolean {
+  if (action.method === "drag") return action.from.x === undefined || action.to.x === undefined;
+  if (action.method === "capture_screen") return action.selector !== undefined;
+  return ("selector" in action && action.selector !== undefined)
+    || ("targetId" in action && action.targetId !== undefined);
 }
 
 /// 이력 map 의 내부 키(`component.on \0 member [\0 among]`)를 응답에 쓸 이름으로 바꾼다.
@@ -869,17 +880,20 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   }, async () => {
     // 연결되지 않은 것은 이 tool 의 답이지 실패가 아니다. isError 를 붙이면 agent 가 조회 자체가
     // 실패했다고 읽는다.
+    let activityWarning: string | undefined;
     try {
-      await connection.ensureConnected();
+      await requestRuntimeActivity(connection, store, nextActionId++, "status");
     } catch (error) {
       if (error instanceof UnityUnreachableError) {
         return text(describeStatus({ connected: false, endpoint: connection.endpoint, now: Date.now() }));
       }
-      return { ...text(failureText("Could not check Unity", error)), isError: true };
+      // 구형 SDK의 activity 미지원이 호환 버전 안내까지 가리지 않게 한다.
+      activityWarning = failureText("Runtime activity unavailable", error);
     }
 
     const compatibility = cliVersion === undefined ? undefined
-      : await probeCompatibility(connection, cliVersion, nextActionId++);
+      : connection.isConnected() ? await probeCompatibility(connection, cliVersion, nextActionId++)
+        : compareVersions(cliVersion, undefined);
     const state = store.getState() as unknown as Record<string, unknown> | undefined;
     return text(describeStatus({
       connected: connection.isConnected(),
@@ -891,7 +905,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       lastUnreadableFrame: store.getLastUnreadableFrame(),
       staleness: store.getStaleness(),
       now: Date.now(),
-    }) + (compatibility === undefined ? "" : `\nCompatibility (${compatibility.status}): ${compatibility.message}`));
+    }) + (compatibility === undefined ? "" : `\nCompatibility (${compatibility.status}): ${compatibility.message}`)
+      + (activityWarning === undefined ? "" : `\n${activityWarning}`));
   });
 
   server.registerTool("get_scene_state", {
@@ -908,7 +923,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     },
   }, async ({ selector, includeInactive, includeHistory, root, depth, expand, includeStatics, staticsDeclaring }) => {
     try {
-      await connection.ensureConnected();
+      await requestRuntimeActivity(connection, store, nextActionId++, "readings");
       return stateResponse(
         store, selector, includeInactive, includeHistory, root, depth, { includeStatics, staticsDeclaring }, expand);
     } catch (error) {
@@ -923,7 +938,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     description: [
       "List the UI elements the player can see right now, and what each one is showing:",
       "the text of a label, the fill of a bar, the value of a slider or toggle.",
-      "This reads the latest scene reading already in hand, so it costs no round trip to the game.",
+      "This resumes scene readings when idle and waits for a fresh run before using cached state.",
       "Elements that are turned off, off-screen, or covered by something drawn on top of them are left out.",
       "Set includeHidden to get them back; every element then carries the active, onScreen, and covered",
       "flags that say why it would have been left out.",
@@ -941,7 +956,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     },
   }, async ({ selector, includeHidden }) => {
     try {
-      await connection.ensureConnected();
+      await requestRuntimeActivity(connection, store, nextActionId++, "readings");
       const state = store.getState();
       if (state === undefined || state === null) {
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
@@ -990,7 +1005,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     },
   }, async ({ name, displayedText, component, actionable, exact, caseSensitive, includeInactive, limit }) => {
     try {
-      await connection.ensureConnected();
+      await requestRuntimeActivity(connection, store, nextActionId++, "readings");
       const state = store.getState();
       if (state === undefined || state === null) {
         return text("No scene reading has arrived. Call start_readings to begin a play session, then try again.");
@@ -1021,6 +1036,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     if (issue !== undefined) return { ...text(issue), isError: true };
     let targetId = input.targetId;
     if (input.selector !== undefined) {
+      try { await requestRuntimeActivity(connection, store, nextActionId++, "readings"); }
+      catch (error) { return { ...text(failureText("Target state is unavailable", error)), isError: true }; }
       const { state, staleNote } = readingOf(store);
       const id = resolveObjectId(input, state, staleNote, "capture_screen");
       if (!id.ok) return { ...text(id.error), isError: true };
@@ -1059,6 +1076,9 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
   // click, hover, drag 는 같은 일을 한다: 대상을 점으로 풀어 가상 마우스로 보낸다. 각 handler 는 action 하나를 만들어
   // `perform_actions` 와 같은 `expandActions` 로 보낸다.
   const runAction = async (action: PerformAction) => {
+    try {
+      if (needsReadings(action)) await requestRuntimeActivity(connection, store, nextActionId++, "readings");
+    } catch (error) { return { ...text(failureText("Target state is unavailable", error)), isError: true }; }
     const expanded = expandActions([action], store);
     if (!expanded.ok) return { ...text(expanded.error), isError: true };
     return dispatchActions(connection, expanded.wire, store);
@@ -1126,6 +1146,11 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
     inputSchema: { name: inputNameSchema(), pressed: z.boolean() },
   }, async ({ name, pressed }) => dispatchOne(connection, "set_button", [name, pressed]));
 
+  server.registerTool("set_overlay", {
+    description: "Show or hide the agent cursor and keyboard status overlays. Hidden by default and after 15 seconds idle. Hiding stops UI updates; input continues. Success returns the applied visibility.",
+    inputSchema: { visible: z.boolean() },
+  }, async ({ visible }) => dispatchOne(connection, "set_overlay", [visible]));
+
   const noInput = {};
   server.registerTool("pause_game", { description: "Pause Unity game time.", inputSchema: noInput },
     async () => dispatchOne(connection, "pause_time", []));
@@ -1148,6 +1173,9 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       + "A capture_screen action returns its screenshot as an image content block, like the capture_screen tool, and its result entry carries the same description with imageBlock (the 1-based image position) instead of the base64 data.",
     inputSchema: { actions: z.array(performActionSchema).min(1) },
   }, async ({ actions }) => {
+    try {
+      if (actions.some(needsReadings)) await requestRuntimeActivity(connection, store, nextActionId++, "readings");
+    } catch (error) { return { ...text(failureText("Target state is unavailable", error)), isError: true }; }
     const expanded = expandActions(actions, store);
     if (!expanded.ok) return { ...text(expanded.error), isError: true };
     return dispatchActions(connection, expanded.wire, store);
@@ -1176,6 +1204,7 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       timeoutMilliseconds: z.number().int().positive().max(WAIT_MAX_TIMEOUT_MS).optional(),
     },
   }, async ({ sinceRun, sinceReading, sinceFrame, scene, memberEquals, timeoutMilliseconds }, extra) => {
+    const deadline = Date.now() + (timeoutMilliseconds ?? WAIT_DEFAULT_TIMEOUT_MS);
     if (sinceReading === undefined && sinceFrame === undefined && scene === undefined && memberEquals === undefined) {
       return {
         ...text("wait_for_condition requires at least one of sinceReading, sinceFrame, scene, or memberEquals."),
@@ -1183,23 +1212,29 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       };
     }
     try {
-      await connection.ensureConnected();
+      await requestRuntimeActivity(connection, store, nextActionId++, "readings", extra.signal,
+        Math.max(1, Math.min(2_000, deadline - Date.now())));
     } catch (error) {
       return { ...text(failureText("Unity is unreachable", error)), isError: true };
     }
-    const outcome = await waitForCondition(store, connection, {
-      sinceRun,
-      sinceReading,
-      sinceFrame,
-      scene,
-      memberEquals,
-      timeoutMilliseconds: timeoutMilliseconds ?? WAIT_DEFAULT_TIMEOUT_MS,
-    }, extra.signal);
-    const { payload, isError } = describeWaitOutcome(outcome, store.getLastUnreadableFrame());
-    return {
-      ...text(JSON.stringify(withRedactionNote(payload as unknown as Record<string, unknown>), null, 2)),
-      ...(isError ? { isError: true } : {}),
-    };
+    const stopActivity = keepReadingsActive(() => requestRuntimeActivity(
+      connection, store, nextActionId++, "readings", extra.signal), extra.signal);
+    const offDisconnect = connection.onDisconnect(stopActivity);
+    try {
+      const outcome = await waitForCondition(store, connection, {
+        sinceRun,
+        sinceReading,
+        sinceFrame,
+        scene,
+        memberEquals,
+        timeoutMilliseconds: Math.max(1, deadline - Date.now()),
+      }, extra.signal);
+      const { payload, isError } = describeWaitOutcome(outcome, store.getLastUnreadableFrame());
+      return {
+        ...text(JSON.stringify(withRedactionNote(payload as unknown as Record<string, unknown>), null, 2)),
+        ...(isError ? { isError: true } : {}),
+      };
+      } finally { stopActivity(); offDisconnect(); }
   });
 
   registerPlayTools(server, connection, store);

@@ -127,14 +127,16 @@ export class UnityConnection {
   /// `timeoutMilliseconds` 는 이 요청 하나의 상한이다. 안 주면 연결 전체의 기본값을 쓴다.
   async sendActions(
     actions: ActionRequest[],
-    options: { timeoutMilliseconds?: number } = {},
+    options: { timeoutMilliseconds?: number; signal?: AbortSignal } = {},
   ): Promise<ActionResult[]> {
     if (actions.length === 0) {
       throw new Error("At least one action is required");
     }
 
     this.started = true;
-    const socket = await this.connect();
+    if (options.signal?.aborted) throw new Error("Request cancelled.");
+    const socket = await abortable(this.connect(), options.signal);
+    if (options.signal?.aborted) throw new Error("Request cancelled.");
     const requestId = this.nextEnvelopeId++;
     const frame: ActionFrame = {
       type: "ACTION",
@@ -143,7 +145,7 @@ export class UnityConnection {
     };
 
     const timeoutMilliseconds = options.timeoutMilliseconds ?? this.timeoutMilliseconds;
-    const resultFrame = await new Promise<ActionResultFrame>((resolve, reject) => {
+    const pendingResult = new Promise<ActionResultFrame>((resolve, reject) => {
       const timeout = this.timers.setTimeout(() => {
         this.pending.delete(requestId);
         reject(new Error(`ACTION ${requestId} timed out after ${timeoutMilliseconds}ms`));
@@ -156,6 +158,12 @@ export class UnityConnection {
         this.settlePendingFailure(requestId, toError(error, `Failed to send ACTION ${requestId}`));
       }
     });
+    let resultFrame: ActionResultFrame;
+    try { resultFrame = await abortable(pendingResult, options.signal); }
+    catch (error) {
+      this.settlePendingFailure(requestId, toError(error, "Request cancelled."));
+      throw error;
+    }
     this.noteStoppedReadings(actions, resultFrame.results);
     return resultFrame.results;
   }
@@ -452,4 +460,15 @@ function isGamePushFrame(value: { type: string }): value is GamePush {
 
 function toError(value: unknown, fallbackMessage: string): Error {
   return value instanceof Error ? value : new Error(fallbackMessage);
+}
+
+/// 공유 연결 시도는 유지하되 취소된 요청은 연결 완료 뒤에도 전송하지 않는다.
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => { signal.removeEventListener("abort", abort); reject(new Error("Request cancelled.")); };
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    if (signal.aborted) abort();
+  });
 }

@@ -12,6 +12,9 @@ namespace UnityPlayMcp
         /// <see cref="IsConnected"/> 는 server 상태만 알려 준다 (#69).
         /// </remarks>
         int ClientsOpened { get; }
+        int ActiveClients { get; }
+        /// <summary>마지막 client 종료 횟수. 프레임 사이 재연결도 구분한다.</summary>
+        int IdleGeneration { get; }
         void Start();
         void Stop();
         bool TryDequeueMessage(out AgentMessage message);

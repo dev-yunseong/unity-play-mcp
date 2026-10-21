@@ -54,6 +54,7 @@ namespace UnityPlayMcp.Tests
         public IEnumerator MoveMouse_ReportsEveryPositionItPutTheCursorAt()
         {
             var controller = new GameObject("cursor controller").AddComponent<CursorController>();
+            controller.SetVisible(true);
             host = controller.gameObject;
             var reported = new List<Vector2>();
 
