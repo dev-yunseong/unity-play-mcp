@@ -2,11 +2,11 @@
 
 - Date: 2026-11-09
 - GitHub Issue: https://github.com/dev-yunseong/unity-play-mcp/issues/127
-- Status: Implemented, GitHub checks pending
+- Status: Implemented, draft PR #128
 
 ## Goal
 
-Run the TypeScript server build and tests during pull request review. Make the setup steps, code layout, and verification paths visible in both READMEs.
+Run the TypeScript server build and tests during pull request review. Make the setup steps, code layout, and verification paths visible in a single Korean repository README.
 
 ## Non-goals
 
@@ -20,7 +20,7 @@ Unity CI already covers EditMode and PlayMode. The npm publication workflow runs
 
 - [x] Inspect the README files, package scripts, and existing Actions workflows.
 - [x] Add a standalone read-only PR and develop push workflow with the MCP lockfile.
-- [x] Link quick start, source paths and checks from the English and Korean READMEs.
+- [x] Consolidate the repository README into a single Korean document with quick start, source paths, and checks.
 - [ ] Verify local commands, relative paths and workflow syntax. Open a draft PR and inspect its checks.
 
 ## Validation
