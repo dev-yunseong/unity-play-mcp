@@ -2,6 +2,9 @@
 
 한국어 | [English](README.md)
 
+[![MCP 서버 테스트](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/mcp-tests.yml/badge.svg?branch=develop)](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/mcp-tests.yml)
+[![Unity 테스트](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/unity-tests.yml/badge.svg?branch=develop)](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/unity-tests.yml)
+
 실행 중인 Unity 게임을 AI coding agent가 직접 보고 조작하게 해 주는 MCP server입니다. agent는 현재 scene을 읽고, 버튼을 누르고, 텍스트를 입력하고, 화면을 캡처할 수 있습니다.
 
 이런 일을 시킬 수 있습니다.
@@ -9,6 +12,8 @@
 - "지금 scene에 뭐가 있는지 알려줘."
 - "Start 버튼을 누르고 화면을 캡처해 줘."
 - "튜토리얼을 끝까지 진행해 보고, 막히는 곳이 있으면 알려줘."
+
+[준비 사항](#준비-사항)을 확인한 뒤 [Unity 패키지를 설치](#설치)하고 [Agent를 연결](#agent-연결)하세요. Play Mode에서 장면을 읽을 수 있습니다. 소스 위치와 테스트는 [개발에 참여하려면](#개발에-참여하려면)을 참고하세요.
 
 ## 준비 사항
 
@@ -98,6 +103,10 @@ Unity가 연결되어 있는지 궁금하면 "Unity 켜져 있어?"라고 물어
 | `run_steps` | 적어 준 player 행동을 순서대로 수행하고, 처음으로 기대와 달라진 단계를 알려 줍니다. | `steps`, `expectation` (선택) |
 | `track_value` | object의 값이 시간에 따라 어떻게 바뀌는지 관찰합니다. 행동을 함께 지정할 수 있습니다. | `selector`, `action` (선택) |
 
+### 장면을 관찰하고 입력 결과 확인하기
+
+Agent는 현재 장면을 관찰하고 입력을 보낸 뒤 게임 상태를 다시 확인할 수 있습니다. 입력이 Unity에 전달됐는지와 게임에서 기대한 결과가 관찰됐는지는 별도로 반환됩니다. 사용 가능한 도구와 버전 조건은 [관찰, 입력, 결과 확인 안내](docs/observe-act-loop.md)를 참고하세요.
+
 ### 값을 읽는 간격
 
 agent가 게임을 지켜보는 동안 Unity Play MCP는 값을 1초마다 읽고 바뀐 것만 전달합니다. 1초보다 빠르게 변하는 값을 추적해야 할 때는 **Edit > Project Settings > Unity Play MCP**의 **Reading interval (s)**에서 간격을 줄일 수 있습니다.
@@ -126,14 +135,22 @@ agent에게 "Unity 상태를 확인해 줘"라고 하면 어느 주소로 연결
 
 ## 개발에 참여하려면
 
+[Unity 패키지](Packages/dev.yunseong.unityplaymcp)는 실행 중인 게임 상태를 읽고 입력을 적용합니다. [TypeScript MCP 서버](mcp)는 이 기능을 Agent가 호출할 수 있는 MCP 도구로 제공합니다.
+
+저장소 루트에서 Node.js 22.14 이상과 Bash(Linux, macOS, WSL)를 사용해 서버를 확인하세요.
+
 ```bash
 cd mcp
-npm install
+npm ci
 npm run build
 npm test
 ```
 
-이 repository의 package를 Unity에 연결하면 설정 화면이 local build(`mcp/dist/index.js`)를 우선 사용하므로, publish하지 않고 server 변경을 바로 확인할 수 있습니다. Unity package test는 [테스트 실행 방법](.agents/docs/project.md#running-package-tests)을 참고하세요. release 절차는 [RELEASING.md](RELEASING.md)에 있습니다.
+Windows용 Node.js를 Git Bash에서 사용한다면, 명령을 실행하기 전에 `npm_config_script_shell`에 Git Bash 실행 파일을 지정하세요.
+
+[MCP 서버 테스트](.github/workflows/mcp-tests.yml)는 PR과 `develop` 푸시에서 같은 명령을 실행합니다. [Unity 테스트](.github/workflows/unity-tests.yml)는 EditMode와 PlayMode를 별도로 실행하며 Unity 라이선스가 필요합니다. [로컬 Unity 테스트 실행 방법](.agents/docs/project.md#running-package-tests)도 참고하세요.
+
+이 저장소의 패키지를 Unity에 연결하면 설정 화면이 로컬 빌드(`mcp/dist/index.js`)를 우선 사용하므로 배포 없이 서버 변경을 확인할 수 있습니다. 릴리스 절차는 [RELEASING.md](RELEASING.md)에 있습니다.
 
 ## License
 

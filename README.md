@@ -2,6 +2,9 @@
 
 [한국어](README.ko.md) | English
 
+[![MCP Server Tests](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/mcp-tests.yml/badge.svg?branch=develop)](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/mcp-tests.yml)
+[![Unity Tests](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/unity-tests.yml/badge.svg?branch=develop)](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/unity-tests.yml)
+
 An MCP server that lets an AI coding agent see and play your running Unity game. The agent can read the current scene, click buttons, type text, and capture the screen.
 
 Things you can ask for:
@@ -9,6 +12,8 @@ Things you can ask for:
 - "What's in the scene right now?"
 - "Click Start and capture the screen."
 - "Play through the tutorial and tell me where it gets stuck."
+
+Start with the [requirements](#requirements), [install the Unity package](#install), then [connect your agent](#connect-your-agent) and enter Play Mode. See [Contributing](#contributing) for the source layout and checks.
 
 ## Requirements
 
@@ -136,14 +141,22 @@ If a configuration file has a syntax error, the page won't touch it because it c
 
 ## Contributing
 
+The [Unity package](Packages/dev.yunseong.unityplaymcp) exposes the running game state and applies inputs. The [TypeScript MCP server](mcp) exposes those operations as tools to the agent over MCP.
+
+Run the server checks from the repository root in Bash (Linux, macOS, or WSL) with Node.js 22.14 or later.
+
 ```bash
 cd mcp
-npm install
+npm ci
 npm run build
 npm test
 ```
 
-When the package is linked from this repository, the settings page prefers the local build (`mcp/dist/index.js`), so server changes take effect without publishing. For Unity package tests, see [how to run tests](.agents/docs/project.md#running-package-tests). The release process is in [RELEASING.md](RELEASING.md).
+On Windows with Git Bash and native Node.js, set `npm_config_script_shell` to the Git Bash executable before running these commands.
+
+[MCP Server Tests](.github/workflows/mcp-tests.yml) runs the same commands on pull requests and pushes to `develop`. [Unity Tests](.github/workflows/unity-tests.yml) runs EditMode and PlayMode separately and needs a Unity licence. See [how to run Unity tests locally](.agents/docs/project.md#running-package-tests).
+
+When the package is linked from this repository, the settings page prefers the local build (`mcp/dist/index.js`), so server changes take effect without publishing. See [RELEASING.md](RELEASING.md) for the release process.
 
 ## License
 
