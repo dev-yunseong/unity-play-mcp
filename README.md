@@ -5,7 +5,7 @@
 
 코딩 에이전트가 실행 중인 Unity 게임을 직접 테스트할 수 있게 해 주는 MCP 서버입니다. 에이전트는 장면과 오브젝트 상태를 읽고, 가상 입력을 보내고, 화면을 캡처할 수 있습니다.
 
-[준비 사항](#준비-사항)을 확인한 뒤 [Unity 패키지를 설치](#설치)하고 [에이전트를 연결](#에이전트-연결)하세요. Play Mode에서 장면을 읽을 수 있습니다. 소스 위치와 테스트는 [개발에 참여하려면](#개발에-참여하려면)을 참고하세요.
+[준비 사항](#준비-사항)을 확인한 뒤 [Unity 패키지를 설치](#설치)하고 [에이전트를 연결](#에이전트-연결)하세요. Play Mode에서 장면을 읽을 수 있습니다.
 
 ## 준비 사항
 
@@ -31,7 +31,7 @@ Unity 패키지 릴리스마다 함께 검증한 MCP 서버 버전을 기록하�
 
 **Edit > Project Settings > Unity Play MCP**에서 에이전트 설정 범위를 고른 뒤 **Update CLI**를 누르면 환경변수와 다른 서버 옵션을 보존하면서 호환 버전으로 고정합니다. 요구 버전이 더 오래된 경우에도 그 버전으로 맞춥니다. 이후 에이전트를 재시작하면 `npx`가 해당 버전을 설치·실행합니다. 설정에서 버전을 고정해도 실행 중 프로세스는 아직 구버전일 수 있으므로 `get_unity_status`로 다시 확인하세요. 설치 실패 시 에이전트 로그와 네트워크 연결을 확인하세요.
 
-자동 수정은 생성기가 만든 `npx -y unity-play-mcp@<exact-version>` 형태만 지원합니다. 로컬 빌드, 래퍼, 추가 인자, 버전 범위나 태그은 수동으로 업데이트해야 합니다. 주석·중복 키가 있는 JSON이나 모호한 TOML은 덮어쓰지 않으며, SDK 의존성 자체는 변경하지 않습니다.
+자동 수정은 생성기가 만든 `npx -y unity-play-mcp@<exact-version>` 형태만 지원합니다. 로컬 빌드, 래퍼, 추가 인자, 버전 범위나 태그는 수동으로 업데이트해야 합니다.
 
 | Unity 패키지 | MCP 서버 | 비고 |
 | --- | --- | --- |
@@ -123,26 +123,7 @@ Unity가 연결되어 있는지 궁금하면 "Unity 켜져 있어?"라고 물어
 
 ### 설정 화면에 "파일을 읽을 수 없다"고 나와요
 
-설정 파일에 문법 오류가 있으면 내용을 보존할 수 없어 수정하지 않습니다. 표시된 오류를 고치고 **Refresh**를 누르세요. Visual Studio Code 설정 파일에 주석이 있는 경우에도, 저장하면 주석이 지워지기 때문에 수정하지 않습니다.
-
-## 개발에 참여하려면
-
-[Unity 패키지](Packages/dev.yunseong.unityplaymcp)는 실행 중인 게임 상태를 읽고 입력을 적용합니다. [TypeScript MCP 서버](mcp)는 이 기능을 에이전트가 호출할 수 있는 MCP 도구로 제공합니다.
-
-저장소 루트에서 Node.js 22.14 이상과 Bash(Linux, macOS, WSL)를 사용해 서버를 확인하세요.
-
-```bash
-cd mcp
-npm ci
-npm run build
-npm test
-```
-
-Windows용 Node.js를 Git Bash에서 사용한다면, 명령을 실행하기 전에 `npm_config_script_shell`에 Git Bash 실행 파일을 지정하세요.
-
-[MCP 서버 테스트](.github/workflows/mcp-tests.yml)는 PR과 `develop` 푸시에서 같은 명령을 실행합니다. [Unity 테스트](.github/workflows/unity-tests.yml)는 EditMode와 PlayMode를 별도로 실행하며 Unity 라이선스가 필요합니다. [로컬 Unity 테스트 실행 방법](.agents/docs/project.md#running-package-tests)도 참고하세요.
-
-이 저장소의 패키지를 Unity에 연결하면 설정 화면이 로컬 빌드(`mcp/dist/index.js`)를 우선 사용하므로 배포 없이 서버 변경을 확인할 수 있습니다. 릴리스 절차는 [RELEASING.md](RELEASING.md)에 있습니다.
+설정 파일에 문법 오류가 있으면 내용을 보존할 수 없어 수정하지 않습니다. 표시된 오류를 고치고 **Refresh**를 누르세요.
 
 ## 라이선스
 

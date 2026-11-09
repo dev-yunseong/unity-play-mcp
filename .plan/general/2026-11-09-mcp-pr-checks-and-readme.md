@@ -6,7 +6,7 @@
 
 ## Goal
 
-Run the TypeScript server build and tests during pull request review. Make the setup steps, code layout, and verification paths visible in a single Korean repository README.
+Run the TypeScript server build and tests during pull request review. Provide a single Korean repository README for installation, agent setup, and usage.
 
 ## Non-goals
 
@@ -20,7 +20,7 @@ Unity CI already covers EditMode and PlayMode. The npm publication workflow runs
 
 - [x] Inspect the README files, package scripts, and existing Actions workflows.
 - [x] Add a standalone read-only PR and develop push workflow with the MCP lockfile.
-- [x] Consolidate the repository README into a single Korean document with quick start, source paths, and checks.
+- [x] Consolidate the repository README into a single Korean user guide.
 - [ ] Verify local commands, relative paths and workflow syntax. Open a draft PR and inspect its checks.
 
 ## Validation
