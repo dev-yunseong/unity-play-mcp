@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -26,7 +27,12 @@ namespace UnityPlayMcp.Tests
             public void Start() { }
             public void Stop() { }
             public void Dispose() { }
-            public void Send(string text) { }
+            public readonly Queue<JObject> Responses = new Queue<JObject>();
+            public void Send(string text)
+            {
+                var message = JObject.Parse(text);
+                if ((string)message["type"] == "ACTION_RESULT") Responses.Enqueue(message);
+            }
             public bool TryDequeueMessage(out AgentMessage message)
             {
                 message = Messages.Count == 0 ? null : Messages.Dequeue();
@@ -293,11 +299,107 @@ namespace UnityPlayMcp.Tests
             Assert.That(host.GetComponent<KeyboardStatusController>().enabled, Is.False);
         }
 
-        private static void Send(Transport transport, string method, string parameters)
+        [UnityTest]
+        public IEnumerator ProjectActionsAreListedAndUseTheSameInputLeaseAsBuiltInActions()
+        {
+            var host = CreateHost();
+            yield return null;
+            var transport = ReplaceTransport(host);
+            transport.ActiveClients = 2;
+            transport.ClientsOpened = 2;
+
+            Send(transport, "play_capabilities", "", "owner");
+            yield return WaitForResponse(transport);
+            var capabilities = transport.Responses.Dequeue()["results"][0]["returnValue"];
+            var actions = (JArray)capabilities["registeredActions"];
+            Assert.That(actions.SelectToken("[?(@.name == 'test_echo')].description")?.Value<string>(),
+                Is.EqualTo("Return the input value."));
+            Assert.That(actions.SelectToken("[?(@.name == 'test_echo')].parameters")?.Value<string>(),
+                Is.EqualTo("[value: string]"));
+            Assert.That(actions.SelectToken("[?(@.name == 'pause_time')]"), Is.Null);
+
+            Send(transport, "play_begin", "\"op1\",\"hash\",30000", "owner");
+            yield return WaitForResponse(transport);
+            Assert.That(transport.Responses.Dequeue()["results"][0]["success"].Value<bool>(), Is.True);
+
+            Send(transport, "unity_action", "\"test_echo\",\"blocked\"", "other");
+            yield return WaitForResponse(transport);
+            var rejected = transport.Responses.Dequeue()["results"][0];
+            Assert.That(rejected["success"].Value<bool>(), Is.False);
+            Assert.That(rejected["error"].Value<string>(), Does.StartWith("busy:op1"));
+
+            transport.Messages.Enqueue(new AgentMessage(
+                "{\"type\":\"ACTION\",\"id\":2,\"actions\":[" +
+                "{\"id\":1,\"method\":\"unity_action\",\"params\":[\"test_throw\"]}," +
+                "{\"id\":2,\"method\":\"unity_action\",\"params\":[\"pause_time\"]}," +
+                "{\"id\":3,\"method\":\"unity_action\",\"params\":[\"test_throw\",true]}," +
+                "{\"id\":4,\"method\":\"unity_action\",\"params\":[\"test_bad_result\"]}," +
+                "{\"id\":5,\"method\":\"unity_action\",\"params\":[\"test_echo\",\"allowed\"]}]}",
+                _ => { }, "owner"));
+            yield return WaitForResponse(transport);
+            var results = (JArray)transport.Responses.Dequeue()["results"];
+            Assert.That(results.Count, Is.EqualTo(5));
+            Assert.That(results[0]["error"].Value<string>(), Does.Contain("nested failure"));
+            Assert.That(results[1]["error"].Value<string>(), Is.EqualTo("Unknown Unity action: pause_time"));
+            Assert.That(results[2]["error"].Value<string>(), Does.Contain("wait failure"));
+            Assert.That(results[3]["error"].Value<string>(), Does.Contain("cannot be serialized"));
+            Assert.That(results[4]["success"].Value<bool>(), Is.True);
+            Assert.That(results[4]["returnValue"].Value<string>(), Is.EqualTo("allowed"));
+        }
+
+        [UnityAction("test_echo", "Return the input value.", "[value: string]")]
+        private sealed class EchoAction : IUnityAction
+        {
+            public IEnumerator Execute(int id, List<object> parameters, System.Action<ActionResultDto> completed)
+            {
+                completed(ActionResultDto.Success(id, parameters[0]));
+                yield break;
+            }
+        }
+
+        [UnityAction("test_throw", "Throw from a nested routine.")]
+        private sealed class ThrowAction : IUnityAction
+        {
+            public IEnumerator Execute(int id, List<object> parameters, System.Action<ActionResultDto> completed)
+            {
+                if (parameters.Count == 0)
+                    yield return ThrowOnNextFrame();
+                else
+                    yield return new WaitUntil(() => throw new System.InvalidOperationException("wait failure"));
+            }
+
+            private static IEnumerator ThrowOnNextFrame()
+            {
+                yield return null;
+                throw new System.InvalidOperationException("nested failure");
+            }
+        }
+
+        [UnityAction("test_bad_result", "Return a cyclic value.")]
+        private sealed class BadResultAction : IUnityAction
+        {
+            public IEnumerator Execute(int id, List<object> parameters, System.Action<ActionResultDto> completed)
+            {
+                var cyclic = new List<object>();
+                cyclic.Add(cyclic);
+                completed(ActionResultDto.Success(id, cyclic));
+                yield break;
+            }
+        }
+
+        private static IEnumerator WaitForResponse(Transport transport)
+        {
+            var deadline = Time.realtimeSinceStartupAsDouble + 5;
+            while (transport.Responses.Count == 0 && Time.realtimeSinceStartupAsDouble < deadline)
+                yield return null;
+            Assert.That(transport.Responses.Count, Is.EqualTo(1));
+        }
+
+        private static void Send(Transport transport, string method, string parameters, string clientId = "test")
         {
             transport.Messages.Enqueue(new AgentMessage(
                 "{\"type\":\"ACTION\",\"id\":1,\"actions\":[{\"id\":1,\"method\":\"" + method +
-                "\",\"params\":[" + parameters + "]}]}", _ => { }, "test"));
+                "\",\"params\":[" + parameters + "]}]}", _ => { }, clientId));
         }
         private UnityPlayMcpHost CreateHost()
         {

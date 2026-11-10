@@ -33,11 +33,19 @@ Codex를 기본 설정으로 실행한다면 **User**를 고르세요. **Project
 
 Play Mode에서 확인할 동작과 기대 결과를 에이전트에게 알려 주세요. 게임 상태를 읽기만 하거나, 입력을 보낸 뒤 상태가 어떻게 바뀌는지 확인할 수 있습니다. [MCP 도구 설명](docs/observe-act-loop.md)
 
+### 게임 전용 액션 만들기
+
+테스트 씬 열기처럼 게임에서 자주 쓰는 동작을 에이전트에게 맡길 수 있습니다. 게임 프로젝트에 `IUnityAction`을 구현한 C# 클래스를 만들고 `[UnityAction]`을 붙이세요. Play Mode에서 에이전트에게 그 액션을 실행해 달라고 요청하면 됩니다. [게임 전용 액션 만들기](docs/project-actions.md) · [기본 액션 목록과 교체 방법](docs/project-actions.md#기본-액션-목록)
+
 ## 문제 해결
 
 - **처음 연결할 때** `npx`가 MCP 서버를 내려받으므로 인터넷 연결이 필요합니다.
 - **Unity에 연결되지 않을 때** Unity가 Play Mode인지, 에이전트가 Unity와 같은 컴퓨터에서 실행 중인지 확인하세요.
 - **Update required가 표시될 때** Unity Play MCP 설정에서 **Update CLI**를 누른 뒤 에이전트를 다시 시작하세요.
+
+## 기여하기
+
+[기여 가이드](CONTRIBUTING.md)
 
 ## 라이선스
 

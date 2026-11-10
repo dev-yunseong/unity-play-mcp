@@ -41,6 +41,7 @@ test("get_play_capabilities reports both sides, and an old Unity yields unsuppor
   const structured = ok.structuredContent as { server: { protocolVersion: number }; unity: { sessionId: string } };
   assert.equal(structured.server.protocolVersion, 1);
   assert.ok(structured.unity.sessionId);
+  assert.equal("registeredActions" in structured.unity, false);
 
   const old = await register(new FakeUnity()).call("get_play_capabilities");
   assert.equal(old.isError, true);

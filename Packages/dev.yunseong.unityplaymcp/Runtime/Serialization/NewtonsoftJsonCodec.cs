@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace UnityPlayMcp.Serialization
 {
@@ -11,6 +12,8 @@ namespace UnityPlayMcp.Serialization
             MissingMemberHandling = MissingMemberHandling.Ignore,
             NullValueHandling = NullValueHandling.Include
         };
+
+        internal static JToken ToToken(object value) => JToken.FromObject(value, JsonSerializer.Create(Settings));
 
         public string Serialize<T>(T value)
         {

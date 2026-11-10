@@ -194,7 +194,7 @@ namespace UnityPlayMcp
                 new ScreenCapturer(),
                 this,
                 SetOverlay);
-            playApi = new PlayApi(new ScreenCapturer());
+            playApi = new PlayApi(new ScreenCapturer(), actionExecutor.ProjectActions);
             frameTimeRecorder = new FrameTimeRecorder();
             frameTimingSampler = new FrameTimingSampler();
 
@@ -402,7 +402,7 @@ namespace UnityPlayMcp
             ReleaseAgentInput();
             EndDiscovery();
             SetOverlay(false);
-            playApi = new PlayApi(new ScreenCapturer());
+            playApi = new PlayApi(new ScreenCapturer(), actionExecutor.ProjectActions);
             clientSessionActive = false;
             collectingPerformance = false;
             reportedDeviceContext = false;

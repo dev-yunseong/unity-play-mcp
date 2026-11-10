@@ -1,14 +1,15 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using UnityEngine.Scripting;
 
 namespace UnityPlayMcp.Protocol.Dto
 {
     public sealed class ActionResultMessage
     {
-        [JsonProperty("type")]
+        [Preserve, JsonProperty("type")]
         public string Type { get; set; }
 
-        [JsonProperty("id")]
+        [Preserve, JsonProperty("id")]
         public long Id { get; set; }
 
         /// <summary>
@@ -18,7 +19,7 @@ namespace UnityPlayMcp.Protocol.Dto
         /// Separate from <c>id</c>, which is this message's own outgoing number;
         /// the two counters are unrelated.
         /// </remarks>
-        [JsonProperty("requestId", NullValueHandling = NullValueHandling.Ignore)]
+        [Preserve, JsonProperty("requestId", NullValueHandling = NullValueHandling.Ignore)]
         public long? RequestId { get; set; }
 
         /// <summary>
@@ -31,10 +32,10 @@ namespace UnityPlayMcp.Protocol.Dto
         /// pulse 와 같은 <see cref="UnityEngine.Time.frameCount"/> 다. 커서 이동처럼 여러 프레임에 걸치는
         /// 액션이 있으므로 큐에 넣은 프레임이 아니라 배치가 <b>끝난 프레임</b>이다. 배치 전체에 하나다.
         /// </remarks>
-        [JsonProperty("frame")]
+        [Preserve, JsonProperty("frame")]
         public int Frame { get; set; }
 
-        [JsonProperty("results")]
+        [Preserve, JsonProperty("results")]
         public List<ActionResultDto> Results { get; set; } = new List<ActionResultDto>();
     }
 }

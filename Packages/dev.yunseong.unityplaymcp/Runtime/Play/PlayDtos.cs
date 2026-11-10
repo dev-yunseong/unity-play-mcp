@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using UnityEngine.Scripting;
 
 namespace UnityPlayMcp.Play
 {
@@ -264,28 +265,30 @@ namespace UnityPlayMcp.Play
 
     internal sealed class ProviderStatusDto
     {
-        [JsonProperty("id")] public string Id { get; set; }
-        [JsonProperty("status")] public string Status { get; set; }
-        [JsonProperty("slowCount")] public int SlowCount { get; set; }
-        [JsonProperty("lastError", NullValueHandling = NullValueHandling.Ignore)] public string LastError { get; set; }
-        [JsonProperty("lastElapsedMs")] public double LastElapsedMs { get; set; }
+        [Preserve, JsonProperty("id")] public string Id { get; set; }
+        [Preserve, JsonProperty("status")] public string Status { get; set; }
+        [Preserve, JsonProperty("slowCount")] public int SlowCount { get; set; }
+        [Preserve, JsonProperty("lastError", NullValueHandling = NullValueHandling.Ignore)] public string LastError { get; set; }
+        [Preserve, JsonProperty("lastElapsedMs")] public double LastElapsedMs { get; set; }
     }
 
     internal sealed class CapabilitiesDto
     {
-        [JsonProperty("protocolVersion")] public int ProtocolVersion { get; set; }
-        [JsonProperty("runtimeVersion")] public string RuntimeVersion { get; set; }
-        [JsonProperty("requiredServerVersion")] public string RequiredServerVersion { get; set; }
-        [JsonProperty("sessionId")] public string SessionId { get; set; }
-        [JsonProperty("tools")] public List<string> Tools { get; set; }
-        [JsonProperty("inputPaths")] public List<string> InputPaths { get; set; }
-        [JsonProperty("inputSystem")] public string InputSystem { get; set; }
-        [JsonProperty("physics2D")] public bool Physics2D { get; set; }
-        [JsonProperty("physics3D")] public bool Physics3D { get; set; }
-        [JsonProperty("ui")] public bool Ui { get; set; }
-        [JsonProperty("providers")] public List<ProviderStatusDto> Providers { get; set; }
-        [JsonProperty("observationPolicies")] public List<string> ObservationPolicies { get; set; }
-        [JsonProperty("limits")] public Dictionary<string, int> Limits { get; set; }
+        [Preserve, JsonProperty("protocolVersion")] public int ProtocolVersion { get; set; }
+        [Preserve, JsonProperty("runtimeVersion")] public string RuntimeVersion { get; set; }
+        [Preserve, JsonProperty("requiredServerVersion")] public string RequiredServerVersion { get; set; }
+        [Preserve, JsonProperty("sessionId")] public string SessionId { get; set; }
+        [Preserve, JsonProperty("tools")] public List<string> Tools { get; set; }
+        [Preserve, JsonProperty("inputPaths")] public List<string> InputPaths { get; set; }
+        [Preserve, JsonProperty("registeredActions", NullValueHandling = NullValueHandling.Ignore)]
+        public IReadOnlyList<RegisteredActionDto> RegisteredActions { get; set; }
+        [Preserve, JsonProperty("inputSystem")] public string InputSystem { get; set; }
+        [Preserve, JsonProperty("physics2D")] public bool Physics2D { get; set; }
+        [Preserve, JsonProperty("physics3D")] public bool Physics3D { get; set; }
+        [Preserve, JsonProperty("ui")] public bool Ui { get; set; }
+        [Preserve, JsonProperty("providers")] public List<ProviderStatusDto> Providers { get; set; }
+        [Preserve, JsonProperty("observationPolicies")] public List<string> ObservationPolicies { get; set; }
+        [Preserve, JsonProperty("limits")] public Dictionary<string, int> Limits { get; set; }
     }
 
     internal sealed class BeginResultDto

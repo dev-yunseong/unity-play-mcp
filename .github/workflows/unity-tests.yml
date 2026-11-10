@@ -52,8 +52,8 @@ jobs:
               echo "### Unity tests skipped"
               echo
               echo "This pull request comes from a fork, and GitHub does not expose repository"
-              echo "secrets to fork pull requests. Unity cannot be activated, so EditMode and"
-              echo "PlayMode were not run."
+              echo "secrets to fork pull requests. Unity cannot be activated, so EditMode,"
+              echo "PlayMode, and the IL2CPP player smoke test were not run."
               echo
               echo "A maintainer must push the change to a branch in \`${GITHUB_REPOSITORY}\` and"
               echo "let the tests run there before merging."
@@ -198,3 +198,72 @@ jobs:
           name: unity-editor-log-${{ matrix.testMode }}
           path: artifacts/unity-log-${{ matrix.testMode }}
           if-no-files-found: ignore
+
+  player-action-smoke:
+    name: Build and run IL2CPP action smoke test
+    needs: preflight
+    if: needs.preflight.outputs.run-tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify dispatched commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Assemble Unity player smoke project
+        id: project
+        run: |
+          set -euo pipefail
+          .github/scripts/setup-unity-test-project.sh "${TEST_PROJECT_PATH}"
+          cp -R .github/unity-player-smoke/Assets/. "${TEST_PROJECT_PATH}/Assets/"
+          version="$(sed -n 's/^m_EditorVersion: //p' "${TEST_PROJECT_PATH}/ProjectSettings/ProjectVersion.txt")"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build IL2CPP player with High stripping
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.TEST_PROJECT_PATH }}
+          targetPlatform: StandaloneLinux64
+          customImage: unityci/editor:ubuntu-${{ steps.project.outputs.version }}-linux-il2cpp-3
+          buildMethod: ActionSmokeBuild.Build
+          buildsPath: build/action-smoke
+          buildName: ActionSmoke
+          versioning: None
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: Build MCP server
+        working-directory: mcp
+        run: |
+          npm ci
+          npm run build
+
+      - name: Discover and call the private action through MCP
+        id: smoke
+        run: |
+          mkdir -p artifacts
+          node mcp/test/player-action-smoke.mjs \
+            build/action-smoke/StandaloneLinux64/ActionSmoke.x86_64 artifacts/action-smoke-player.log
+
+      - name: Print player log on failure
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: |
+          if [ -f artifacts/action-smoke-player.log ]; then
+            tail -n 120 artifacts/action-smoke-player.log
+          fi
