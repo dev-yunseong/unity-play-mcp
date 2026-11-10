@@ -1,0 +1,4 @@
+{
+  "name": "UnityPlayMcp.ActionSmoke.Game",
+  "references": ["UnityPlayMcp.Runtime"]
+}
