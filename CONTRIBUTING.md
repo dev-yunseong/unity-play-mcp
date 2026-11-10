@@ -1,49 +1,6 @@
 # Unity Play MCP에 기여하기
 
-## 게임 전용 액션 추가
-
-게임에서 자주 확인하는 동작은 **C# 클래스 하나로 MCP 액션에 추가할 수 있습니다.** `IUnityAction`을 구현하고 `[UnityAction]`에 이름, 설명, 인자 순서를 적으면 에이전트가 기존 `perform_actions`에서 호출할 수 있습니다. 게임 쪽 코드에 액션과 설명을 함께 두면 됩니다. MCP 서버 코드나 도구 목록을 따로 수정할 필요가 없습니다.
-
-Unity Play MCP 패키지를 참조하는 게임의 런타임 어셈블리에 액션 클래스를 작성하세요. 이 예제는 Build Settings에 포함된 씬을 열고 로딩이 끝나면 씬 이름을 반환합니다.
-
-```csharp
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using UnityPlayMcp;
-using UnityPlayMcp.Protocol.Dto;
-
-[UnityAction("load_test_scene", "Load a scene included in Build Settings.", "[scene: string]")]
-public sealed class LoadTestSceneAction : IUnityAction
-{
-    public IEnumerator Execute(int id, List<object> parameters, Action<ActionResultDto> completed)
-    {
-        if (parameters.Count != 1 || !(parameters[0] is string scene)
-            || string.IsNullOrWhiteSpace(scene) || !Application.CanStreamedLevelBeLoaded(scene))
-        {
-            completed(ActionResultDto.Failure(id, "Pass a scene name from Build Settings."));
-            yield break;
-        }
-
-        yield return SceneManager.LoadSceneAsync(scene, LoadSceneMode.Single);
-        completed(ActionResultDto.Success(id, SceneManager.GetActiveScene().name));
-    }
-}
-```
-
-기본 생성자가 있는 클래스를 사용하세요. 액션 이름은 영문 소문자로 시작하고 영문 소문자, 숫자, 밑줄을 최대 64자까지 쓸 수 있습니다. 중복된 이름과 예약된 이름은 등록에서 제외됩니다. 입력값은 `Execute`에서 검증하고, 실행이 끝나기 전에 `completed`를 한 번 호출하세요.
-
-Play Mode에서 `get_play_capabilities`를 호출하면 `unity.registeredActions`에 액션 이름, 설명, 인자가 표시됩니다. `QA_Menu` 씬을 열려면 `perform_actions`에 아래처럼 요청합니다.
-
-```json
-{
-  "actions": [
-    { "method": "unity_action", "name": "load_test_scene", "params": ["QA_Menu"] }
-  ]
-}
-```
+게임 프로젝트에서 액션을 추가하는 방법은 [사용자 가이드](docs/project-actions.md)를 참고하세요.
 
 ## 액션을 찾고 실행하는 방식
 

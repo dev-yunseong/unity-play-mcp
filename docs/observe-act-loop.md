@@ -112,7 +112,7 @@ Real game classes belong in your game or a test/sample assembly, never in the pa
 
 ## 프로젝트 액션 추가
 
-`IUnityAction`과 `[UnityAction]`으로 프로젝트 액션을 등록하고 `perform_actions`에서 호출할 수 있습니다. [액션 추가 예제](../CONTRIBUTING.md#게임-전용-액션-추가)
+`IUnityAction`과 `[UnityAction]`으로 프로젝트 액션을 등록하고 `perform_actions`에서 호출할 수 있습니다. [액션 추가 예제](project-actions.md)
 
 ## Not covered
 
