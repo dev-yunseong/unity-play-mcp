@@ -39,17 +39,7 @@ public sealed class LoadTestSceneAction : IUnityAction
 
 ## 2. Play Mode에서 실행하기
 
-Play Mode에서 에이전트에게 “`load_test_scene` 액션으로 `QA_Menu` 씬을 열어 줘”라고 요청하세요. `QA_Menu`는 프로젝트의 Build Settings에 포함된 씬 이름으로 바꿔 쓰면 됩니다.
-
-MCP를 직접 호출한다면 먼저 `get_play_capabilities`의 `unity.registeredActions`에서 액션 이름, 설명, 인자를 확인하세요. 그다음 아래 입력을 `perform_actions`에 보냅니다.
-
-```json
-{
-  "actions": [
-    { "method": "unity_action", "name": "load_test_scene", "params": ["QA_Menu"] }
-  ]
-}
-```
+Play Mode를 시작하고 에이전트에게 “QA_Menu 씬을 열어 줘”라고 요청하세요. QA_Menu 대신 프로젝트의 Build Settings에 포함된 씬 이름을 쓰면 됩니다.
 
 ## 기본 액션 목록
 
