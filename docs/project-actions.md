@@ -39,7 +39,7 @@ public sealed class LoadTestSceneAction : IUnityAction
 
 ## 2. Play Mode에서 실행하기
 
-Play Mode를 시작하고 에이전트에게 “QA_Menu 씬을 열어 줘”라고 요청하세요. QA_Menu 대신 프로젝트의 Build Settings에 포함된 씬 이름을 쓰면 됩니다.
+Play Mode에서 추가한 액션과 관련된 작업을 에이전트에게 요청하세요. 에이전트가 등록된 액션 목록을 조회하고, 요청에 맞는 액션을 찾아 필요한 인자와 함께 실행합니다.
 
 ## 기본 액션 목록
 
