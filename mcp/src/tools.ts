@@ -113,6 +113,11 @@ export const performActionSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("start_readings") }).strict(),
   z.object({ method: z.literal("stop_readings") }).strict(),
   z.object({
+    method: z.literal("unity_action"),
+    name: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+    params: z.array(z.unknown()).describe("Positional arguments listed in get_play_capabilities."),
+  }).strict(),
+  z.object({
     method: z.literal("capture_screen"),
     ...objectRefShape(),
     maxEdge: maxEdgeSchema().optional(),
@@ -265,6 +270,8 @@ export function toWireAction(action: Exclude<PerformAction, { method: "click" | 
       return { method: action.method, params: [{ clearPlayerPrefs: action.clearPlayerPrefs }] };
     case "capture_screen":
       return { method: action.method, params: captureScreenParams(action) };
+    case "unity_action":
+      return { method: action.method, params: [action.name, ...action.params] };
     case "pause_time":
     case "resume_time":
     case "start_readings":
@@ -1170,7 +1177,8 @@ export function registerTools(server: McpServer, connection: UnityConnection, st
       + "A successful result only means Unity accepted the input, not that its in-game effect has appeared yet; call wait_for_condition or read the state again to confirm the effect. "
       + "An action that fails (for example an id that is no longer valid) does not stop the actions after it; every action reports its own success. "
       + "Ids from get_scene_state or get_visible_elements stop being valid when the scene reloads or the object is destroyed or recreated, including inside one batch (a card that is used and replaced gets a new id); read again for new ids. "
-      + "A capture_screen action returns its screenshot as an image content block, like the capture_screen tool, and its result entry carries the same description with imageBlock (the 1-based image position) instead of the base64 data.",
+      + "A capture_screen action returns its screenshot as an image content block, like the capture_screen tool, and its result entry carries the same description with imageBlock (the 1-based image position) instead of the base64 data."
+      + ' For a project action, use {"method":"unity_action","name":"...","params":[]}. Find its name and argument order in get_play_capabilities under unity.registeredActions.',
     inputSchema: { actions: z.array(performActionSchema).min(1) },
   }, async ({ actions }) => {
     try {

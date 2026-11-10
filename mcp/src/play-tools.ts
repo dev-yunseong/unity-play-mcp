@@ -110,7 +110,7 @@ export function registerPlayTools(
   client.onSessionChange((sessionId) => log.changeSession(sessionId));
 
   server.registerTool("get_play_capabilities", {
-    description: "Report what the connected Unity Play MCP runtime supports: protocol/runtime/server versions, the new tools, input paths, 2D/3D physics and UI support, registered semantic providers, allowed observation scopes, and limits. "
+    description: "Report what the connected Unity Play MCP runtime supports: protocol/runtime/server versions, the new tools, input paths, 2D/3D physics and UI support, registered semantic providers, allowed observation scopes, limits, and project actions for perform_actions. "
       + "Fails with unsupported_capability when the Unity package is older than this server; the existing tools keep working.",
     inputSchema: {},
   }, async () => {

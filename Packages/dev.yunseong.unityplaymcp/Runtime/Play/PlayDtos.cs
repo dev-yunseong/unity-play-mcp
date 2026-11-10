@@ -279,6 +279,8 @@ namespace UnityPlayMcp.Play
         [JsonProperty("sessionId")] public string SessionId { get; set; }
         [JsonProperty("tools")] public List<string> Tools { get; set; }
         [JsonProperty("inputPaths")] public List<string> InputPaths { get; set; }
+        [JsonProperty("registeredActions", NullValueHandling = NullValueHandling.Ignore)]
+        public IReadOnlyList<RegisteredActionDto> RegisteredActions { get; set; }
         [JsonProperty("inputSystem")] public string InputSystem { get; set; }
         [JsonProperty("physics2D")] public bool Physics2D { get; set; }
         [JsonProperty("physics3D")] public bool Physics3D { get; set; }

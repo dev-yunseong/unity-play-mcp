@@ -27,12 +27,24 @@ export class PlayCallError extends Error {
   }
 }
 
+export interface RegisteredUnityAction {
+  name: string;
+  description: string;
+  parameters: string;
+}
+
+function isRegisteredUnityAction(value: unknown): value is RegisteredUnityAction {
+  return isRecord(value) && typeof value.name === "string"
+    && typeof value.description === "string" && typeof value.parameters === "string";
+}
+
 export interface PlayCapabilities {
   protocolVersion: number;
   runtimeVersion?: string;
   requiredServerVersion?: string;
   sessionId: string;
   tools: string[];
+  registeredActions?: RegisteredUnityAction[];
   inputPaths: string[];
   physics2D: boolean;
   physics3D: boolean;
@@ -124,6 +136,8 @@ export class PlayClient {
       sessionId: raw.sessionId,
       tools: Array.isArray(raw.tools) ? raw.tools.filter((item): item is string => typeof item === "string") : [],
       inputPaths: Array.isArray(raw.inputPaths) ? raw.inputPaths.filter((item): item is string => typeof item === "string") : [],
+      ...(Array.isArray(raw.registeredActions)
+        ? { registeredActions: raw.registeredActions.filter(isRegisteredUnityAction) } : {}),
       physics2D: raw.physics2D === true,
       physics3D: raw.physics3D === true,
       ui: raw.ui === true,

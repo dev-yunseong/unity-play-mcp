@@ -8,7 +8,7 @@ import { PLAY_LIMITS } from "./play-types.js";
 const MUTATING_METHODS = new Set([
   "button_click", "pointer_click", "pointer_drag", "pointer_hover", "enter_text", "move_mouse",
   "mouse_down", "mouse_up", "key_click", "key_down", "key_up", "set_axis", "set_button",
-  "pause_time", "resume_time", "reset_game",
+  "pause_time", "resume_time", "reset_game", "unity_action",
 ]);
 
 export function isMutatingMethod(method: string): boolean {

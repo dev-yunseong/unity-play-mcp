@@ -6,7 +6,7 @@ import { expandActions, performActionSchema } from "../src/tools.js";
 
 /// agent 가 보내는 이름 있는 action 과 Unity 가 받아야 하는 `params` 배열의 대응.
 ///
-/// 배열의 순서와 값은 Unity 쪽 protocol 이므로 16 개 method 를 모두 고정한다.
+/// 배열의 순서와 값은 Unity 쪽 protocol 이므로 17 개 method 를 모두 고정한다.
 const wireCases: ReadonlyArray<{
   name: string;
   action: unknown;
@@ -48,6 +48,11 @@ const wireCases: ReadonlyArray<{
   },
   { name: "start_readings", action: { method: "start_readings" }, params: [] },
   { name: "stop_readings", action: { method: "stop_readings" }, params: [] },
+  {
+    name: "unity_action",
+    action: { method: "unity_action", name: "test_echo", params: ["hello", { count: 2 }, null] },
+    params: ["test_echo", "hello", { count: 2 }, null],
+  },
   { name: "capture_screen for the whole screen", action: { method: "capture_screen" }, params: [] },
   {
     name: "capture_screen for a scaled whole screen",
@@ -93,7 +98,7 @@ for (const { name, action, params } of wireCases) {
 
 test("every method the schema accepts is covered by a wire case", () => {
   const covered = new Set(wireCases.map(({ action }) => (action as { method: string }).method));
-  assert.equal(covered.size, 16);
+  assert.equal(covered.size, 17);
 });
 
 test("set_overlay requires a boolean, including when batched", () => {

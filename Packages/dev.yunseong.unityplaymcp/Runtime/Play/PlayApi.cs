@@ -36,18 +36,20 @@ namespace UnityPlayMcp.Play
         private static readonly HashSet<string> MutatingMethods = new HashSet<string>
         {
             "enter_text", "move_mouse", "mouse_down", "mouse_up", "key_click", "key_down", "key_up",
-            "set_axis", "set_button", "pause_time", "resume_time", "reset_game"
+            "set_axis", "set_button", "pause_time", "resume_time", "reset_game", ActionRegistry.ProjectMethod
         };
 
         private readonly IScreenCapturer capturer;
+        private readonly IReadOnlyList<RegisteredActionDto> registeredActions;
         private readonly EntityRegistry registry;
         private readonly PlayEntityScanner scanner;
         private readonly PlaySpaceQueries space;
         private readonly OperationTable operations = new OperationTable();
         private long inputRevision;
 
-        public PlayApi(IScreenCapturer capturer)
+        public PlayApi(IScreenCapturer capturer, IReadOnlyList<RegisteredActionDto> registeredActions = null)
         {
+            this.registeredActions = registeredActions;
             this.capturer = capturer;
             SessionId = Guid.NewGuid().ToString("N");
             registry = new EntityRegistry(SessionId);
@@ -230,6 +232,7 @@ namespace UnityPlayMcp.Play
                 Physics3D = true,
                 Ui = true,
                 Providers = PlaySemantics.Statuses(),
+                RegisteredActions = registeredActions,
                 ObservationPolicies = new List<string> { "player", "debug" },
                 Limits = new Dictionary<string, int>
                 {
