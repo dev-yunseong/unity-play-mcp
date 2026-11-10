@@ -36,7 +36,7 @@ namespace UnityPlayMcp.Play
         private static readonly HashSet<string> MutatingMethods = new HashSet<string>
         {
             "enter_text", "move_mouse", "mouse_down", "mouse_up", "key_click", "key_down", "key_up",
-            "set_axis", ActionRegistry.SetButtonMethod, "pause_time", "resume_time", "reset_game", ActionRegistry.ProjectMethod
+            "set_axis", "set_button", "pause_time", "resume_time", "reset_game", ActionRegistry.ProjectMethod
         };
 
         private readonly IScreenCapturer capturer;

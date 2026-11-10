@@ -40,7 +40,7 @@ const startup = new AbortController();
 
 try {
   await Promise.race([verifyPlayer(), prematureExit]);
-  console.log("IL2CPP player executed the private game action and both set_button override calls through MCP.");
+  console.log("IL2CPP player verified project actions and set_button and capture_screen overrides through MCP.");
 } finally {
   startup.abort();
   try {
@@ -76,21 +76,37 @@ async function verifyPlayer() {
   assert.ok(!capabilities.structuredContent.unity.registeredActions.some(({ name }) => name === "set_button"));
 
   const nonce = randomUUID();
-  const [press] = await callActions("set_button", { name: nonce, pressed: true });
+  const [press] = actionResults(await callTool("set_button", { name: nonce, pressed: true }));
   assert.equal(press.returnValue, "press:" + nonce);
 
-  const [echo, release] = await callActions("perform_actions", { actions: [
+  const directCapture = await callTool("capture_screen", {});
+  const [image] = directCapture.content;
+  assert.deepEqual(image, {
+    type: "image",
+    mimeType: "image/png",
+    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOQLDkEAAH5AVAz2BXaAAAAAElFTkSuQmCC",
+  });
+
+  const batch = await callTool("perform_actions", { actions: [
     { method: "unity_action", name: action.name, params: [nonce] },
     { method: "set_button", name: nonce, pressed: false },
+    { method: "capture_screen" },
   ] });
+  const [echo, release, capture] = actionResults(batch);
   assert.equal(echo.returnValue, "player:" + nonce);
   assert.equal(release.returnValue, "release:" + nonce);
+  assert.equal(capture.returnValue.imageBlock, 1);
+  assert.deepEqual(batch.content[1], image);
 }
 
-async function callActions(name, args) {
+async function callTool(name, args) {
   const result = await client.callTool({ name, arguments: args }, undefined,
     { timeout: 5_000, signal: startup.signal });
   assert.ok(!result.isError, JSON.stringify(result));
+  return result;
+}
+
+function actionResults(result) {
   const [content] = result.content;
   assert.equal(content?.type, "text");
   const actions = JSON.parse(content.text.slice(content.text.indexOf("\n") + 1));

@@ -5,7 +5,7 @@ using UnityPlayMcp.Protocol.Dto;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("set_overlay", "Show or hide the agent overlay.", "[visible: boolean]")]
+    [UnityAction(BuiltInAction.SetOverlay, "set_overlay", "Show or hide the agent overlay.", "[visible: boolean]")]
     internal sealed class OverlayAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)

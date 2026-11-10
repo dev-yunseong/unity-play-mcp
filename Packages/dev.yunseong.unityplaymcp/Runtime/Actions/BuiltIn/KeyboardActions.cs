@@ -7,7 +7,7 @@ using static UnityPlayMcp.ActionParameters;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("enter_text", "Set text on an input object.", "[targetId, value]")]
+    [UnityAction(BuiltInAction.EnterText, "enter_text", "Set text on an input object.", "[targetId, value]")]
     internal sealed class EnterTextAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(
@@ -47,7 +47,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("key_click", "Press and release a key after a duration.", "[keyCode, positiveDurationSeconds]")]
+    [UnityAction(BuiltInAction.KeyClick, "key_click", "Press and release a key after a duration.", "[keyCode, positiveDurationSeconds]")]
     internal sealed class KeyClickAction : BuiltInUnityAction
     {
         // 마우스 버튼은 가상 키보드처럼 자동 만료되지 않으므로 unscaled time으로 기다린 뒤 직접 놓는다.
@@ -78,7 +78,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("key_down", "Hold a key.", "[keyCode]")]
+    [UnityAction(BuiltInAction.KeyDown, "key_down", "Hold a key.", "[keyCode]")]
     internal sealed class KeyDownAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -87,7 +87,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("key_up", "Release a held key.", "[keyCode]")]
+    [UnityAction(BuiltInAction.KeyUp, "key_up", "Release a held key.", "[keyCode]")]
     internal sealed class KeyUpAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)

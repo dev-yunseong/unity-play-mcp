@@ -8,7 +8,7 @@ using UnityPlayMcp.Protocol.Dto;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("reset_game", "Reload the scene that started the run.", "[{ clearPlayerPrefs?: boolean }]")]
+    [UnityAction(BuiltInAction.ResetGame, "reset_game", "Reload the scene that started the run.", "[{ clearPlayerPrefs?: boolean }]")]
     internal sealed class ResetGameAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(

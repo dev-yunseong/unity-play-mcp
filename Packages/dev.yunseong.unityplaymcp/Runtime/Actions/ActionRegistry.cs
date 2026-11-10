@@ -27,7 +27,6 @@ namespace UnityPlayMcp
     internal sealed class ActionRegistry
     {
         public const string ProjectMethod = "unity_action";
-        internal const string SetButtonMethod = "set_button";
 
         private static readonly Regex ActionName = new Regex(@"\A[a-z][a-z0-9_]{0,63}\z");
         private static readonly Lazy<Type[]> ActionTypes = new Lazy<Type[]>(DiscoverActionTypes);
@@ -37,19 +36,24 @@ namespace UnityPlayMcp
         private readonly Dictionary<string, IUnityAction> projectActions =
             new Dictionary<string, IUnityAction>(StringComparer.Ordinal);
 
-        private readonly IUnityAction setButtonOverride;
+        private readonly Dictionary<string, IUnityAction> overrides =
+            new Dictionary<string, IUnityAction>(StringComparer.Ordinal);
 
-        public ActionRegistry(ActionContext context)
+        public ActionRegistry(ActionContext context) : this(context, DiscoverOverrides()) { }
+
+        internal ActionRegistry(ActionContext context, IEnumerable<(BuiltInAction Target, Type Implementation)> overrideCandidates)
         {
             var entries = ActionTypes.Value.Select(type => (Type: type, Metadata: type.GetCustomAttribute<UnityActionAttribute>()))
                 .Where(entry => entry.Metadata != null && !entry.Type.IsDefined(typeof(OverrideUnityActionAttribute), false))
                 .ToArray();
 
+            var builtInNames = new Dictionary<BuiltInAction, string>();
             foreach (var entry in entries.Where(entry => typeof(BuiltInUnityAction).IsAssignableFrom(entry.Type)))
             {
                 var action = (BuiltInUnityAction)Activator.CreateInstance(entry.Type, true);
                 action.Context = context;
                 builtIns.Add(entry.Metadata.Name, action);
+                builtInNames.Add(entry.Metadata.BuiltInTarget.Value, entry.Metadata.Name);
             }
 
             var descriptions = new List<RegisteredActionDto>();
@@ -83,55 +87,57 @@ namespace UnityPlayMcp
             }
 
             ProjectActions = descriptions;
-            setButtonOverride = FindSetButtonOverride(ActionTypes.Value);
+            RegisterOverrides(builtInNames, overrideCandidates);
         }
 
-        public bool TryGetOverride(string name, out IUnityAction action)
-        {
-            action = name == SetButtonMethod ? setButtonOverride : null;
-            return action != null;
-        }
+        public bool TryGetOverride(string name, out IUnityAction action) =>
+            overrides.TryGetValue(name ?? string.Empty, out action);
 
-        private static IUnityAction FindSetButtonOverride(IEnumerable<Type> actionTypes)
+        private static IEnumerable<(BuiltInAction Target, Type Implementation)> DiscoverOverrides()
         {
-            var candidates = new List<Type>();
-            foreach (var type in actionTypes)
+            foreach (var type in ActionTypes.Value)
             {
                 var metadata = type.GetCustomAttribute<OverrideUnityActionAttribute>();
                 if (metadata == null)
                     continue;
-
-                if (metadata.Target != BuiltInAction.SetButton || type.IsDefined(typeof(UnityActionAttribute), false))
+                if (type.IsDefined(typeof(UnityActionAttribute), false))
                 {
-                    Debug.LogWarning("[Unity Play MCP] Unsupported or ambiguous Unity action override on " + type.FullName);
+                    Debug.LogWarning("[Unity Play MCP] Ambiguous Unity action override on " + type.FullName);
                     continue;
                 }
 
-                candidates.Add(type);
+                yield return (metadata.Target, type);
             }
-
-            return CreateSetButtonOverride(candidates);
         }
 
-        internal static IUnityAction CreateSetButtonOverride(IReadOnlyList<Type> candidates)
+        private void RegisterOverrides(
+            IReadOnlyDictionary<BuiltInAction, string> builtInNames,
+            IEnumerable<(BuiltInAction Target, Type Implementation)> candidates)
         {
-            if (candidates.Count == 0)
-                return null;
-            if (candidates.Count > 1)
+            foreach (var group in candidates.GroupBy(candidate => candidate.Target))
             {
-                Debug.LogWarning("[Unity Play MCP] Multiple overrides for set_button. Using the default action.");
-                return null;
-            }
+                if (!builtInNames.TryGetValue(group.Key, out var name))
+                {
+                    Debug.LogWarning("[Unity Play MCP] Unknown built-in action override target: " + group.Key);
+                    continue;
+                }
 
-            try
-            {
-                return (IUnityAction)Activator.CreateInstance(candidates[0], true);
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning("[Unity Play MCP] Could not create override for set_button: "
-                    + exception.GetBaseException().Message);
-                return null;
+                var implementations = group.Select(candidate => candidate.Implementation).ToArray();
+                if (implementations.Length > 1)
+                {
+                    Debug.LogWarning("[Unity Play MCP] Multiple overrides for " + name + ". Using the default action.");
+                    continue;
+                }
+
+                try
+                {
+                    overrides.Add(name, (IUnityAction)Activator.CreateInstance(implementations[0], true));
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("[Unity Play MCP] Could not create override for " + name + ": "
+                        + exception.GetBaseException().Message);
+                }
             }
         }
 

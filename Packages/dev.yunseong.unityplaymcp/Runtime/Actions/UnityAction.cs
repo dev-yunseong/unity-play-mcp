@@ -15,6 +15,13 @@ namespace UnityPlayMcp
             Parameters = parameters;
         }
 
+        internal UnityActionAttribute(BuiltInAction target, string name, string description, string parameters)
+            : this(name, description, parameters)
+        {
+            BuiltInTarget = target;
+        }
+
+        internal BuiltInAction? BuiltInTarget { get; }
         public string Name { get; }
         public string Description { get; }
         public string Parameters { get; }

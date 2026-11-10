@@ -7,7 +7,7 @@ using static UnityPlayMcp.ActionParameters;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("move_mouse", "Move the pointer in screen coordinates.", "[x, y]")]
+    [UnityAction(BuiltInAction.MoveMouse, "move_mouse", "Move the pointer in screen coordinates.", "[x, y]")]
     internal sealed class MoveMouseAction : BuiltInUnityAction
     {
         // Unity 좌표의 원점은 좌하단이므로 화면에서 받은 y를 뒤집는다.
@@ -30,7 +30,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("mouse_down", "Press a mouse button.", "[button?]")]
+    [UnityAction(BuiltInAction.MouseDown, "mouse_down", "Press a mouse button.", "[button?]")]
     internal sealed class MouseDownAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -39,7 +39,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("mouse_up", "Release a mouse button.", "[button?]")]
+    [UnityAction(BuiltInAction.MouseUp, "mouse_up", "Release a mouse button.", "[button?]")]
     internal sealed class MouseUpAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)

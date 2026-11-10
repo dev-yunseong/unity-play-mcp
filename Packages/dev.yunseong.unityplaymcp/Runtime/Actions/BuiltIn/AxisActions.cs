@@ -8,7 +8,7 @@ using static UnityPlayMcp.AxisParameters;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("set_axis", "Set a legacy Input Manager axis.", "[axisName, valueBetweenMinusOneAndOne]")]
+    [UnityAction(BuiltInAction.SetAxis, "set_axis", "Set a legacy Input Manager axis.", "[axisName, valueBetweenMinusOneAndOne]")]
     internal sealed class SetAxisAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -37,7 +37,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction(ActionRegistry.SetButtonMethod, "Set a legacy Input Manager button.", "[axisName, pressed]")]
+    [UnityAction(BuiltInAction.SetButton, "set_button", "Set a legacy Input Manager button.", "[axisName, pressed]")]
     internal sealed class SetButtonAction : BuiltInUnityAction
     {
         // 버튼을 놓을 때 축을 실제 입력에 돌려줘 GetButtonUp이 변화를 읽게 한다.

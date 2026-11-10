@@ -53,28 +53,28 @@ MCP를 직접 호출한다면 먼저 `get_play_capabilities`의 `unity.registere
 
 ## 기본 액션 목록
 
-`perform_actions`에서 아래 이름을 사용할 수 있습니다. 현재 교체를 지원하는 기본 액션은 **`set_button`**입니다.
+`perform_actions`에서 아래 이름을 사용할 수 있습니다. **16개 모두** `[OverrideUnityAction]`으로 교체할 수 있습니다. `Execute`의 `parameters`에는 표의 순서대로 값이 들어옵니다.
 
-| 호출 이름 | `BuiltInAction` 값 | 하는 일 | 교체 |
+| 호출 이름 | `BuiltInAction` 값 | 하는 일 | `parameters` 순서 |
 | --- | --- | --- | --- |
-| `move_mouse` | `MoveMouse` | 화면 좌표로 포인터 이동 | — |
-| `mouse_down` | `MouseDown` | 마우스 버튼 누르기 | — |
-| `mouse_up` | `MouseUp` | 마우스 버튼 떼기 | — |
-| `enter_text` | `EnterText` | 입력 필드에 텍스트 입력 | — |
-| `key_click` | `KeyClick` | 키를 잠시 눌렀다 떼기 | — |
-| `key_down` | `KeyDown` | 키 누르기 | — |
-| `key_up` | `KeyUp` | 키 떼기 | — |
-| `set_axis` | `SetAxis` | Input Manager 축 값 설정 | — |
-| `set_button` | `SetButton` | 이름으로 버튼을 누르거나 떼기 | 지원 |
+| `move_mouse` | `MoveMouse` | 화면 좌표로 포인터 이동 | `x, y` |
+| `mouse_down` | `MouseDown` | 마우스 버튼 누르기 | `button` |
+| `mouse_up` | `MouseUp` | 마우스 버튼 떼기 | `button` |
+| `enter_text` | `EnterText` | 입력 필드에 텍스트 입력 | `targetId, text` |
+| `key_click` | `KeyClick` | 키를 잠시 눌렀다 떼기 | `key, seconds` |
+| `key_down` | `KeyDown` | 키 누르기 | `key` |
+| `key_up` | `KeyUp` | 키 떼기 | `key` |
+| `set_axis` | `SetAxis` | Input Manager 축 값 설정 | `name, value` |
+| `set_button` | `SetButton` | 이름으로 버튼을 누르거나 떼기 | `name, pressed` |
 | `pause_time` | `PauseTime` | 게임 시간 멈추기 | — |
 | `resume_time` | `ResumeTime` | 멈추기 전의 시간 배율로 복구 | — |
-| `reset_game` | `ResetGame` | 시작 씬 다시 불러오기 | — |
+| `reset_game` | `ResetGame` | 시작 씬 다시 불러오기 | `{ clearPlayerPrefs }` |
 | `start_readings` | `StartReadings` | 실행 중 장면 상태 수집 시작 | — |
 | `stop_readings` | `StopReadings` | 장면 상태 수집 중단 | — |
-| `capture_screen` | `CaptureScreen` | 전체 화면이나 오브젝트 영역 캡처 | — |
-| `set_overlay` | `SetOverlay` | 에이전트 입력 오버레이 표시 또는 숨기기 | — |
+| `capture_screen` | `CaptureScreen` | 전체 화면이나 오브젝트 영역 캡처 | `targetId?, options?` |
+| `set_overlay` | `SetOverlay` | 에이전트 입력 오버레이 표시 또는 숨기기 | `visible` |
 
-## 기본 버튼 동작 교체하기
+## 기본 액션 교체하기
 
 게임에 자체 입력 시스템이 있다면 `IUnityAction`을 구현한 클래스에 `[OverrideUnityAction(BuiltInAction.SetButton)]`을 붙이세요. 같은 `set_button` 호출이 게임 구현으로 전달됩니다. 아래 예제에서는 게임의 입력 코드가 `GameButtonAction.Changed`를 구독해 버튼 상태를 받습니다.
 
@@ -106,4 +106,8 @@ public sealed class GameButtonAction : IUnityAction
 
 `set_button` 도구에 `{"name":"Jump","pressed":true}`를 보내면 게임 구현이 `Jump` 누르기를 받습니다. 떼기는 `pressed: false`로 보냅니다. `perform_actions`에서도 기존처럼 `{"method":"set_button","name":"Jump","pressed":true}`를 사용합니다. 게임이 직접 관리하는 눌림 상태는 연결이 끊겼을 때도 게임 쪽에서 정리하세요.
 
-같은 대상을 교체하는 클래스가 여러 개이거나 교체 인스턴스를 만들 수 없으면 기본 구현이 실행됩니다. 지원하지 않는 enum 값을 지정하면 Unity Console에 경고가 표시됩니다.
+같은 대상을 교체하는 클래스가 여러 개이거나 교체 인스턴스를 만들 수 없으면 그 대상의 기본 구현이 실행됩니다. 다른 액션의 교체는 그대로 적용됩니다.
+
+교체 구현은 기존 입력과 반환 형식을 따르세요. 예를 들어 `capture_screen`의 성공 결과에는 `mimeType`(`image/png` 또는 `image/jpeg`), `width`, `height`, `clipped`, Base64 문자열 `data`가 필요합니다. 캡처 옵션에는 `maxEdge`와 `padding`이 들어올 수 있고, 전체 화면에 `maxEdge`만 지정하면 `parameters`는 `[null, options]`입니다. 화면 상태를 읽는 액션은 읽기 동작을 유지하세요. `start_readings`와 `stop_readings`는 성공 응답을 반환하기 전에 실제 수집을 시작하거나 중단해야 합니다.
+
+교체는 에이전트가 호출하는 표의 액션에 적용됩니다. `observe`가 내부에서 찍는 이미지와 SDK의 자동 수집 관리는 각자의 기존 경로로 실행됩니다. `pause_time`이 게임 쪽에서 시간 배율을 따로 저장한다면 `resume_time`도 같은 값을 쓰도록 교체하고 연결 종료 시 게임이 저장한 상태를 정리하세요.

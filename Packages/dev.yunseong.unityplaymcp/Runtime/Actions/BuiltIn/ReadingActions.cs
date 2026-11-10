@@ -5,7 +5,7 @@ using UnityPlayMcp.Protocol.Dto;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("start_readings", "Start live scene readings.", "[]")]
+    [UnityAction(BuiltInAction.StartReadings, "start_readings", "Start live scene readings.", "[]")]
     internal sealed class StartReadingsAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -28,7 +28,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("stop_readings", "Stop live scene readings.", "[]")]
+    [UnityAction(BuiltInAction.StopReadings, "stop_readings", "Stop live scene readings.", "[]")]
     internal sealed class StopReadingsAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)

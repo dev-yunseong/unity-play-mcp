@@ -6,7 +6,7 @@ using UnityPlayMcp.Protocol.Dto;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("pause_time", "Pause game time.", "[]")]
+    [UnityAction(BuiltInAction.PauseTime, "pause_time", "Pause game time.", "[]")]
     internal sealed class PauseTimeAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)
@@ -28,7 +28,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("resume_time", "Restore the time scale saved by pause_time.", "[]")]
+    [UnityAction(BuiltInAction.ResumeTime, "resume_time", "Restore the time scale saved by pause_time.", "[]")]
     internal sealed class ResumeTimeAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(int actionId, List<object> parameters, Action<ActionResultDto> completed)

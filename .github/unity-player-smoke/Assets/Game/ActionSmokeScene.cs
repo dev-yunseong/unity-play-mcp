@@ -32,4 +32,23 @@ public sealed class ActionSmokeScene : MonoBehaviour
             yield break;
         }
     }
+
+    [OverrideUnityAction(BuiltInAction.CaptureScreen)]
+    private sealed class SmokeCaptureScreenAction : IUnityAction
+    {
+        private SmokeCaptureScreenAction() { }
+
+        public IEnumerator Execute(int id, List<object> parameters, Action<ActionResultDto> completed)
+        {
+            completed(ActionResultDto.Success(id, new Dictionary<string, object>
+            {
+                ["mimeType"] = "image/png",
+                ["width"] = 1,
+                ["height"] = 1,
+                ["clipped"] = false,
+                ["data"] = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOQLDkEAAH5AVAz2BXaAAAAAElFTkSuQmCC"
+            }));
+            yield break;
+        }
+    }
 }

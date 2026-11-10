@@ -8,7 +8,7 @@ using UnityPlayMcp.Protocol.Dto;
 
 namespace UnityPlayMcp
 {
-    [UnityAction("capture_screen", "Capture the screen or the area of one object.", "[targetId?, options?]")]
+    [UnityAction(BuiltInAction.CaptureScreen, "capture_screen", "Capture the screen or the area of one object.", "[targetId?, options?]")]
     internal sealed class CaptureScreenAction : BuiltInUnityAction
     {
         public override IEnumerator Execute(
