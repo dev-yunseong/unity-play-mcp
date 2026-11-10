@@ -19,4 +19,17 @@ public sealed class ActionSmokeScene : MonoBehaviour
             yield break;
         }
     }
+
+    [OverrideUnityAction(BuiltInAction.SetButton)]
+    private sealed class SmokeSetButtonAction : IUnityAction
+    {
+        private SmokeSetButtonAction() { }
+
+        public IEnumerator Execute(int id, List<object> parameters, Action<ActionResultDto> completed)
+        {
+            var pressed = (bool)parameters[1];
+            completed(ActionResultDto.Success(id, (pressed ? "press:" : "release:") + (string)parameters[0]));
+            yield break;
+        }
+    }
 }

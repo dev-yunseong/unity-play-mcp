@@ -35,6 +35,8 @@ namespace UnityPlayMcp
         {
             if (method == ActionRegistry.ProjectMethod)
                 return ExecuteProject(actionId, parameters, completed);
+            if (registry.TryGetOverride(method, out var replacement))
+                return ExecuteExtension(replacement, actionId, parameters, completed);
             if (registry.TryGetBuiltIn(method, out var action))
                 return action.Execute(actionId, parameters, completed);
             return Fail(actionId, "Unsupported method: " + method, completed);
@@ -49,23 +51,22 @@ namespace UnityPlayMcp
         private IEnumerator ExecuteProject(int id, List<object> parameters, Action<ActionResultDto> completed)
         {
             if (parameters == null || parameters.Count == 0 || !(parameters[0] is string name))
-            {
-                completed(ActionResultDto.Failure(id, "unity_action requires params [name, ...params]."));
-                yield break;
-            }
-
+                return Fail(id, "unity_action requires params [name, ...params].", completed);
             if (!registry.TryGetProject(name, out var action))
-            {
-                completed(ActionResultDto.Failure(id, "Unknown Unity action: " + name));
-                yield break;
-            }
+                return Fail(id, "Unknown Unity action: " + name, completed);
 
+            return ExecuteExtension(action, id, parameters.GetRange(1, parameters.Count - 1), completed);
+        }
+
+        private static IEnumerator ExecuteExtension(
+            IUnityAction action, int id, List<object> parameters, Action<ActionResultDto> completed)
+        {
             ActionResultDto result = null;
             Exception failure = null;
             IEnumerator routine = null;
             try
             {
-                routine = action.Execute(id, parameters.GetRange(1, parameters.Count - 1), value => result = result ?? value);
+                routine = action.Execute(id, parameters, value => result = result ?? value);
             }
             catch (Exception exception)
             {
@@ -73,17 +74,17 @@ namespace UnityPlayMcp
             }
 
             if (routine != null)
-                yield return RunProjectRoutine(routine, error => failure = error);
+                yield return RunExtensionRoutine(routine, error => failure = error);
 
             if (failure != null)
                 completed(ActionResultDto.Failure(id, "Unity action failed: " + failure.GetBaseException().Message));
             else if (result == null || result.Id != id)
                 completed(ActionResultDto.Failure(id, "Unity action did not return a result for this request."));
             else
-                completed(SerializeProjectResult(result));
+                completed(SerializeExtensionResult(result));
         }
 
-        private static ActionResultDto SerializeProjectResult(ActionResultDto result)
+        private static ActionResultDto SerializeExtensionResult(ActionResultDto result)
         {
             try
             {
@@ -102,7 +103,7 @@ namespace UnityPlayMcp
         }
 
         // Unity가 중첩 IEnumerator를 직접 실행하면 그 안에서 난 예외를 배치가 처리할 수 없다.
-        private static IEnumerator RunProjectRoutine(IEnumerator routine, Action<Exception> onError)
+        private static IEnumerator RunExtensionRoutine(IEnumerator routine, Action<Exception> onError)
         {
             try
             {
@@ -138,7 +139,7 @@ namespace UnityPlayMcp
                     if (nested is CustomYieldInstruction wait)
                         yield return new GuardedWait(wait, OnStepError);
                     else
-                        yield return RunProjectRoutine(nested, OnStepError);
+                        yield return RunExtensionRoutine(nested, OnStepError);
 
                     if (failed) yield break;
                 }

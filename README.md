@@ -35,7 +35,7 @@ Play Mode에서 확인할 동작과 기대 결과를 에이전트에게 알려 �
 
 ### 게임 전용 액션 만들기
 
-테스트 씬 열기처럼 게임에서 자주 쓰는 동작을 에이전트에게 맡길 수 있습니다. 게임 프로젝트에 `IUnityAction`을 구현한 C# 클래스를 만들고 `[UnityAction]`을 붙이세요. Play Mode에서 에이전트에게 그 액션을 실행해 달라고 요청하면 됩니다. [게임 전용 액션 만들기](docs/project-actions.md)
+테스트 씬 열기처럼 게임에서 자주 쓰는 동작을 에이전트에게 맡길 수 있습니다. 게임 프로젝트에 `IUnityAction`을 구현한 C# 클래스를 만들고 `[UnityAction]`을 붙이세요. Play Mode에서 에이전트에게 그 액션을 실행해 달라고 요청하면 됩니다. [게임 전용 액션 만들기](docs/project-actions.md) · [기본 액션 목록과 교체 방법](docs/project-actions.md#기본-액션-목록)
 
 ## 문제 해결
 

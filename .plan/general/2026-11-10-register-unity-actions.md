@@ -16,7 +16,7 @@ Unity 액션은 `IUnityAction`을 구현하고 `[UnityAction]`에서 이름, 설
 
 - 기존 Unity wire method, 실패 메시지, 인자 변환, 코루틴 대기와 생명주기를 보존한다.
 - 기존 MCP 입력 스키마의 이름 있는 인자와 대상 해석을 유지한다. 새 액션용 `{ method: "unity_action", name, params }` 항목 하나를 추가한다. Unity wire에는 예약 method `unity_action`과 평탄한 위치 인자 `[name, ...params]`로 보내고, 별도 프로젝트 레지스트리에서만 이름을 조회한다.
-- 기본 액션을 프로젝트 액션으로 덮어쓸 수 없다. 호스트가 예약 method를 mutating으로 분류해 입력 소유권 검사와 input revision 갱신을 기존과 같은 위치에서 수행한다.
+- `[UnityAction]`은 기본 액션 이름을 덮어쓸 수 없다. 호스트가 예약 method를 mutating으로 분류해 입력 소유권 검사와 input revision 갱신을 기존과 같은 위치에서 수행한다.
 - UnityLinker가 리플렉션으로 만드는 클래스와 기본 생성자를 보존하도록 Unity의 `PreserveAttribute`를 상속한 어트리뷰트를 사용한다.
 
 ## Approach (Checklist)
@@ -52,3 +52,11 @@ Unity 액션은 `IUnityAction`을 구현하고 `[UnityAction]`에서 이름, 설
 - 로컬에서는 가능한 Windows IL2CPP로 같은 테스트를 실행한다. Linux 빌드와 실행은 CI 결과로 확인한다. 검사를 되돌릴 때 CI job과 전용 fixture만 제거한다.
 - 생성물은 무시되는 테스트 프로젝트와 빌드 폴더에 둔다. 실행 전 포트가 비어 있는지 확인하고 빌드 결과와 활성 backend 및 stripping 설정을 검사한다.
 - 첫 Windows 빌드에서 High stripping 후 요청 DTO의 setter와 응답 DTO의 getter가 제거됐다. 실측한 액션 요청·응답과 기능 조회 계약에 `Preserve`를 적용해 다시 빌드한다.
+
+## 기본 액션 교체
+
+- 게임 클래스는 `IUnityAction`을 구현하고 `[OverrideUnityAction(BuiltInAction.SetButton)]`으로 대상을 지정한다. 기본 구현 상속은 요구하지 않는다. enum은 기존 기본 액션 16개의 이름을 제공하며, 첫 교체 대상은 `SetButton`이다.
+- 로드된 게임 어셈블리에서 명시적으로 어트리뷰트를 단 클래스 하나를 선택한다. 같은 대상이 여러 개거나 기본 생성자로 만들 수 없으면 기본 구현을 유지한다. 미지원 대상과 두 등록 어트리뷰트를 함께 붙인 클래스는 경고하고 제외한다.
+- 기존 `set_button` 도구와 배치는 같은 인자를 전달한다. 호스트의 입력 잠금과 revision 갱신을 유지하고, 교체 구현은 프로젝트 액션과 같은 예외·응답 처리를 거친다.
+- 별도 게임 어셈블리의 비공개 구현을 Linux IL2CPP fixture에 추가한다. 중복과 생성 실패는 어트리뷰트 없는 테스트 클래스 목록을 생성 단계에 직접 전달해 다른 테스트의 자동 발견을 오염시키지 않는다. 기존 `set_button` 도구와 `perform_actions`의 `set_button`이 게임 구현의 고유한 결과를 반환하는지 확인한다. 기존 프로젝트 액션도 계속 검증한다.
+- 누르기와 떼기 모두 같은 교체 구현으로 보낸다. `act_and_observe`의 정리 요청도 같은 경로를 타며, 연결이 끊겼을 때 게임이 직접 관리하는 입력의 정리는 게임에 맡긴다. README에 연결된 사용자 문서에서 전체 기본 액션과 현재 교체 가능한 대상을 표시한다.

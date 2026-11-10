@@ -40,7 +40,7 @@ const startup = new AbortController();
 
 try {
   await Promise.race([verifyPlayer(), prematureExit]);
-  console.log("IL2CPP player listed and executed the private game action through MCP.");
+  console.log("IL2CPP player executed the private game action and both set_button override calls through MCP.");
 } finally {
   startup.abort();
   try {
@@ -73,15 +73,27 @@ async function verifyPlayer() {
     parameters: "[value: string]",
   });
 
+  assert.ok(!capabilities.structuredContent.unity.registeredActions.some(({ name }) => name === "set_button"));
+
   const nonce = randomUUID();
-  const result = await client.callTool({
-    name: "perform_actions",
-    arguments: { actions: [{ method: "unity_action", name: action.name, params: [nonce] }] },
-  }, undefined, { timeout: 5_000, signal: startup.signal });
+  const [press] = await callActions("set_button", { name: nonce, pressed: true });
+  assert.equal(press.returnValue, "press:" + nonce);
+
+  const [echo, release] = await callActions("perform_actions", { actions: [
+    { method: "unity_action", name: action.name, params: [nonce] },
+    { method: "set_button", name: nonce, pressed: false },
+  ] });
+  assert.equal(echo.returnValue, "player:" + nonce);
+  assert.equal(release.returnValue, "release:" + nonce);
+}
+
+async function callActions(name, args) {
+  const result = await client.callTool({ name, arguments: args }, undefined,
+    { timeout: 5_000, signal: startup.signal });
   assert.ok(!result.isError, JSON.stringify(result));
   const [content] = result.content;
   assert.equal(content?.type, "text");
-  const [echo] = JSON.parse(content.text.slice(content.text.indexOf("\n") + 1));
-  assert.equal(echo.success, true);
-  assert.equal(echo.returnValue, "player:" + nonce);
+  const actions = JSON.parse(content.text.slice(content.text.indexOf("\n") + 1));
+  assert.ok(actions.every(({ success }) => success));
+  return actions;
 }

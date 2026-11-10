@@ -37,7 +37,7 @@ namespace UnityPlayMcp
         }
     }
 
-    [UnityAction("set_button", "Set a legacy Input Manager button.", "[axisName, pressed]")]
+    [UnityAction(ActionRegistry.SetButtonMethod, "Set a legacy Input Manager button.", "[axisName, pressed]")]
     internal sealed class SetButtonAction : BuiltInUnityAction
     {
         // 버튼을 놓을 때 축을 실제 입력에 돌려줘 GetButtonUp이 변화를 읽게 한다.

@@ -50,3 +50,60 @@ MCP를 직접 호출한다면 먼저 `get_play_capabilities`의 `unity.registere
   ]
 }
 ```
+
+## 기본 액션 목록
+
+`perform_actions`에서 아래 이름을 사용할 수 있습니다. 현재 교체를 지원하는 기본 액션은 **`set_button`**입니다.
+
+| 호출 이름 | `BuiltInAction` 값 | 하는 일 | 교체 |
+| --- | --- | --- | --- |
+| `move_mouse` | `MoveMouse` | 화면 좌표로 포인터 이동 | — |
+| `mouse_down` | `MouseDown` | 마우스 버튼 누르기 | — |
+| `mouse_up` | `MouseUp` | 마우스 버튼 떼기 | — |
+| `enter_text` | `EnterText` | 입력 필드에 텍스트 입력 | — |
+| `key_click` | `KeyClick` | 키를 잠시 눌렀다 떼기 | — |
+| `key_down` | `KeyDown` | 키 누르기 | — |
+| `key_up` | `KeyUp` | 키 떼기 | — |
+| `set_axis` | `SetAxis` | Input Manager 축 값 설정 | — |
+| `set_button` | `SetButton` | 이름으로 버튼을 누르거나 떼기 | 지원 |
+| `pause_time` | `PauseTime` | 게임 시간 멈추기 | — |
+| `resume_time` | `ResumeTime` | 멈추기 전의 시간 배율로 복구 | — |
+| `reset_game` | `ResetGame` | 시작 씬 다시 불러오기 | — |
+| `start_readings` | `StartReadings` | 실행 중 장면 상태 수집 시작 | — |
+| `stop_readings` | `StopReadings` | 장면 상태 수집 중단 | — |
+| `capture_screen` | `CaptureScreen` | 전체 화면이나 오브젝트 영역 캡처 | — |
+| `set_overlay` | `SetOverlay` | 에이전트 입력 오버레이 표시 또는 숨기기 | — |
+
+## 기본 버튼 동작 교체하기
+
+게임에 자체 입력 시스템이 있다면 `IUnityAction`을 구현한 클래스에 `[OverrideUnityAction(BuiltInAction.SetButton)]`을 붙이세요. 같은 `set_button` 호출이 게임 구현으로 전달됩니다. 아래 예제에서는 게임의 입력 코드가 `GameButtonAction.Changed`를 구독해 버튼 상태를 받습니다.
+
+```csharp
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityPlayMcp;
+using UnityPlayMcp.Protocol.Dto;
+
+[OverrideUnityAction(BuiltInAction.SetButton)]
+public sealed class GameButtonAction : IUnityAction
+{
+    public static event Action<string, bool> Changed;
+
+    public IEnumerator Execute(int id, List<object> parameters, Action<ActionResultDto> completed)
+    {
+        if (parameters.Count != 2 || !(parameters[0] is string name) || !(parameters[1] is bool pressed))
+        {
+            completed(ActionResultDto.Failure(id, "Expected a button name and pressed state."));
+            yield break;
+        }
+
+        Changed?.Invoke(name, pressed);
+        completed(ActionResultDto.Success(id));
+    }
+}
+```
+
+`set_button` 도구에 `{"name":"Jump","pressed":true}`를 보내면 게임 구현이 `Jump` 누르기를 받습니다. 떼기는 `pressed: false`로 보냅니다. `perform_actions`에서도 기존처럼 `{"method":"set_button","name":"Jump","pressed":true}`를 사용합니다. 게임이 직접 관리하는 눌림 상태는 연결이 끊겼을 때도 게임 쪽에서 정리하세요.
+
+같은 대상을 교체하는 클래스가 여러 개이거나 교체 인스턴스를 만들 수 없으면 기본 구현이 실행됩니다. 지원하지 않는 enum 값을 지정하면 Unity Console에 경고가 표시됩니다.
