@@ -1,150 +1,44 @@
 # Unity Play MCP
 
-[한국어](README.ko.md) | English
+[![MCP 서버 테스트](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/mcp-tests.yml/badge.svg?branch=develop)](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/mcp-tests.yml)
+[![Unity 테스트](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/unity-tests.yml/badge.svg?branch=develop)](https://github.com/dev-yunseong/unity-play-mcp/actions/workflows/unity-tests.yml)
 
-An MCP server that lets an AI coding agent see and play your running Unity game. The agent can read the current scene, click buttons, type text, and capture the screen.
+코딩 에이전트가 실행 중인 Unity 게임을 테스트할 수 있게 해 주는 MCP 서버입니다. 에이전트가 장면과 오브젝트 상태를 읽고, 게임에 가상 입력을 보내고, 화면을 캡처합니다.
 
-Things you can ask for:
+## 설치
 
-- "What's in the scene right now?"
-- "Click Start and capture the screen."
-- "Play through the tutorial and tell me where it gets stuck."
+- Unity 2022.3 이상과 Node.js 22.14 이상이 필요합니다.
+- Claude Code, Cursor, Visual Studio Code, Codex를 지원합니다.
 
-## Requirements
-
-- Unity 2022.3 or later
-- Node.js 22.14 or later
-- A supported agent: Claude Code, Cursor, Visual Studio Code, or Codex
-
-## Install
-
-In Unity, open **Window > Package Manager**, select **Add package from git URL**, and enter:
+Unity에서 **Window > Package Manager**를 열고 **Add package from git URL**을 선택합니다. 아래 주소를 입력하세요.
 
 ```text
 https://github.com/dev-yunseong/unity-play-mcp.git?path=Packages/dev.yunseong.unityplaymcp#latest
 ```
 
-To pin a version, replace `latest` at the end with a release tag such as `v0.4.0`.
+특정 버전이 필요하면 주소 끝의 `latest`를 해당 릴리스 태그로 바꾸세요. [릴리스 목록](https://github.com/dev-yunseong/unity-play-mcp/releases)
 
-### Version compatibility
+## 에이전트 연결
 
-Each Unity package release records the MCP server version it was tested with, and **Add** on the settings page writes `npx -y unity-play-mcp@<that version>`. Keep that pair. A local `mcp/dist` build or an entry added by an older package can mix versions.
+1. Unity에서 **Edit > Project Settings > Unity Play MCP**를 엽니다.
+2. **Configuration scope**에서 프로젝트에만 등록하려면 **Project**, 사용자 설정에 등록하려면 **User**를 고릅니다.
+3. 사용하는 에이전트 옆의 **Add**를 누릅니다. **Configured**가 표시되면 에이전트를 다시 시작합니다.
+4. Unity에서 Play Mode를 시작하고 에이전트에게 “현재 장면을 읽어 줘”라고 요청합니다.
 
-`get_unity_status` compares the running CLI with the SDK-required CLI version and reports **Update required** when they differ. SDK and CLI version numbers need not be equal. Older SDKs without compatibility metadata report **unknown**.
+Codex를 기본 설정으로 실행한다면 **User**를 고르세요. **Project** 설정을 쓰려면 `CODEX_HOME`을 프로젝트의 `.codex` 폴더로 지정하고 Codex를 실행해야 합니다.
 
-In **Edit > Project Settings > Unity Play MCP**, choose the scope containing your agent configuration and click **Update CLI** for a stale pin. This preserves environment variables and other server settings and pins the exact compatible version, even if it is older. Restart the agent afterward: `npx` installs/runs the pinned version on its next launch. A matching configured pin does not prove the running process has updated; verify with `get_unity_status`. If installation fails, check the agent log and network access.
+연결을 해제하려면 등록할 때 고른 범위에서 **Remove**를 누르세요.
 
-Automatic updates support the generated `npx -y unity-play-mcp@<exact-version>` form. Local builds, wrappers, custom arguments, version ranges, and tags require manual updates. JSON files with comments or duplicate keys and ambiguous TOML are not rewritten. The SDK dependency itself is not changed.
+## 사용하기
 
-| Unity package | MCP server | Notes |
-| --- | --- | --- |
-| `v0.4.0` | `0.4.0` | Keeps following the scene after readings restart or the connection drops, and marks an old reading `stale`. Adds hovering over an object by id, screen coordinates and the frame/scene on screenshots, and hides values that look like credentials. A 0.3.x or older server rejects this package's screenshots. |
-| `v0.3.0` | `0.3.0` | Adds target search, clicking and dragging objects by id, waiting for a condition, and recovery after script reloads. If readings restart while the server keeps running (stop and start readings, re-entering Play Mode, a reload), the scene can stay on the previous screen. Upgrade to 0.4.0. |
-| `v0.2.0` | `0.2.0` | The 0.2.0 server cannot read the 0.2.0 package's component values, so scene state stays empty. Upgrade. |
+Play Mode에서 확인할 동작과 기대 결과를 에이전트에게 알려 주세요. 게임 상태를 읽기만 하거나, 입력을 보낸 뒤 상태가 어떻게 바뀌는지 확인할 수 있습니다. [MCP 도구 설명](docs/observe-act-loop.md)
 
-## Connect your agent
+## 문제 해결
 
-1. Open **Edit > Project Settings > Unity Play MCP**.
-2. Select **Add** next to your agent.
-3. Check that the status changes to **Configured**.
-4. Restart the agent if it was running.
-5. Enter Play Mode in Unity.
-6. Ask the agent to "read the current scene".
+- **처음 연결할 때** `npx`가 MCP 서버를 내려받으므로 인터넷 연결이 필요합니다.
+- **Unity에 연결되지 않을 때** Unity가 Play Mode인지, 에이전트가 Unity와 같은 컴퓨터에서 실행 중인지 확인하세요.
+- **Update required가 표시될 때** Unity Play MCP 설정에서 **Update CLI**를 누른 뒤 에이전트를 다시 시작하세요.
 
-The MCP server is downloaded by `npx` the first time it runs, so the first connection needs internet access and may take a moment.
-
-To disconnect, select **Remove** on the same page. Your other MCP servers are left alone.
-
-### Configuration scope
-
-Use **Configuration scope** at the top of the settings page to choose where the entry is saved:
-
-- **Project** (default): only this Unity project.
-- **User**: every project on your account.
-
-| Agent | Project | User |
-| --- | --- | --- |
-| Claude Code | `.mcp.json` | `~/.claude.json` |
-| Cursor | `.cursor/mcp.json` | `~/.cursor/mcp.json` |
-| Visual Studio Code | `.vscode/mcp.json` | Windows: `%APPDATA%\Code\User\mcp.json`<br>macOS: `~/Library/Application Support/Code/User/mcp.json`<br>Linux: `~/.config/Code/User/mcp.json` |
-| Codex | `.codex/config.toml` * | `~/.codex/config.toml` |
-
-Project paths are relative to your Unity project folder.
-
-\* By default Codex only reads `~/.codex/config.toml`. The project file applies only if you run `codex` with `CODEX_HOME` set to `<Unity project>/.codex`.
-
-Changing the scope does not move or delete an entry you already added. To remove it, switch back to the scope you added it under and select **Remove**.
-
-## Using it
-
-Agent cursor and keyboard status overlays start hidden. Use `set_overlay { "visible": true }` to show them or `false` to hide them; a batch accepts `{ "method": "set_overlay", "visible": false }`. Virtual input works while hidden.
-
-Overlay resources are created on first display, then reused with their Canvas and UI Update loops disabled while hidden. Connecting alone starts no collection. After 15 seconds without a request or active work, overlays, discovery, live readings, and performance sampling stop while the connection stays open. Status requests resume performance only; scene and target queries resume needed readings and wait for fresh data. Raw input and full-screen capture do not enable collection or overlays. Show overlays again explicitly with `set_overlay { "visible": true }`. Running operations and active condition waits stay awake until completion. The last disconnect also cancels pending input; reconnecting keeps overlays hidden.
-
-Idle cost is not zero: the localhost listener, per-frame request checks, and virtual input processing remain. The listener keeps `Application.runInBackground` enabled so background requests can be processed, which can also incur the game's own background execution cost. Automatic host creation is limited to the Editor and Development Builds.
-
-With Play Mode running, just ask the agent in plain language. Unity opens a local connection on `127.0.0.1:17311`, and the MCP server on the same computer connects to it.
-
-To check the connection, ask "Is Unity running?" The agent reports whether it can reach the game and when it last received data. If you ask for anything else while Unity is not in Play Mode, the agent tells you to start Play Mode.
-
-### Ready-made requests
-
-Four common requests are registered as commands in your agent. In Claude Code, they appear as `/unity-play:<name>`.
-
-| Name | What it does | Arguments |
-| --- | --- | --- |
-| `inspect_scene` | Summarizes what is in the scene and which objects can be interacted with. | `selector` (optional) |
-| `review_screen` | Captures the screen and reviews layout, readability, and anything that looks off. | `focus` (optional) |
-| `run_steps` | Performs the player actions you describe, in order, and reports the first step that didn't match what you expected. | `steps`, `expectation` (optional) |
-| `track_value` | Watches how an object's values change over time, optionally while an action runs. | `selector`, `action` (optional) |
-
-### Playing by observing and acting
-
-For agents that play a game rather than test it, six tools form an observe, act and verify loop
-(`get_play_capabilities`, `observe`, `inspect_action`, `query_space`, `act_and_observe`,
-`watch_events`). They need no game-specific code, keep input acceptance apart from in-game
-results, and can be extended by an optional semantic provider. See
-[docs/observe-act-loop.md](docs/observe-act-loop.md). They require a Unity package and MCP server
-that speak the same play protocol version; on an older package they report
-`unsupported_capability` and the other tools keep working.
-
-### Reading interval
-
-While an agent is watching the game, Unity Play MCP reads values every second and sends only what changed. If you need to catch values that change faster than that, shorten the interval under **Edit > Project Settings > Unity Play MCP > Reading interval (s)**.
-
-- Accepted range is 0.02 to 10 seconds. Values outside it are adjusted to the nearest limit.
-- A new interval applies the next time watching starts.
-- Very short intervals can slow the game down enough to distort what the agent sees. Shorten it only when you need to, then set it back.
-
-## Troubleshooting
-
-### The agent doesn't show `unity-play`
-
-Select **Refresh** on the settings page, select **Add** again, and restart the agent. Also check that `node --version` and `npx --version` work in a terminal.
-
-### The first connection is slow
-
-`npx` may still be downloading the MCP server. Stay online until the download finishes, then restart the agent.
-
-### It can't connect to Unity
-
-Ask the agent to check Unity's status. It tells you which address it tried and what answered. Make sure the right project is open and in Play Mode. The connection only works on the same computer; if your agent runs in a container or on a remote machine, it needs access to the host's loopback address.
-
-### The settings page says it can't read a file
-
-If a configuration file has a syntax error, the page won't touch it because it can't keep your content safe. Fix the error shown and select **Refresh**. A Visual Studio Code file that contains comments is also left alone, because saving it would erase them.
-
-## Contributing
-
-```bash
-cd mcp
-npm install
-npm run build
-npm test
-```
-
-When the package is linked from this repository, the settings page prefers the local build (`mcp/dist/index.js`), so server changes take effect without publishing. For Unity package tests, see [how to run tests](.agents/docs/project.md#running-package-tests). The release process is in [RELEASING.md](RELEASING.md).
-
-## License
+## 라이선스
 
 MIT
