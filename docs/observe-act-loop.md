@@ -112,40 +112,7 @@ Real game classes belong in your game or a test/sample assembly, never in the pa
 
 ## 프로젝트 액션 추가
 
-프로젝트 코드에서 `IUnityAction`을 구현하고 클래스에 `[UnityAction]`을 붙이면 Play Mode에서 자동으로 등록됩니다. 기본 생성자가 필요하며, 이름은 소문자로 시작하고 소문자·숫자·밑줄을 사용할 수 있습니다. 기본 액션과 이름이 겹치거나 프로젝트 안에서 같은 이름을 여러 번 쓰면 등록되지 않습니다.
-
-```csharp
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityPlayMcp;
-using UnityPlayMcp.Protocol.Dto;
-
-[UnityAction("echo_value", "Return the input value.", "[value: string]")]
-public sealed class EchoValueAction : IUnityAction
-{
-    public IEnumerator Execute(int id, List<object> parameters, Action<ActionResultDto> completed)
-    {
-        if (parameters.Count != 1 || !(parameters[0] is string value))
-        {
-            completed(ActionResultDto.Failure(id, "Expected one string."));
-            yield break;
-        }
-
-        completed(ActionResultDto.Success(id, value));
-    }
-}
-```
-
-인자 설명은 배열에 넣을 값의 순서를 안내합니다. 실제 값은 `Execute`에서 검증하고, 실행이 끝나기 전에 `completed`로 결과를 한 번 반환합니다. MCP에서는 `get_play_capabilities` 응답의 `unity.registeredActions`에서 이름과 인자를 확인한 뒤, `perform_actions`에서 호출합니다.
-
-```json
-{
-  "actions": [
-    { "method": "unity_action", "name": "echo_value", "params": ["ready"] }
-  ]
-}
-```
+`IUnityAction`과 `[UnityAction]`으로 프로젝트 액션을 등록하고 `perform_actions`에서 호출할 수 있습니다. [액션 추가 예제](../CONTRIBUTING.md#게임-전용-액션-추가)
 
 ## Not covered
 

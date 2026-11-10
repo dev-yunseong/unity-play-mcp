@@ -33,6 +33,8 @@ Codex를 기본 설정으로 실행한다면 **User**를 고르세요. **Project
 
 Play Mode에서 확인할 동작과 기대 결과를 에이전트에게 알려 주세요. 게임 상태를 읽기만 하거나, 입력을 보낸 뒤 상태가 어떻게 바뀌는지 확인할 수 있습니다. [MCP 도구 설명](docs/observe-act-loop.md)
 
+`IUnityAction`을 구현한 C# 클래스에 `[UnityAction]`을 붙이면 게임 전용 액션을 MCP에서 바로 쓸 수 있습니다. [액션 추가와 기여 방법](CONTRIBUTING.md)
+
 ## 문제 해결
 
 - **처음 연결할 때** `npx`가 MCP 서버를 내려받으므로 인터넷 연결이 필요합니다.
