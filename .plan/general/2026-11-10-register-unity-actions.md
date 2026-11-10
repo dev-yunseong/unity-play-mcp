@@ -51,3 +51,4 @@ Unity 액션은 `IUnityAction`을 구현하고 `[UnityAction]`에서 이름, 설
 - 빌드된 플레이어를 실행하고 실제 MCP 서버에 `get_play_capabilities`와 `perform_actions`를 보내 이름, 설명, 인자 순서와 고유한 반환값을 확인한다. 실행 또는 응답 시간이 초과되면 실패시키고 플레이어를 정리한다.
 - 로컬에서는 가능한 Windows IL2CPP로 같은 테스트를 실행한다. Linux 빌드와 실행은 CI 결과로 확인한다. 검사를 되돌릴 때 CI job과 전용 fixture만 제거한다.
 - 생성물은 무시되는 테스트 프로젝트와 빌드 폴더에 둔다. 실행 전 포트가 비어 있는지 확인하고 빌드 결과와 활성 backend 및 stripping 설정을 검사한다.
+- 첫 Windows 빌드에서 High stripping 후 요청 DTO의 setter와 응답 DTO의 getter가 제거됐다. 실측한 액션 요청·응답과 기능 조회 계약에 `Preserve`를 적용해 다시 빌드한다.

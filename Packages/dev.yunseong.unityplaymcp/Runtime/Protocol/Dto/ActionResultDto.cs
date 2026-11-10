@@ -1,16 +1,17 @@
 using Newtonsoft.Json;
+using UnityEngine.Scripting;
 
 namespace UnityPlayMcp.Protocol.Dto
 {
     public sealed class ActionResultDto
     {
-        [JsonProperty("id")]
+        [Preserve, JsonProperty("id")]
         public int Id { get; set; }
 
-        [JsonProperty("success")]
+        [Preserve, JsonProperty("success")]
         public bool IsSuccess { get; set; }
 
-        [JsonProperty("error")]
+        [Preserve, JsonProperty("error")]
         public string Error { get; set; }
 
         /// <summary>
@@ -20,7 +21,7 @@ namespace UnityPlayMcp.Protocol.Dto
         /// Omitted when absent. The relay passes the payload through untouched, so an action can
         /// add a field without a protocol version.
         /// </remarks>
-        [JsonProperty("returnValue", NullValueHandling = NullValueHandling.Ignore)]
+        [Preserve, JsonProperty("returnValue", NullValueHandling = NullValueHandling.Ignore)]
         public object ReturnValue { get; set; }
 
         public static ActionResultDto Success(int id)

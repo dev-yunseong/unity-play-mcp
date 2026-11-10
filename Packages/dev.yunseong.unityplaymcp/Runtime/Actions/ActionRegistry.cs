@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using UnityEngine;
+using UnityEngine.Scripting;
 using UnityPlayMcp.Play;
 
 namespace UnityPlayMcp
@@ -18,9 +19,9 @@ namespace UnityPlayMcp
             Parameters = metadata.Parameters;
         }
 
-        [JsonProperty("name")] public string Name { get; }
-        [JsonProperty("description")] public string Description { get; }
-        [JsonProperty("parameters")] public string Parameters { get; }
+        [Preserve, JsonProperty("name")] public string Name { get; }
+        [Preserve, JsonProperty("description")] public string Description { get; }
+        [Preserve, JsonProperty("parameters")] public string Parameters { get; }
     }
 
     internal sealed class ActionRegistry
